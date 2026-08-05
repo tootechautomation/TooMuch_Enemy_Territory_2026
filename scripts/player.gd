@@ -39,6 +39,10 @@ var next_ability_time := 0
 var kills := 0
 var deaths := 0
 var xp := 0
+var is_bot := false
+var interact_accumulator := 0.0
+var bot_think_accumulator := 0.0
+var bot_fire_accumulator := 0.0
 var target_position := Vector3.ZERO
 var target_yaw := 0.0
 var target_pitch := 0.0
@@ -66,6 +70,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"): Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _physics_process(delta: float) -> void:
+	if multiplayer.is_server() and is_bot:
+		_server_bot_tick(delta)
+		return
 	if _is_local_player():
 		_collect_and_send_input()
 		_update_hud()
@@ -207,6 +214,101 @@ func request_class_ability() -> void:
 func request_class(index: int) -> void:
 	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id: return
 	player_class = clampi(index, 0, 4); health = mini(health, _class_health(player_class))
+
+
+func _server_bot_tick(delta: float) -> void:
+	if not alive or downed or get_parent().match_over:
+		velocity = Vector3.ZERO
+		return
+
+	bot_think_accumulator += delta
+	bot_fire_accumulator = maxf(0.0, bot_fire_accumulator - delta)
+
+	var target: Node3D = null
+	if player_class == PlayerClass.MEDIC:
+		target = get_parent().nearest_downed_teammate(self)
+		if target and global_position.distance_to(target.global_position) <= 2.6:
+			target.server_revive(peer_id)
+			add_xp(15, "bot revive")
+			return
+
+	if player_class == PlayerClass.ENGINEER:
+		if get_parent().objective_stage == 0 and team == 0:
+			target = get_parent().get_node_or_null("BridgeBuildSite")
+			if target and global_position.distance_to(target.global_position) <= 3.2:
+				get_parent().server_engineer_interact(self)
+				return
+		elif get_parent().objective_stage == 1:
+			target = get_parent().get_node_or_null("Objective")
+			if target and global_position.distance_to(target.global_position) <= 3.2:
+				get_parent().server_engineer_interact(self)
+				return
+
+	if target == null:
+		target = get_parent().nearest_enemy(self)
+
+	if target == null:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		move_and_slide()
+		return
+
+	var flat_direction := target.global_position - global_position
+	flat_direction.y = 0.0
+	var distance := flat_direction.length()
+	if distance > 0.05:
+		flat_direction = flat_direction.normalized()
+		look_at(global_position + flat_direction, Vector3.UP)
+
+	if target in get_parent().players.values() and distance <= weapon.range:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		if bot_fire_accumulator <= 0.0 and _bot_has_line_of_sight(target):
+			bot_fire_accumulator = maxf(0.12, weapon.fire_interval)
+			_server_bot_fire(target)
+	else:
+		var bot_speed := 4.8
+		velocity.x = flat_direction.x * bot_speed
+		velocity.z = flat_direction.z * bot_speed
+
+	if not is_on_floor():
+		velocity.y -= gravity * delta
+	move_and_slide()
+
+func _bot_has_line_of_sight(target: Node3D) -> bool:
+	var from := global_position + Vector3.UP * 0.8
+	var to := target.global_position + Vector3.UP * 0.8
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.exclude = [self]
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.is_empty() or hit.get("collider") == target
+
+func _server_bot_fire(target: Node3D) -> void:
+	if ammo_in_mag <= 0:
+		_server_begin_reload()
+		return
+	ammo_in_mag -= 1
+	if target.has_method("apply_damage"):
+		target.apply_damage(weapon.damage, peer_id)
+
+func server_force_respawn(spawn_position: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	global_position = spawn_position
+	velocity = Vector3.ZERO
+	alive = true
+	downed = false
+	health = _class_health(player_class)
+	ammo_in_mag = weapon.magazine_size
+	reserve_ammo = weapon.reserve_ammo
+	bleedout_finish_ms = 0
+	show()
+
+func server_apply_class(class_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	player_class = clampi(class_id, 0, 4)
+	health = _class_health(player_class)
 
 func add_xp(amount: int, reason: String = "") -> void:
 	if not multiplayer.is_server():

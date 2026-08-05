@@ -4,6 +4,8 @@ const PlayerScene = preload("res://scenes/player.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
+const ROUND_RESTART_SECONDS := 10.0
+const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
 const SPAWN_WAVE_SECONDS := 10.0
 const DYNAMITE_FUSE_SECONDS := 8.0
@@ -18,6 +20,9 @@ var spawn_points := {
 	1: [Vector3(12, 1, 0), Vector3(12, 1, 4), Vector3(12, 1, -4)]
 }
 var next_team := 0
+var desired_bot_count := 0
+var next_bot_peer_id := BOT_PEER_ID_START
+var round_restart_remaining := 0.0
 var objective_health := 100
 var objective_stage := 0 # 0 build bridge, 1 destroy bunker
 var bridge_progress := 0
@@ -307,6 +312,8 @@ func announce(message: String) -> void:
 	var label := Label.new(); label.text = message; label.position = Vector2(390, 50); label.add_theme_font_size_override("font_size", 28); layer.add_child(label)
 
 func objective_status_text() -> String:
+	if match_over:
+		return "Round restarts in %.1fs" % round_restart_remaining
 	if objective_stage == 0:
 		return "Stage 1: Build bridge %d/%d" % [bridge_progress, bridge_required]
 	if dynamite_armed:
@@ -327,6 +334,78 @@ func scoreboard_text() -> String:
 			state
 		])
 	return "\n".join(lines)
+
+
+func _spawn_bot(index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var bot_id := next_bot_peer_id
+	next_bot_peer_id += 1
+	var team := index % 2
+	var class_id := index % 5
+	_spawn_player.rpc(bot_id, team, "Bot%02d" % (index + 1))
+	call_deferred("_configure_bot", bot_id, class_id)
+
+func _configure_bot(bot_id: int, class_id: int) -> void:
+	if not players.has(bot_id):
+		return
+	var bot = players[bot_id]
+	bot.is_bot = true
+	bot.player_class = class_id
+	bot.server_apply_class(class_id)
+
+func nearest_enemy(from_player: Node3D) -> Node3D:
+	var best: Node3D = null
+	var best_distance := INF
+	for candidate in players.values():
+		if candidate == from_player:
+			continue
+		if candidate.team == from_player.team or not candidate.alive or candidate.downed:
+			continue
+		var distance := from_player.global_position.distance_to(candidate.global_position)
+		if distance < best_distance:
+			best = candidate
+			best_distance = distance
+	return best
+
+func nearest_downed_teammate(from_player: Node3D) -> Node3D:
+	var best: Node3D = null
+	var best_distance := INF
+	for candidate in players.values():
+		if candidate == from_player:
+			continue
+		if candidate.team != from_player.team or not candidate.alive or not candidate.downed:
+			continue
+		var distance := from_player.global_position.distance_to(candidate.global_position)
+		if distance < best_distance:
+			best = candidate
+			best_distance = distance
+	return best
+
+func _reset_round() -> void:
+	match_over = false
+	match_time_remaining = MATCH_DURATION_SECONDS
+	spawn_wave_remaining = SPAWN_WAVE_SECONDS
+	objective_health = 100
+	objective_stage = 0
+	bridge_progress = 0
+	defuse_progress = 0
+	dynamite_armed = false
+	dynamite_remaining = 0.0
+	round_restart_remaining = 0.0
+	pending_respawns.clear()
+
+	var bridge := get_node_or_null("ConstructedBridge")
+	if bridge:
+		bridge.visible = false
+		bridge.process_mode = Node.PROCESS_MODE_DISABLED
+
+	for player in players.values():
+		player.kills = 0
+		player.deaths = 0
+		player.server_force_respawn(_get_spawn(player.team, player.peer_id))
+
+	push_kill_feed.rpc("New round started")
 
 func _build_world() -> void:
 	var env := WorldEnvironment.new()

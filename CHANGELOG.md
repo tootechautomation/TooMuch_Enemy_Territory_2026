@@ -1,17 +1,15 @@
 # Changelog
 
+## 0.7.0
+
+- Added configurable server-side bots with `--bots N`
+- Added basic combat, Engineer-objective, and Medic-revive behavior
+- Converted interaction input to held quarter-second ticks
+- Added automatic ten-second round restart
+- Added round-state and player-state reset helpers
+- Added testing documentation
+
 ## 0.6.0
 
-- Added two-stage bridge-and-bunker assault mission
-- Added engineer bridge construction
-- Added defender charge defusing
-- Added objective XP and five rank names
-- Added XP/rank scoreboard columns
-- Added stage-aware mission HUD
-- Expanded original procedural blockout map
-
-## 0.5.0
-
-- Added downed state and Medic revives
-- Added deployable health and ammo packs
-- Added dynamite objective, scoreboard, kill feed, and first-person weapon blockout
+- Added bridge-and-bunker mission
+- Added construction, defusing, XP, ranks, and stage-aware HUD

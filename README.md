@@ -1,24 +1,32 @@
 # Frontline: Objective
 
-An original Godot 4 class-based objective-shooter prototype. It contains no Wolfenstein game data, maps, branding, characters, sounds, or artwork.
+An original Godot 4 class-based objective-shooter prototype. No Wolfenstein game data, maps, branding, characters, audio, or artwork are included.
 
-## Version 0.6: campaign objectives and progression
+## Version 0.7: bots, held interactions, and round flow
 
-This milestone turns the single target into a small two-stage assault mission:
+New features:
 
-1. Attacking Engineers construct a bridge by using **E** at the yellow build site.
-2. After construction, attackers cross the river and arm a charge at the bunker.
-3. Defending Engineers can defuse an armed charge by repeatedly using **E** near it.
-4. The attackers win when the bunker charge detonates; defenders win when time expires.
+- Server-side bots for local and VPS testing
+- Bots select all five classes
+- Engineer bots build, arm, and defuse objectives
+- Medic bots seek and revive downed teammates
+- Combat bots locate and fire at enemies
+- Hold **E** for construction, arming, defusing, and reviving
+- Automatic ten-second round restart
+- Round objectives, players, scores, and spawn state reset cleanly
 
-Also included:
+## Start a dedicated server with bots
 
-- Objective XP and five ranks
-- XP awards for eliminations, revives, construction, arming, and defusing
-- Expanded scoreboard with XP and rank
-- Mission-stage HUD
-- Original procedural bridge, river, bunker, uniforms, supply packs, and weapon blockouts
-- Server-authoritative movement, combat, objectives, revives, and wave respawns
+```bash
+flatpak run org.godotengine.Godot \
+  --headless \
+  --path . \
+  --server \
+  --port 27960 \
+  --bots 8
+```
+
+The bot count is clamped between 0 and 16.
 
 ## Controls
 
@@ -29,23 +37,19 @@ Also included:
 - Mouse: aim
 - Left mouse: fire
 - R: reload
-- E: revive, build, arm, or defuse
-- Q: class ability / deploy supply pack
+- Hold E: revive, construct, arm, or defuse
+- Q: class ability / supply pack
 - 1–5: select class
 - Tab: scoreboard
 - Escape: release mouse
 
-## Run the dedicated server
+## Mission
 
-```bash
-flatpak run org.godotengine.Godot --headless --path . --server --port 27960
-```
-
-## Connect a Windows client
-
-Open `project.godot` in Godot 4.7, run the project, and enter the public IP address of the VPS.
-
-Open UDP port 27960 on the VPS and at the hosting provider firewall.
+1. Attacking Engineers construct the bridge.
+2. Attackers cross the river.
+3. Attacking Engineers arm the bunker charge.
+4. Defending Engineers may defuse it.
+5. Attackers win on detonation; defenders win on time.
 
 ## Validate
 
@@ -53,6 +57,6 @@ Open UDP port 27960 on the VPS and at the hosting provider firewall.
 ./tools/validate_project.sh
 ```
 
-## Status
+## Alpha limitations
 
-This remains an alpha prototype. It needs client prediction/reconciliation, lag compensation, animations, audio, polished models, bots, map rotation, and security hardening before public hosting.
+The bots use direct steering rather than a navigation mesh. Advanced prediction, reconciliation, lag compensation, polished animation, audio, final models, anti-cheat, and public-server hardening remain future work.
