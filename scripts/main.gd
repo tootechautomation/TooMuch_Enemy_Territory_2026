@@ -10,7 +10,7 @@ const FieldEmplacementScript = preload("res://scripts/field_emplacement.gd")
 const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.4.4"
+const BUILD_VERSION := "3.5.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -663,7 +663,7 @@ func _on_connection_failed() -> void:
 		connection_join_button.disabled = false
 	if status_label != null:
 		status_label.text = (
-			"Connection failed. Check the VPS IP, port 27960, "+
+			"Connection failed. Check the VPS IP, port 27960, "
 			"firewall, and server process."
 	)
 
@@ -2785,6 +2785,7 @@ func _reset_round() -> void:
 		)
 
 	push_kill_feed.rpc("New round started")
+	announce.rpc("ROUND START · Secure the bridge and command post")
 
 func _build_world() -> void:
 	var env := WorldEnvironment.new()

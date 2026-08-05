@@ -51,6 +51,11 @@ var tex_uniform_attackers: Texture2D
 var tex_uniform_defenders: Texture2D
 var tex_weapon_rifle: Texture2D
 var tex_weapon_pistol: Texture2D
+var tex_medal_elimination: Texture2D
+var tex_medal_headshot: Texture2D
+var tex_objective_marker: Texture2D
+var tex_spawn_shield: Texture2D
+var tex_muzzle_flash_ui: Texture2D
 
 var health := 100
 var ammo_in_mag := 30
@@ -173,6 +178,14 @@ var spectator_freecam_position := Vector3.ZERO
 var heavy_fire_until_ms := 0
 var replicated_heavy_fire_ms := 0
 var class_mode_label: Label
+var compass_label: Label
+var medal_icon: TextureRect
+var medal_label: Label
+var medal_until_ms := 0
+var directional_damage_labels: Dictionary = {}
+var spawn_shield_icon: TextureRect
+var spawn_shield_until_ms := 0
+var muzzle_flash_sprite: TextureRect
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -209,6 +222,21 @@ func _ready() -> void:
 		)
 		tex_weapon_pistol = _load_optional_texture(
 			"res://assets/textures/weapon_pistol.png"
+		)
+		tex_medal_elimination = _load_optional_texture(
+			"res://assets/textures/medal_elimination.png"
+		)
+		tex_medal_headshot = _load_optional_texture(
+			"res://assets/textures/medal_headshot.png"
+		)
+		tex_objective_marker = _load_optional_texture(
+			"res://assets/textures/objective_marker.png"
+		)
+		tex_spawn_shield = _load_optional_texture(
+			"res://assets/textures/spawn_shield.png"
+		)
+		tex_muzzle_flash_ui = _load_optional_texture(
+			"res://assets/textures/muzzle_flash.png"
 		)
 
 	_initialize_loadout()
@@ -981,6 +1009,63 @@ func confirm_weapon_switch(weapon_index: int) -> void:
 		_apply_weapon_index(weapon_index, true)
 
 @rpc("authority", "call_remote", "reliable")
+func _show_combat_medal(title: String, headshot: bool) -> void:
+	if medal_icon == null or medal_label == null:
+		return
+	medal_icon.texture = (
+		tex_medal_headshot if headshot else tex_medal_elimination
+	)
+	medal_label.text = title
+	medal_icon.visible = medal_icon.texture != null
+	medal_label.visible = true
+	medal_until_ms = Time.get_ticks_msec() + 1250
+
+func _show_spawn_presentation() -> void:
+	if spawn_shield_icon == null:
+		return
+	spawn_shield_icon.texture = tex_spawn_shield
+	spawn_shield_icon.visible = spawn_shield_icon.texture != null
+	spawn_shield_until_ms = Time.get_ticks_msec() + 1800
+
+func _update_objective_compass() -> void:
+	if compass_label == null or not alive:
+		return
+	var main_node: Node = get_parent()
+	if main_node == null:
+		return
+
+	var target: Node3D = (
+		main_node.get_node_or_null("BridgeBuildSite") as Node3D
+		if int(main_node.get("objective_stage")) == 0
+		else main_node.get_node_or_null("Objective") as Node3D
+	)
+	if target == null:
+		compass_label.text = ""
+		return
+
+	var offset: Vector3 = target.global_position - global_position
+	offset.y = 0.0
+	var distance: int = int(round(offset.length()))
+	if offset.length() <= 0.01:
+		compass_label.text = "◆ OBJECTIVE 0m"
+		return
+
+	var forward: Vector3 = -global_transform.basis.z
+	forward.y = 0.0
+	forward = forward.normalized()
+	var right: Vector3 = global_transform.basis.x
+	right.y = 0.0
+	right = right.normalized()
+	var direction: Vector3 = offset.normalized()
+	var fd: float = forward.dot(direction)
+	var rd: float = right.dot(direction)
+	var arrow := "◆"
+	if absf(rd) > 0.38:
+		arrow = "▶" if rd > 0.0 else "◀"
+	elif fd < 0.0:
+		arrow = "▼"
+	compass_label.text = "%s OBJECTIVE %dm" % [arrow, distance]
+
 func confirm_hit() -> void:
 	if not _is_local_player():
 		return
@@ -1003,6 +1088,7 @@ func confirm_headshot() -> void:
 		hit_marker.position = Vector2(580, 332)
 		hit_marker.visible = true
 
+	_show_combat_medal("HEADSHOT", true)
 	elimination_notice_until_ms = Time.get_ticks_msec() + 650
 	if elimination_notice != null:
 		elimination_notice.text = "HEADSHOT"
@@ -1104,6 +1190,7 @@ func combat_notice(message: String) -> void:
 		return
 
 	elimination_notice.text = message
+	_show_combat_medal(message, false)
 	elimination_notice_until_ms = (
 		Time.get_ticks_msec() + 1100
 	)
@@ -1255,6 +1342,15 @@ func damage_feedback(attacker_position: Vector3, amount: int) -> void:
 
 	damage_indicator.text = "DAMAGE %s  -%d" % [direction_text, amount]
 	damage_indicator.visible = true
+	for arrow_value in directional_damage_labels.values():
+		var arrow: Label = arrow_value as Label
+		if arrow != null:
+			arrow.visible = false
+	var direction_arrow: Label = directional_damage_labels.get(
+		direction_text
+	) as Label
+	if direction_arrow != null:
+		direction_arrow.visible = true
 
 func server_revive(reviver_id: int = 0) -> void:
 	if not multiplayer.is_server() or not alive or not downed:
@@ -2031,6 +2127,12 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 		collision.set_deferred("disabled", false)
 
 	show()
+	show_spawn_presentation.rpc_id(peer_id)
+
+@rpc("authority", "call_remote", "reliable")
+func show_spawn_presentation() -> void:
+	if _is_local_player():
+		_show_spawn_presentation()
 
 func server_set_team_and_class(
 	new_team: int,
@@ -2219,6 +2321,9 @@ func _local_fire_feedback() -> void:
 	muzzle_flash_until_ms = Time.get_ticks_msec() + 55
 	if muzzle_flash != null:
 		muzzle_flash.visible = true
+	if muzzle_flash_sprite != null:
+		muzzle_flash_sprite.texture = tex_muzzle_flash_ui
+		muzzle_flash_sprite.visible = muzzle_flash_sprite.texture != null
 
 	_spawn_local_shell_effect()
 
@@ -2753,6 +2858,57 @@ func _build_hud() -> void:
 	damage_indicator.visible = false
 	layer.add_child(damage_indicator)
 
+	compass_label = Label.new()
+	compass_label.position = Vector2(430, 42)
+	compass_label.custom_minimum_size = Vector2(420, 30)
+	compass_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	compass_label.add_theme_font_size_override("font_size", 20)
+	layer.add_child(compass_label)
+
+	medal_icon = TextureRect.new()
+	medal_icon.position = Vector2(596, 115)
+	medal_icon.size = Vector2(88, 88)
+	medal_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	medal_icon.visible = false
+	layer.add_child(medal_icon)
+
+	medal_label = Label.new()
+	medal_label.position = Vector2(520, 202)
+	medal_label.custom_minimum_size = Vector2(240, 30)
+	medal_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	medal_label.add_theme_font_size_override("font_size", 22)
+	medal_label.visible = false
+	layer.add_child(medal_label)
+
+	spawn_shield_icon = TextureRect.new()
+	spawn_shield_icon.position = Vector2(18, 175)
+	spawn_shield_icon.size = Vector2(56, 56)
+	spawn_shield_icon.visible = false
+	layer.add_child(spawn_shield_icon)
+
+	muzzle_flash_sprite = TextureRect.new()
+	muzzle_flash_sprite.position = Vector2(603, 319)
+	muzzle_flash_sprite.size = Vector2(74, 74)
+	muzzle_flash_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	muzzle_flash_sprite.visible = false
+	layer.add_child(muzzle_flash_sprite)
+
+	for direction_name in ["FRONT", "RIGHT", "REAR", "LEFT"]:
+		var arrow := Label.new()
+		arrow.add_theme_font_size_override("font_size", 34)
+		arrow.visible = false
+		layer.add_child(arrow)
+		directional_damage_labels[direction_name] = arrow
+
+	directional_damage_labels["FRONT"].text = "▼"
+	directional_damage_labels["FRONT"].position = Vector2(629, 105)
+	directional_damage_labels["RIGHT"].text = "◀"
+	directional_damage_labels["RIGHT"].position = Vector2(1130, 345)
+	directional_damage_labels["REAR"].text = "▲"
+	directional_damage_labels["REAR"].position = Vector2(629, 610)
+	directional_damage_labels["LEFT"].text = "▶"
+	directional_damage_labels["LEFT"].position = Vector2(115, 345)
+
 	objective_progress_text = Label.new()
 	objective_progress_text.position = Vector2(430, 625)
 	objective_progress_text.custom_minimum_size = Vector2(420, 28)
@@ -3025,6 +3181,15 @@ func _update_hud() -> void:
 		return
 
 	var now: int = Time.get_ticks_msec()
+	_update_objective_compass()
+
+	if medal_label != null and now >= medal_until_ms:
+		medal_label.visible = false
+		if medal_icon != null:
+			medal_icon.visible = false
+
+	if spawn_shield_icon != null and now >= spawn_shield_until_ms:
+		spawn_shield_icon.visible = false
 
 	if stamina_bar != null:
 		stamina_bar.value = replicated_stamina
@@ -3052,9 +3217,15 @@ func _update_hud() -> void:
 
 	if damage_indicator != null and damage_indicator.visible and now >= damage_indicator_until_ms:
 		damage_indicator.visible = false
+		for arrow_value in directional_damage_labels.values():
+			var arrow: Label = arrow_value as Label
+			if arrow != null:
+				arrow.visible = false
 
 	if muzzle_flash != null and muzzle_flash.visible and now >= muzzle_flash_until_ms:
 		muzzle_flash.visible = false
+	if muzzle_flash_sprite != null and now >= muzzle_flash_until_ms:
+		muzzle_flash_sprite.visible = false
 
 	if weapon_kick_offset > 0.001:
 		weapon_kick_offset = lerpf(

@@ -1,11 +1,11 @@
 # Changelog
 
-## 3.4.4
-
-- Fixed missing `.ctex` server startup failures
-- Removed script-level PNG preloads
-- Added optional graphical-client texture loading
-- Disabled character visuals in headless mode
-- Removed `SkinDefinition` parse dependency
-- Added Linux cache reset/import helper
+## 3.5.0
+- Added objective compass
+- Added directional damage indicators
+- Added elimination/headshot medal sprites
+- Added spawn shield presentation
+- Added muzzle-flash sprite
+- Added round-start announcement
+- Preserved headless-safe runtime image loading
 - Preserved protocol 341 compatibility
