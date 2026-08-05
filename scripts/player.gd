@@ -328,7 +328,7 @@ func _server_bot_tick(delta: float) -> void:
 		flat_direction = flat_direction.normalized()
 		look_at(global_position + flat_direction, Vector3.UP)
 
-	var target_is_player := target in get_parent().players.values()
+	var target_is_player: bool = get_parent().players.values().has(target)
 	if target_is_player and distance <= weapon.range_meters:
 		velocity.x = 0.0
 		velocity.z = 0.0
