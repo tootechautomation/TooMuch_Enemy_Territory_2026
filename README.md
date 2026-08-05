@@ -1,30 +1,23 @@
 # Frontline: Objective
 
-## Version 1.4.5 validated spawning
+## Version 1.5.0 spawn protection
 
-The previous system selected raw coordinates without checking the map.
+Added:
 
-This build adds:
+- Five seconds of server-authoritative protection after every spawn
+- Protected players cannot take enemy damage
+- Protection ends immediately when the player fires
+- Protection ends immediately when the player throws a grenade
+- HUD countdown showing remaining protection time
+- Blue attacker spawn zone
+- Red defender spawn zone
+- Spawn protection included in authoritative snapshots
 
-- Safer base spawn positions away from the river, cover blocks, and walls
-- Downward floor raycasts
-- Walkable-surface normal checks
-- Full standing-capsule clearance checks
-- Occupied-player distance checks
-- Multiple alternate and fallback positions
-- Emergency team-ground spawn as a last resort
-- Server logs showing every final spawn coordinate
-
-Install the same package on both Windows and Linux.
+Install the same package on Windows and Linux.
 
 Expected HUD:
 
 ```text
-Connected: v1.4.5 protocol 145
-```
-
-Expected server log:
-
-```text
-Spawned Player123 peer=123 team=0 at (-16.0, 0.96, 0.0)
+Connected: v1.5.0 protocol 150
+HP 100 ... Grenades 2  PROTECTED 4.8s
 ```

@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.4.6"
-const NETWORK_PROTOCOL := 146
+const BUILD_VERSION := "1.5.0"
+const NETWORK_PROTOCOL := 150
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -496,7 +496,8 @@ func _broadcast_player_snapshots() -> void:
 			int(player.get("xp")),
 			int(player.get("current_weapon_index")),
 			int(player.get("grenades_remaining")),
-			bool(player.get("is_crouching"))
+			bool(player.get("is_crouching")),
+			int(player.call("spawn_protection_remaining_ms"))
 		)
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
@@ -518,7 +519,8 @@ func receive_player_snapshot(
 	experience: int,
 	weapon_index: int,
 	grenade_count: int,
-	crouching: bool
+	crouching: bool,
+	spawn_protection_ms: int
 ) -> void:
 	if multiplayer.is_server():
 		return
@@ -550,7 +552,8 @@ func receive_player_snapshot(
 		experience,
 		weapon_index,
 		grenade_count,
-		crouching
+		crouching,
+		spawn_protection_ms
 	)
 
 @rpc("authority", "call_local", "reliable")
@@ -1254,6 +1257,19 @@ func _build_world() -> void:
 	_make_static_box("WestCover", Vector3(-7, 1, -5), Vector3(3, 2, 3), Color(0.32, 0.28, 0.22))
 	_make_static_box("EastCover", Vector3(6, 1, 5), Vector3(3, 2, 3), Color(0.32, 0.28, 0.22))
 
+	_make_spawn_zone(
+		"AttackersSpawnZone",
+		Vector3(-15.0, 0.08, 0.0),
+		Vector3(7.0, 0.12, 19.0),
+		Color(0.12, 0.30, 0.85, 0.34)
+	)
+	_make_spawn_zone(
+		"DefendersSpawnZone",
+		Vector3(15.0, 0.08, 0.0),
+		Vector3(7.0, 0.12, 19.0),
+		Color(0.82, 0.16, 0.12, 0.34)
+	)
+
 	var build_site := Node3D.new()
 	build_site.name = "BridgeBuildSite"
 	build_site.position = Vector3(-1.2, 0.2, 0)
@@ -1297,6 +1313,33 @@ func _build_world() -> void:
 	collision.shape = shape
 	objective.add_child(collision)
 	add_child(objective)
+
+func _make_spawn_zone(
+	zone_name: String,
+	zone_position: Vector3,
+	zone_size: Vector3,
+	zone_color: Color
+) -> void:
+	var zone := MeshInstance3D.new()
+	zone.name = zone_name
+	zone.position = zone_position
+
+	var mesh := BoxMesh.new()
+	mesh.size = zone_size
+	zone.mesh = mesh
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = zone_color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.emission_enabled = true
+	material.emission = Color(
+		zone_color.r * 0.25,
+		zone_color.g * 0.25,
+		zone_color.b * 0.25
+	)
+	zone.material_override = material
+	add_child(zone)
 
 func _make_marker(parent: Node3D, size: Vector3, color: Color) -> void:
 	var marker := MeshInstance3D.new()

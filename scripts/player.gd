@@ -24,6 +24,7 @@ const CROUCH_HEAD_Y := 0.12
 const STANDING_CAPSULE_HEIGHT := 1.8
 const CROUCH_CAPSULE_HEIGHT := 1.15
 const CROUCH_BODY_SCALE_Y := 0.64
+const SPAWN_PROTECTION_MS := 5000
 
 var health := 100
 var ammo_in_mag := 30
@@ -76,6 +77,8 @@ var selected_class := 0
 var spawn_menu_open := false
 var has_deployed := false
 var menu_toggle_latched := false
+var spawn_protection_until_ms := 0
+var replicated_spawn_protection_ms := 0
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -286,7 +289,7 @@ func _server_simulate(delta: float) -> void:
 	move_and_slide()
 
 
-func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool) -> void:
+func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int) -> void:
 	if multiplayer.is_server():
 		return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
@@ -301,6 +304,7 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 	deaths = death_count
 	xp = experience
 	grenades_remaining = grenade_count
+	replicated_spawn_protection_ms = maxi(0, spawn_protection_ms)
 	_apply_crouch_visual(crouching)
 
 	if weapon_index != current_weapon_index:
@@ -325,6 +329,8 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 func server_fire(direction: Vector3) -> void:
 	if not multiplayer.is_server() or not alive or downed or is_reloading:
 		return
+
+	_cancel_spawn_protection()
 	var now: int = Time.get_ticks_msec()
 	if now < next_fire_time or ammo_in_mag <= 0:
 		return
@@ -367,6 +373,8 @@ func server_throw_grenade_request(
 ) -> void:
 	if not multiplayer.is_server():
 		return
+
+	_cancel_spawn_protection()
 	if not alive or downed:
 		return
 	if grenades_remaining <= 0:
@@ -592,8 +600,33 @@ func server_confirm_hit() -> void:
 		return
 	confirm_hit.rpc_id(peer_id)
 
+func spawn_protection_remaining_ms() -> int:
+	if not multiplayer.is_server():
+		return replicated_spawn_protection_ms
+	return maxi(
+		0,
+		spawn_protection_until_ms - Time.get_ticks_msec()
+	)
+
+func _activate_spawn_protection() -> void:
+	if not multiplayer.is_server():
+		return
+	spawn_protection_until_ms = (
+		Time.get_ticks_msec() + SPAWN_PROTECTION_MS
+	)
+
+func _cancel_spawn_protection() -> void:
+	if not multiplayer.is_server():
+		return
+	spawn_protection_until_ms = 0
+
+func _has_spawn_protection() -> bool:
+	return spawn_protection_remaining_ms() > 0
+
 func server_take_damage(amount: int, attacker_id: int) -> void:
 	if not multiplayer.is_server() or not alive or downed:
+		return
+	if _has_spawn_protection():
 		return
 
 	health = maxi(0, health - amount)
@@ -679,6 +712,7 @@ func server_respawn(spawn_position: Vector3) -> void:
 	_reset_loadout_ammo()
 	grenades_remaining = 2
 	_apply_server_crouch(false)
+	_activate_spawn_protection()
 	alive = true
 	downed = false
 	is_reloading = false
@@ -819,6 +853,7 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 	_reset_loadout_ammo()
 	grenades_remaining = 2
 	_apply_server_crouch(false)
+	_activate_spawn_protection()
 	bleedout_finish_ms = 0
 	show()
 
@@ -1285,8 +1320,16 @@ func _update_hud() -> void:
 		)
 	)
 	var objective_text: String = str(main.call("objective_status_text"))
+	var protection_seconds: float = float(
+		replicated_spawn_protection_ms
+	) / 1000.0
+	var protection_text := (
+		"PROTECTED %.1fs" % protection_seconds
+		if replicated_spawn_protection_ms > 0
+		else "Protection off"
+	)
 	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
-	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact  M: spawn menu" % [
+	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact  M: spawn menu" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],
@@ -1305,6 +1348,7 @@ func _update_hud() -> void:
 		current_weapon_index + 1,
 		weapon_slots.size(),
 		grenades_remaining,
+		protection_text,
 		objective_text,
 		minutes,
 		seconds,

@@ -1,11 +1,10 @@
 # Changelog
 
-## 1.4.5
+## 1.5.0
 
-- Added floor-validated spawn selection
-- Added capsule clearance validation
-- Added player-occupancy checks
-- Moved spawn points away from cover and map boundaries
-- Added alternate and emergency spawn fallbacks
-- Added server spawn-coordinate logging
-- Bumped protocol to 145
+- Added five-second spawn protection
+- Added authoritative protection countdown
+- Cancelled protection on firing or grenade use
+- Added colored attacker and defender spawn zones
+- Replicated protection state through Main snapshots
+- Bumped protocol to 150
