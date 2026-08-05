@@ -1,5 +1,10 @@
 extends CharacterBody3D
 
+const TEX_UNIFORM_ATTACKERS: Texture2D = preload("res://assets/textures/uniform_attackers.png")
+const TEX_UNIFORM_DEFENDERS: Texture2D = preload("res://assets/textures/uniform_defenders.png")
+const TEX_WEAPON_RIFLE: Texture2D = preload("res://assets/textures/weapon_rifle.png")
+const TEX_WEAPON_PISTOL: Texture2D = preload("res://assets/textures/weapon_pistol.png")
+
 enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
 
 @export var peer_id := 0
@@ -1380,7 +1385,13 @@ func _refresh_identity_visuals(force: bool = false) -> void:
 	var accent_color: Color = _class_accent_color(player_class)
 
 	if body_material != null:
-		body_material.albedo_color = team_color
+		body_material.albedo_texture = (
+			TEX_UNIFORM_ATTACKERS
+			if team == 0
+			else TEX_UNIFORM_DEFENDERS
+		)
+		body_material.albedo_color = team_color.lightened(0.22)
+		body_material.roughness = 0.82
 		body_material.emission_enabled = true
 		body_material.emission = team_color * 0.10
 
@@ -2467,7 +2478,13 @@ func _rebuild_first_person_weapon() -> void:
 				receiver_width = 0.14
 
 	var metal := StandardMaterial3D.new()
-	metal.albedo_color = Color(0.18, 0.19, 0.20)
+	metal.albedo_texture = (
+		TEX_WEAPON_PISTOL
+		if is_pistol
+		else TEX_WEAPON_RIFLE
+	)
+	metal.albedo_color = Color(0.72, 0.74, 0.76)
+	metal.roughness = 0.48
 
 	var wood := StandardMaterial3D.new()
 	wood.albedo_color = Color(0.28, 0.16, 0.08)

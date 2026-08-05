@@ -1,3 +1,4 @@
+const TEX_METAL: Texture2D = preload("res://assets/textures/metal_panel.png")
 extends Node3D
 
 var emplacement_id := 0
@@ -62,7 +63,8 @@ func _build_visuals() -> void:
 	receiver.mesh = receiver_box
 	receiver.position = Vector3(0.0, 0.0, -0.20)
 	team_material = StandardMaterial3D.new()
-	team_material.albedo_color = Color(0.45, 0.45, 0.45)
+	team_material.albedo_texture = TEX_METAL
+	team_material.albedo_color = Color(0.65, 0.65, 0.65)
 	team_material.metallic = 0.45
 	team_material.roughness = 0.42
 	team_material.emission_enabled = true

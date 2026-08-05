@@ -1,3 +1,4 @@
+const TEX_CONCRETE: Texture2D = preload("res://assets/textures/concrete_damage.png")
 extends StaticBody3D
 
 var cover_id := 0
@@ -39,7 +40,8 @@ func _build_visuals() -> void:
 	body_mesh.mesh = box
 	body_mesh.position.y = original_size.y * 0.5
 	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.34, 0.31, 0.25)
+	material.albedo_texture = TEX_CONCRETE
+	material.albedo_color = Color(0.80, 0.76, 0.68)
 	material.roughness = 0.96
 	body_mesh.material_override = material
 	add_child(body_mesh)

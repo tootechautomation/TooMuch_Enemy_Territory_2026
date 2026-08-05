@@ -8,10 +8,13 @@ const SmokeCloudScript = preload("res://scripts/smoke_cloud.gd")
 const SensorBeaconScript = preload("res://scripts/sensor_beacon.gd")
 const FieldEmplacementScript = preload("res://scripts/field_emplacement.gd")
 const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
+const TEX_METAL: Texture2D = preload("res://assets/textures/metal_panel.png")
+const TEX_OBJECTIVE: Texture2D = preload("res://assets/textures/objective_hazard.png")
+const TEX_FOLIAGE: Texture2D = preload("res://assets/textures/foliage_sprite.png")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.3.0"
-const NETWORK_PROTOCOL := 330
+const BUILD_VERSION := "3.4.0"
+const NETWORK_PROTOCOL := 340
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -234,6 +237,18 @@ func _process(delta: float) -> void:
 		command_post_contested,
 		overtime_active
 	)
+
+func _create_foliage_sprite(position: Vector3, scale_value: float) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var sprite := Sprite3D.new()
+	sprite.texture = TEX_FOLIAGE
+	sprite.position = position
+	sprite.pixel_size = 0.012
+	sprite.scale = Vector3.ONE * scale_value
+	sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	add_child(sprite)
 
 func _create_field_emplacement(
 	emplacement_id: int,
@@ -2798,6 +2813,19 @@ func _build_world() -> void:
 		deg_to_rad(90.0)
 	)
 
+	for foliage_data in [
+		[Vector3(-12.5, 0.0, -4.5), 1.25],
+		[Vector3(-10.0, 0.0, 9.0), 1.10],
+		[Vector3(11.8, 0.0, 5.5), 1.35],
+		[Vector3(13.0, 0.0, -8.5), 1.15],
+		[Vector3(-6.5, 0.0, 11.5), 0.95],
+		[Vector3(6.0, 0.0, -11.0), 1.05]
+	]:
+		_create_foliage_sprite(
+			Vector3(foliage_data[0]),
+			float(foliage_data[1])
+		)
+
 	_make_spawn_zone(
 		"AttackersSpawnZone",
 		Vector3(-15.0, 0.08, 0.0),
@@ -2828,7 +2856,8 @@ func _build_world() -> void:
 	radio_mesh.mesh = radio_box
 	radio_mesh.position = Vector3(0.0, 0.85, 0.0)
 	var radio_material := StandardMaterial3D.new()
-	radio_material.albedo_color = Color(0.20, 0.22, 0.18)
+	radio_material.albedo_texture = TEX_METAL
+	radio_material.albedo_color = Color(0.58, 0.60, 0.54)
 	radio_material.metallic = 0.3
 	radio_mesh.material_override = radio_material
 	command_post.add_child(radio_mesh)
@@ -3014,7 +3043,37 @@ func _make_marker(parent: Node3D, size: Vector3, color: Color) -> void:
 	marker.material_override = material
 	parent.add_child(marker)
 
-func _make_static_box(node_name: String, pos: Vector3, size: Vector3, color: Color) -> void:
-	var body := StaticBody3D.new(); body.name = node_name; body.position = pos
-	var mesh_instance := MeshInstance3D.new(); var mesh := BoxMesh.new(); mesh.size = size; mesh_instance.mesh = mesh; var mat := StandardMaterial3D.new(); mat.albedo_color = color; mesh_instance.material_override = mat; body.add_child(mesh_instance)
-	var collision := CollisionShape3D.new(); var shape := BoxShape3D.new(); shape.size = size; collision.shape = shape; body.add_child(collision); add_child(body)
+func _make_static_box(
+	node_name: String,
+	pos: Vector3,
+	size: Vector3,
+	color: Color
+) -> void:
+	var body := StaticBody3D.new()
+	body.name = node_name
+	body.position = pos
+
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mesh_instance.mesh = mesh
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.88
+	if (
+		"Cover" in node_name
+		or "Tower" in node_name
+		or "Trench" in node_name
+		or "Platform" in node_name
+	):
+		material.albedo_texture = TEX_METAL
+	mesh_instance.material_override = material
+	body.add_child(mesh_instance)
+
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	collision.shape = shape
+	body.add_child(collision)
+	add_child(body)
