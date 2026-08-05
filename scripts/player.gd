@@ -21,7 +21,8 @@ const SPRINT_SPEED := 10.0
 const CROUCH_SPEED := 4.0
 const JUMP_SPEED := 5.2
 const SNAPSHOT_LERP_SPEED := 14.0
-const ABILITY_COOLDOWN_MS := 8000
+const ABILITY_COOLDOWN_MS := 12000
+const SCOUT_SPOT_DURATION_MS := 8000
 const REVIVE_RANGE := 2.8
 const BLEEDOUT_MS := 15000
 const STANDING_HEAD_Y := 0.65
@@ -84,6 +85,10 @@ var has_deployed := false
 var menu_toggle_latched := false
 var spawn_protection_until_ms := 0
 var replicated_spawn_protection_ms := 0
+var replicated_ability_cooldown_ms := 0
+var spotted_until_ms := 0
+var replicated_spotted_ms := 0
+var spotted_label: Label3D
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -95,6 +100,7 @@ var server_logged_first_input := false
 
 func _ready() -> void:
 	_initialize_loadout()
+	_build_spotted_marker()
 	target_position = global_position
 	if _is_local_player() and DisplayServer.get_name() != "headless":
 		$Head/Camera3D.current = true
@@ -294,7 +300,7 @@ func _server_simulate(delta: float) -> void:
 	move_and_slide()
 
 
-func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int) -> void:
+func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int) -> void:
 	if multiplayer.is_server():
 		return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
@@ -319,6 +325,9 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 	xp = experience
 	grenades_remaining = grenade_count
 	replicated_spawn_protection_ms = maxi(0, spawn_protection_ms)
+	replicated_ability_cooldown_ms = maxi(0, ability_cooldown_ms)
+	replicated_spotted_ms = maxi(0, spotted_ms)
+	_update_spotted_marker()
 	_apply_crouch_visual(crouching)
 
 	if weapon_index != current_weapon_index:
@@ -789,18 +798,173 @@ func server_interact_request() -> void:
 	if player_class == PlayerClass.ENGINEER and not downed:
 		get_parent().server_engineer_interact(self)
 
+func ability_cooldown_remaining_ms() -> int:
+	if not multiplayer.is_server():
+		return replicated_ability_cooldown_ms
+	return maxi(0, next_ability_time - Time.get_ticks_msec())
+
+func spotted_remaining_ms() -> int:
+	if not multiplayer.is_server():
+		return replicated_spotted_ms
+	return maxi(0, spotted_until_ms - Time.get_ticks_msec())
+
+func server_apply_spotted(duration_ms: int) -> void:
+	if not multiplayer.is_server():
+		return
+	spotted_until_ms = maxi(
+		spotted_until_ms,
+		Time.get_ticks_msec() + maxi(0, duration_ms)
+	)
+
+func _build_spotted_marker() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	spotted_label = Label3D.new()
+	spotted_label.name = "SpottedMarker"
+	spotted_label.text = "SPOTTED"
+	spotted_label.position = Vector3(0.0, 1.55, 0.0)
+	spotted_label.font_size = 28
+	spotted_label.outline_size = 8
+	spotted_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	spotted_label.no_depth_test = true
+	spotted_label.visible = false
+	add_child(spotted_label)
+
+func _update_spotted_marker() -> void:
+	if spotted_label == null:
+		return
+
+	var local_team := -1
+	var main: Node = get_parent()
+	if main != null:
+		var local_id: int = multiplayer.get_unique_id()
+		if main.get("players") is Dictionary:
+			var player_map: Dictionary = main.get("players")
+			if player_map.has(local_id):
+				var local_player: Node = player_map[local_id] as Node
+				if local_player != null:
+					local_team = int(local_player.get("team"))
+
+	spotted_label.visible = (
+		replicated_spotted_ms > 0
+		and local_team >= 0
+		and local_team != team
+	)
+
+func _ability_name() -> String:
+	match player_class:
+		PlayerClass.SOLDIER:
+			return "Combat Resupply"
+		PlayerClass.MEDIC:
+			return "Healing Burst"
+		PlayerClass.ENGINEER:
+			return "Field Repair"
+		PlayerClass.FIELD_OPS:
+			return "Ammo Pulse"
+		PlayerClass.SCOUT:
+			return "Recon Pulse"
+		_:
+			return "Ability"
+
 func server_ability_request() -> void:
 	if not multiplayer.is_server() or not alive or downed:
 		return
-	var now := Time.get_ticks_msec()
-	if now < next_ability_time: return
+
+	var now: int = Time.get_ticks_msec()
+	if now < next_ability_time:
+		return
+
 	next_ability_time = now + ABILITY_COOLDOWN_MS
+	var main: Node = get_parent()
+
 	match player_class:
-		PlayerClass.SOLDIER: reserve_ammo = mini(reserve_ammo + 45, _weapon_reserve_ammo() + 90)
-		PlayerClass.MEDIC: get_parent().create_supply_pack(self, 0, 45)
-		PlayerClass.ENGINEER: health = mini(_class_health(player_class), health + 25)
-		PlayerClass.FIELD_OPS: get_parent().create_supply_pack(self, 1, 70)
-		PlayerClass.SCOUT: health = mini(_class_health(player_class), health + 15)
+		PlayerClass.SOLDIER:
+			reserve_ammo = mini(
+				reserve_ammo + 90,
+				_weapon_reserve_ammo() + 120
+			)
+			grenades_remaining = mini(grenades_remaining + 1, 3)
+			add_xp(3, "combat resupply")
+
+		PlayerClass.MEDIC:
+			var healed_count := 0
+			for player_value in main.players.values():
+				var teammate: Node3D = player_value as Node3D
+				if teammate == null:
+					continue
+				if int(teammate.get("team")) != team:
+					continue
+				if not bool(teammate.get("alive")):
+					continue
+				if global_position.distance_to(teammate.global_position) > 10.0:
+					continue
+
+				var teammate_max: int = teammate.call(
+					"_class_health",
+					int(teammate.get("player_class"))
+				)
+				var current_health: int = int(teammate.get("health"))
+				var new_health: int = mini(
+					teammate_max,
+					current_health + 40
+				)
+				if new_health > current_health:
+					teammate.set("health", new_health)
+					healed_count += 1
+
+			if healed_count > 0:
+				add_xp(healed_count * 4, "healing burst")
+
+		PlayerClass.ENGINEER:
+			health = mini(
+				_class_health(player_class),
+				health + 35
+			)
+			if main.has_method("server_engineer_interact"):
+				for step in range(3):
+					main.call("server_engineer_interact", self)
+			add_xp(3, "field repair")
+
+		PlayerClass.FIELD_OPS:
+			var supplied_count := 0
+			for player_value in main.players.values():
+				var teammate: Node3D = player_value as Node3D
+				if teammate == null:
+					continue
+				if int(teammate.get("team")) != team:
+					continue
+				if not bool(teammate.get("alive")):
+					continue
+				if global_position.distance_to(teammate.global_position) > 12.0:
+					continue
+
+				var current_reserve: int = int(
+					teammate.get("reserve_ammo")
+				)
+				var maximum_reserve: int = int(
+					teammate.call("_weapon_reserve_ammo")
+				)
+				var new_reserve: int = mini(
+					maximum_reserve + 60,
+					current_reserve + 70
+				)
+				if new_reserve > current_reserve:
+					teammate.set("reserve_ammo", new_reserve)
+					teammate.call("_store_current_weapon_ammo")
+					supplied_count += 1
+
+			if supplied_count > 0:
+				add_xp(supplied_count * 3, "ammo pulse")
+
+		PlayerClass.SCOUT:
+			if main.has_method("server_scout_recon"):
+				main.call(
+					"server_scout_recon",
+					self,
+					36.0,
+					SCOUT_SPOT_DURATION_MS
+				)
 
 func server_class_request(index: int) -> void:
 	if not multiplayer.is_server():
@@ -940,6 +1104,8 @@ func server_apply_class(class_id: int) -> void:
 
 	player_class = clampi(class_id, 0, 4)
 	health = _class_health(player_class)
+	next_ability_time = 0
+	spotted_until_ms = 0
 	current_weapon_index = 0
 	_configure_class_loadout(true, false)
 
@@ -1449,8 +1615,16 @@ func _update_hud() -> void:
 		if replicated_spawn_protection_ms > 0
 		else "Protection off"
 	)
-	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
-	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact  M: spawn menu" % [
+	var cooldown: float = float(
+		replicated_ability_cooldown_ms
+	) / 1000.0
+	var ability_name: String = _ability_name()
+	var ability_state := (
+		"READY"
+		if replicated_ability_cooldown_ms <= 0
+		else "%.1fs" % cooldown
+	)
+	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  G: grenade  X: switch  E: interact  M: spawn menu" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],
@@ -1477,7 +1651,8 @@ func _update_hud() -> void:
 		names[player_class],
 		xp,
 		rank_name(),
-		cooldown
+		ability_name,
+		ability_state
 	]
 	scoreboard.visible = Input.is_action_pressed("scoreboard")
 	if scoreboard.visible:

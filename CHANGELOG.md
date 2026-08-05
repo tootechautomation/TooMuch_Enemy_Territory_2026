@@ -1,11 +1,14 @@
 # Changelog
 
-## 1.6.0
+## 1.7.0
 
-- Added five class-specific primary weapons
-- Added automatic class loadout selection
-- Added class-specific weapon statistics
-- Added distinct first-person primary models
-- Added Scout scope blockout
-- Added HUD loadout line
-- Bumped protocol to 160
+- Replaced placeholder class abilities
+- Added Soldier Combat Resupply
+- Added Medic Healing Burst
+- Added Engineer Field Repair
+- Added Field Ops Ammo Pulse
+- Added Scout Recon Pulse
+- Added world-space spotted markers
+- Replicated true server ability cooldowns
+- Added ability names and states to HUD
+- Bumped protocol to 170

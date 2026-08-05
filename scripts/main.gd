@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.6.0"
-const NETWORK_PROTOCOL := 160
+const BUILD_VERSION := "1.7.0"
+const NETWORK_PROTOCOL := 170
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -449,6 +449,42 @@ func request_player_team_and_class(
 		]
 	)
 
+func server_scout_recon(
+	scout: Node3D,
+	radius: float = 36.0,
+	duration_ms: int = 8000
+) -> int:
+	if not multiplayer.is_server() or scout == null:
+		return 0
+
+	var scout_team: int = int(scout.get("team"))
+	var spotted_count := 0
+
+	for player_value in players.values():
+		var candidate: Node3D = player_value as Node3D
+		if candidate == null or candidate == scout:
+			continue
+		if int(candidate.get("team")) == scout_team:
+			continue
+		if not bool(candidate.get("alive")):
+			continue
+		if scout.global_position.distance_to(candidate.global_position) > radius:
+			continue
+
+		candidate.call("server_apply_spotted", duration_ms)
+		spotted_count += 1
+
+	if spotted_count > 0:
+		scout.call("add_xp", spotted_count * 3, "recon spotting")
+
+	push_kill_feed.rpc(
+		"%s spotted %d enemies" % [
+			str(scout.get("player_name")),
+			spotted_count
+		]
+	)
+	return spotted_count
+
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_class(
 	requested_peer_id: int,
@@ -497,7 +533,9 @@ func _broadcast_player_snapshots() -> void:
 			int(player.get("current_weapon_index")),
 			int(player.get("grenades_remaining")),
 			bool(player.get("is_crouching")),
-			int(player.call("spawn_protection_remaining_ms"))
+			int(player.call("spawn_protection_remaining_ms")),
+			int(player.call("ability_cooldown_remaining_ms")),
+			int(player.call("spotted_remaining_ms"))
 		)
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
@@ -520,7 +558,9 @@ func receive_player_snapshot(
 	weapon_index: int,
 	grenade_count: int,
 	crouching: bool,
-	spawn_protection_ms: int
+	spawn_protection_ms: int,
+	ability_cooldown_ms: int,
+	spotted_ms: int
 ) -> void:
 	if multiplayer.is_server():
 		return
@@ -553,7 +593,9 @@ func receive_player_snapshot(
 		weapon_index,
 		grenade_count,
 		crouching,
-		spawn_protection_ms
+		spawn_protection_ms,
+		ability_cooldown_ms,
+		spotted_ms
 	)
 
 @rpc("authority", "call_local", "reliable")

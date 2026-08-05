@@ -1,30 +1,28 @@
 # Frontline: Objective
 
-## Version 1.6.0 class-specific loadouts
+## Version 1.7.0 class abilities
 
-Each class now receives a distinct primary weapon plus the shared Service Pistol:
+The five classes now have distinct server-authoritative abilities:
 
-- Soldier: Support LMG — large magazine and sustained fire
-- Medic: Medic SMG — fast handling and close-range fire rate
-- Engineer: Engineer Carbine — stronger controlled shots
-- Field Ops: Field Ops Rifle — balanced medium/long-range weapon
-- Scout: Scout Marksman — slow, accurate, high-damage weapon
+- **Soldier — Combat Resupply:** restores primary reserve ammunition and one grenade.
+- **Medic — Healing Burst:** heals all living teammates within 10 meters.
+- **Engineer — Field Repair:** restores health and applies three objective interaction ticks when in range.
+- **Field Ops — Ammo Pulse:** resupplies nearby teammates within 12 meters.
+- **Scout — Recon Pulse:** spots living enemies within 36 meters for eight seconds.
 
 Added:
 
-- Automatic loadout change when selecting a class
-- Server-authoritative class weapon assignment
-- Client loadout preview when deploying
-- Class-specific ammunition, damage, spread, range, recoil, and reload values
-- Visibly different first-person primary weapon models
-- Scout scope blockout
-- HUD loadout confirmation
+- Real server cooldown replication
+- Ability name and READY/countdown state in the HUD
+- World-space `SPOTTED` marker visible to the opposing team
+- XP awards for healing, resupply, repair, and recon support
+- Ability state reset when changing class
 
 Install the same package on Windows and Linux.
 
 Expected HUD:
 
 ```text
-Connected: v1.6.0 protocol 160
-Loadout: Engineer Carbine + Service Pistol
+Connected: v1.7.0 protocol 170
+Class: Scout  XP 0 (Recruit)  Q: Recon Pulse [READY]
 ```
