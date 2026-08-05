@@ -634,7 +634,7 @@ func _on_connection_failed() -> void:
 		connection_join_button.disabled = false
 	if status_label != null:
 		status_label.text = (
-			"Connection failed. Check the VPS IP, port 27960, "
+			"Connection failed. Check the VPS IP, port 27960, "+
 			"firewall, and server process."
 	)
 
