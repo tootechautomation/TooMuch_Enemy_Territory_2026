@@ -492,9 +492,14 @@ func _initialize_loadout() -> void:
 	weapon_magazines.clear()
 	weapon_reserves.clear()
 
-	for slot_weapon in weapon_slots:
-		weapon_magazines.append(slot__weapon_magazine_size())
-		weapon_reserves.append(slot__weapon_reserve_ammo())
+	for slot_value in weapon_slots:
+		var slot_weapon: Resource = slot_value as Resource
+		weapon_magazines.append(
+			_resource_int(slot_weapon, "magazine_size", 30)
+		)
+		weapon_reserves.append(
+			_resource_int(slot_weapon, "reserve_ammo", 120)
+		)
 
 	current_weapon_index = 0
 	_apply_weapon_index(0, false)
