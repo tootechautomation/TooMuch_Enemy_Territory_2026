@@ -1,107 +1,55 @@
 # Frontline: Objective
 
-An original Godot 4 class-based objective shooter prototype. It contains no Wolfenstein game data, maps, branding, characters, sounds, or artwork.
+An original Godot 4 multiplayer objective-shooter prototype inspired by classic class-based games. It contains no Wolfenstein code, maps, branding, models, textures, sounds, or other proprietary game data.
 
-## Version 0.3 highlights
+## Version 0.4
 
-- Server-authoritative movement, firing, damage, reloads, objectives, and respawns
-- Sprint and crouch movement
-- Modular weapon resources
-- Magazine and reserve ammunition
-- Timed reloading, weapon spread, damage, range, and rate of fire
-- Interpolated remote-player snapshots
-- Five classes, spawn waves, match timer, and engineer objective
+- ENet dedicated server for up to 32 players
+- Server-authoritative movement, combat, reloads, class actions, and objective damage
+- Sprinting, crouching, jumping, hitscan rifle, spread, magazines, and reserve ammunition
+- Five classes: Soldier, Medic, Engineer, Field Ops, and Scout
+- Ten-second team respawn waves and ten-minute objective matches
+- Four original procedural uniform skins, selected deterministically per player
+- Headless Linux VPS operation
 
 ## Controls
 
 - WASD: move
+- Mouse: look
+- Left mouse: fire
+- R: reload
 - Shift: sprint
 - C: crouch
 - Space: jump
-- Mouse: aim
-- Left mouse: fire
-- R: reload
 - E: engineer objective action
+- Q: class ability
 - 1–5: choose class
 - Escape: release mouse
 
-## Run locally
+## Class abilities
 
-Install Godot 4.3 or newer.
+- Soldier: personal ammunition resupply
+- Medic: heals nearby living teammates
+- Engineer: repairs personal armor/health and performs objective work
+- Field Ops: resupplies ammunition for nearby teammates
+- Scout: light field recovery
 
-Host:
-
-```bash
-godot --path . --server --port 27960
-```
-
-Client:
+## Run a server
 
 ```bash
-godot --path . --connect 127.0.0.1 --port 27960
+flatpak run org.godotengine.Godot --headless --path . --server --port 27960
 ```
 
-You can also launch the project normally and enter a server IP in the menu.
+## Run a Windows client from source
 
-## Export a Linux server
+Install Godot 4.7, clone this repository, open `project.godot`, and press F6/F5. Enter the VPS public IP in the connection menu.
 
-In Godot:
-
-1. Open `project.godot`.
-2. Install export templates if prompted.
-3. Create a Linux export preset.
-4. Enable **Export as dedicated server**.
-5. Export as `frontline_server.x86_64`.
-
-Run:
-
-```bash
-chmod +x frontline_server.x86_64
-./frontline_server.x86_64 --headless --server --port 27960
-```
-
-Open UDP port 27960 in the VPS firewall.
-
-## Ubuntu VPS example
-
-```bash
-sudo ufw allow 27960/udp
-sudo mkdir -p /opt/frontline
-sudo cp frontline_server.x86_64 /opt/frontline/
-sudo chmod +x /opt/frontline/frontline_server.x86_64
-sudo cp deploy/frontline.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now frontline
-sudo systemctl status frontline
-```
-
-Edit the service file if your executable has a different name.
-
-## Important architecture note
-
-This first prototype uses client-authoritative movement to keep the code easy to understand. Before public deployment, movement, shooting, cooldowns, and objective interactions should be validated server-side and protected with rate limits.
-
-## Recommended next milestones
-
-1. Server-authoritative movement and lag compensation
-2. Spawn waves and spawn selection
-3. Revive, ammo packs, med packs, and class abilities
-4. Constructible and dynamite objectives
-5. Match timer, campaign XP, scoreboard, and map rotation
-6. Original character, weapon, audio, UI, and map assets
-
-## Version 0.2 authoritative prototype
-
-The server now controls movement, hit detection, health, deaths, objective damage, and wave respawns. Clients submit input and render replicated state. This is a foundation for further prediction and lag compensation, not a finished anti-cheat implementation.
-
-Validate the project on a Linux machine with either a native or Flatpak Godot installation:
+## Validate
 
 ```bash
 ./tools/validate_project.sh
 ```
 
-Run the VPS server:
+## Current limitations
 
-```bash
-flatpak run org.godotengine.Godot --headless --path . --server --port 27960
-```
+This is an early playable prototype. The character skins are original procedural blockout uniforms, not final animated production models. It does not yet include reviving downed players, planted dynamite, constructible objectives, audio, bots, client prediction, lag compensation, or a full server browser.

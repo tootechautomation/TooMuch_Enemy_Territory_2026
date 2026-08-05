@@ -13,3 +13,12 @@
 
 - Server-authoritative movement and combat.
 - Spawn waves, match timer, replicated match state, and validation workflow.
+
+## 0.4.0 - Classes and original uniforms
+
+- Added original procedural attacker and defender character uniforms.
+- Added four bundled skin palettes with no external or Wolfenstein assets.
+- Added Q class abilities with server-side cooldown validation.
+- Medic heals nearby teammates; Field Ops resupplies ammunition.
+- Soldier self-resupplies; Engineer repairs armor/health; Scout receives a light recovery ability.
+- Added class-ability cooldown to the HUD.

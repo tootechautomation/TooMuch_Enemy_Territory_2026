@@ -14,6 +14,8 @@ const CROUCH_SPEED := 4.0
 const JUMP_SPEED := 5.2
 const OBJECTIVE_INTERVAL_MS := 500
 const SNAPSHOT_LERP_SPEED := 14.0
+const ABILITY_COOLDOWN_MS := 8000
+const SUPPORT_RANGE := 7.0
 
 var health := 100
 var ammo_in_mag := 30
@@ -31,6 +33,9 @@ var last_received_sequence := 0
 var local_sequence := 0
 var next_fire_time := 0
 var next_objective_time := 0
+var next_ability_time := 0
+var kills := 0
+var deaths := 0
 var target_position := Vector3.ZERO
 var target_yaw := 0.0
 var target_pitch := 0.0
@@ -83,6 +88,8 @@ func _collect_and_send_input() -> void:
 		request_reload.rpc_id(1)
 	if Input.is_action_pressed("interact"):
 		request_objective_action.rpc_id(1)
+	if Input.is_action_just_pressed("ability"):
+		request_class_ability.rpc_id(1)
 	for index in 5:
 		if Input.is_action_just_pressed("class_%d" % (index + 1)):
 			request_class.rpc_id(1, index)
@@ -183,6 +190,7 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 	health = maxi(0, health - amount)
 	if health == 0:
 		alive = false
+		deaths += 1
 		is_reloading = false
 		visible = false
 		velocity = Vector3.ZERO
@@ -216,6 +224,37 @@ func request_objective_action() -> void:
 		return
 	next_objective_time = now + OBJECTIVE_INTERVAL_MS
 	get_parent().damage_objective(5, team)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_class_ability() -> void:
+	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id or not alive:
+		return
+	var now := Time.get_ticks_msec()
+	if now < next_ability_time:
+		return
+	next_ability_time = now + ABILITY_COOLDOWN_MS
+	match player_class:
+		PlayerClass.SOLDIER:
+			reserve_ammo = mini(reserve_ammo + 45, weapon.reserve_ammo + 90)
+		PlayerClass.MEDIC:
+			_support_heal()
+		PlayerClass.ENGINEER:
+			health = mini(_class_health(player_class), health + 25)
+		PlayerClass.FIELD_OPS:
+			_support_ammo()
+		PlayerClass.SCOUT:
+			health = mini(_class_health(player_class), health + 15)
+
+func _support_heal() -> void:
+	for candidate in get_parent().players.values():
+		if candidate != self and candidate.team == team and candidate.alive and global_position.distance_to(candidate.global_position) <= SUPPORT_RANGE:
+			candidate.health = mini(candidate._class_health(candidate.player_class), candidate.health + 45)
+
+func _support_ammo() -> void:
+	for candidate in get_parent().players.values():
+		if candidate.team == team and candidate.alive and global_position.distance_to(candidate.global_position) <= SUPPORT_RANGE:
+			candidate.reserve_ammo = mini(candidate.reserve_ammo + 60, candidate.weapon.reserve_ammo + 120)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_class(index: int) -> void:
@@ -256,4 +295,5 @@ func _update_hud() -> void:
 	var seconds := int(main.match_time_remaining) % 60
 	var life_text := "ALIVE" if alive else "RESPAWN IN %.1f" % main.spawn_wave_remaining
 	var weapon_state := "RELOADING" if is_reloading else weapon.display_name
-	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s\nObjective %d%%  Time %02d:%02d\nClass: %s (1–5)" % [player_name, "Attackers" if team == 0 else "Defenders", life_text, health, ammo_in_mag, reserve_ammo, weapon_state, main.objective_health, minutes, seconds, names[player_class]]
+	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
+	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s\nObjective %d%%  Time %02d:%02d\nClass: %s (1–5)  Ability Q: %.1fs" % [player_name, "Attackers" if team == 0 else "Defenders", life_text, health, ammo_in_mag, reserve_ammo, weapon_state, main.objective_health, minutes, seconds, names[player_class], cooldown]
