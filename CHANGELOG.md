@@ -1,10 +1,11 @@
 # Changelog
 
-## 1.4.4
+## 1.4.5
 
-- Centralized player snapshot broadcasting in Main
-- Broadcast authoritative state at 20 Hz
-- Removed player-node snapshot sender
-- Used server-owned fire and grenade origins
-- Added authoritative position/ammo HUD diagnostics
-- Bumped protocol to 144
+- Added floor-validated spawn selection
+- Added capsule clearance validation
+- Added player-occupancy checks
+- Moved spawn points away from cover and map boundaries
+- Added alternate and emergency spawn fallbacks
+- Added server spawn-coordinate logging
+- Bumped protocol to 145

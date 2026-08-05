@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.4.4"
-const NETWORK_PROTOCOL := 144
+const BUILD_VERSION := "1.4.5"
+const NETWORK_PROTOCOL := 145
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -21,8 +21,20 @@ var grenades: Dictionary = {}
 var next_grenade_id := 1
 var next_supply_pack_id := 1
 var spawn_points := {
-	0: [Vector3(-12, 1, 0), Vector3(-12, 1, 4), Vector3(-12, 1, -4)],
-	1: [Vector3(12, 1, 0), Vector3(12, 1, 4), Vector3(12, 1, -4)]
+	0: [
+		Vector3(-16.0, 1.0, 0.0),
+		Vector3(-16.0, 1.0, 6.5),
+		Vector3(-16.0, 1.0, -6.5),
+		Vector3(-12.5, 1.0, 8.0),
+		Vector3(-12.5, 1.0, -8.0)
+	],
+	1: [
+		Vector3(16.0, 1.0, 0.0),
+		Vector3(16.0, 1.0, 6.5),
+		Vector3(16.0, 1.0, -6.5),
+		Vector3(12.5, 1.0, 8.0),
+		Vector3(12.5, 1.0, -8.0)
+	]
 }
 var next_team := 0
 var desired_bot_count := 8
@@ -544,15 +556,199 @@ func receive_player_snapshot(
 @rpc("authority", "call_local", "reliable")
 func spawn_player(peer_id: int, team: int, pname: String, spawn_position: Vector3) -> void:
 	if players.has(peer_id): return
-	var player = PlayerScene.instantiate(); player.name = str(peer_id); player.peer_id = peer_id; player.team = team; player.player_name = pname; player.position = spawn_position
-	add_child(player); players[peer_id] = player
+	var player = PlayerScene.instantiate()
+	player.name = str(peer_id)
+	player.peer_id = peer_id
+	player.team = team
+	player.player_name = pname
+	player.position = spawn_position
+	add_child(player)
+	players[peer_id] = player
+
+	if multiplayer.is_server():
+		print(
+			"Spawned %s peer=%d team=%d at %s" % [
+				pname,
+				peer_id,
+				team,
+				spawn_position
+			]
+		)
 
 @rpc("authority", "call_local", "reliable")
 func remove_player(peer_id: int) -> void:
 	if players.has(peer_id): players[peer_id].queue_free(); players.erase(peer_id)
 
 func _get_spawn(team: int, peer_id: int) -> Vector3:
-	var points: Array = spawn_points.get(team, spawn_points[0]); return points[peer_id % points.size()]
+	var safe_team: int = clampi(team, 0, 1)
+	var points: Array = spawn_points.get(safe_team, spawn_points[0])
+	var start_index: int = posmod(peer_id, points.size())
+
+	for offset in range(points.size()):
+		var candidate_index: int = posmod(
+			start_index + offset,
+			points.size()
+		)
+		var base_candidate: Vector3 = points[candidate_index]
+		var validated: Dictionary = _validate_spawn_candidate(
+			base_candidate,
+			peer_id
+		)
+		if bool(validated.get("valid", false)):
+			return Vector3(validated.get("position"))
+
+	# Try nearby offsets around the preferred team side.
+	var team_x: float = -15.0 if safe_team == 0 else 15.0
+	var fallback_offsets: Array[Vector3] = [
+		Vector3(team_x, 1.0, 0.0),
+		Vector3(team_x, 1.0, 4.0),
+		Vector3(team_x, 1.0, -4.0),
+		Vector3(team_x - (2.0 if safe_team == 0 else -2.0), 1.0, 7.5),
+		Vector3(team_x - (2.0 if safe_team == 0 else -2.0), 1.0, -7.5)
+	]
+
+	for fallback in fallback_offsets:
+		var validated_fallback: Dictionary = _validate_spawn_candidate(
+			fallback,
+			peer_id
+		)
+		if bool(validated_fallback.get("valid", false)):
+			return Vector3(validated_fallback.get("position"))
+
+	# Last-resort point is still placed above known solid team ground.
+	var emergency := Vector3(
+		-17.0 if safe_team == 0 else 17.0,
+		1.15,
+		0.0
+	)
+	push_warning(
+		"No fully clear spawn found for peer %d; using emergency spawn %s"
+		% [peer_id, emergency]
+	)
+	return emergency
+
+func _validate_spawn_candidate(
+	base_candidate: Vector3,
+	peer_id: int
+) -> Dictionary:
+	if not multiplayer.is_server():
+		return {
+			"valid": true,
+			"position": base_candidate
+		}
+
+	var world: World3D = get_world_3d()
+	if world == null:
+		return {
+			"valid": false,
+			"position": base_candidate
+		}
+
+	var space_state: PhysicsDirectSpaceState3D = (
+		world.direct_space_state
+	)
+
+	# Find actual floor below the candidate rather than trusting its Y value.
+	var ray_from := Vector3(
+		base_candidate.x,
+		base_candidate.y + 6.0,
+		base_candidate.z
+	)
+	var ray_to := Vector3(
+		base_candidate.x,
+		base_candidate.y - 20.0,
+		base_candidate.z
+	)
+	var floor_query := PhysicsRayQueryParameters3D.create(
+		ray_from,
+		ray_to
+	)
+	floor_query.collision_mask = 1
+	floor_query.collide_with_areas = false
+	floor_query.collide_with_bodies = true
+
+	var floor_hit: Dictionary = space_state.intersect_ray(
+		floor_query
+	)
+	if floor_hit.is_empty():
+		return {
+			"valid": false,
+			"position": base_candidate
+		}
+
+	var floor_normal: Vector3 = Vector3(
+		floor_hit.get("normal", Vector3.ZERO)
+	)
+	if floor_normal.dot(Vector3.UP) < 0.65:
+		return {
+			"valid": false,
+			"position": base_candidate
+		}
+
+	var floor_position: Vector3 = Vector3(
+		floor_hit.get("position", base_candidate)
+	)
+
+	# Player capsule is 1.8 m tall with a 0.45 m radius.
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.45
+	capsule.height = 1.8
+
+	var spawn_position := floor_position + Vector3.UP * 0.96
+	var shape_query := PhysicsShapeQueryParameters3D.new()
+	shape_query.shape = capsule
+	shape_query.transform = Transform3D(
+		Basis.IDENTITY,
+		spawn_position
+	)
+	shape_query.collision_mask = 1
+	shape_query.collide_with_areas = false
+	shape_query.collide_with_bodies = true
+	shape_query.margin = 0.03
+
+	var excluded: Array[RID] = []
+	if players.has(peer_id):
+		var existing_player: CollisionObject3D = (
+			players[peer_id] as CollisionObject3D
+		)
+		if existing_player != null:
+			excluded.append(existing_player.get_rid())
+	shape_query.exclude = excluded
+
+	var overlaps: Array[Dictionary] = (
+		space_state.intersect_shape(shape_query, 16)
+	)
+
+	# Ignore the floor body itself only when the capsule is merely resting
+	# above it; any other overlap means the point is obstructed.
+	for overlap in overlaps:
+		var collider: Object = overlap.get("collider")
+		if collider == floor_hit.get("collider"):
+			continue
+		return {
+			"valid": false,
+			"position": spawn_position
+		}
+
+	# Keep players separated even if their collision layers later change.
+	for player_value in players.values():
+		var other_player: Node3D = player_value as Node3D
+		if other_player == null:
+			continue
+		if int(other_player.get("peer_id")) == peer_id:
+			continue
+		if not bool(other_player.get("alive")):
+			continue
+		if other_player.global_position.distance_to(spawn_position) < 1.4:
+			return {
+				"valid": false,
+				"position": spawn_position
+			}
+
+	return {
+		"valid": true,
+		"position": spawn_position
+	}
 
 func _respawn_wave() -> void:
 	for peer_id_value in players:
