@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Medic SMG"
+magazine_size = 32
+reserve_ammo = 160
+damage = 15
+rounds_per_minute = 820.0
+reload_seconds = 1.75
+range_meters = 72.0
+hip_spread_degrees = 0.9
+moving_spread_degrees = 1.45
+recoil_degrees = 0.4

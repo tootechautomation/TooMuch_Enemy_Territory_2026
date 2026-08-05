@@ -1,23 +1,30 @@
 # Frontline: Objective
 
-## Version 1.5.0 spawn protection
+## Version 1.6.0 class-specific loadouts
+
+Each class now receives a distinct primary weapon plus the shared Service Pistol:
+
+- Soldier: Support LMG — large magazine and sustained fire
+- Medic: Medic SMG — fast handling and close-range fire rate
+- Engineer: Engineer Carbine — stronger controlled shots
+- Field Ops: Field Ops Rifle — balanced medium/long-range weapon
+- Scout: Scout Marksman — slow, accurate, high-damage weapon
 
 Added:
 
-- Five seconds of server-authoritative protection after every spawn
-- Protected players cannot take enemy damage
-- Protection ends immediately when the player fires
-- Protection ends immediately when the player throws a grenade
-- HUD countdown showing remaining protection time
-- Blue attacker spawn zone
-- Red defender spawn zone
-- Spawn protection included in authoritative snapshots
+- Automatic loadout change when selecting a class
+- Server-authoritative class weapon assignment
+- Client loadout preview when deploying
+- Class-specific ammunition, damage, spread, range, recoil, and reload values
+- Visibly different first-person primary weapon models
+- Scout scope blockout
+- HUD loadout confirmation
 
 Install the same package on Windows and Linux.
 
 Expected HUD:
 
 ```text
-Connected: v1.5.0 protocol 150
-HP 100 ... Grenades 2  PROTECTED 4.8s
+Connected: v1.6.0 protocol 160
+Loadout: Engineer Carbine + Service Pistol
 ```

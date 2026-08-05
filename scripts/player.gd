@@ -8,6 +8,11 @@ enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
 @export var player_class: PlayerClass = PlayerClass.SOLDIER
 const SERVICE_RIFLE: Resource = preload("res://data/weapons/service_rifle.tres")
 const SERVICE_PISTOL: Resource = preload("res://data/weapons/service_pistol.tres")
+const SOLDIER_LMG: Resource = preload("res://data/weapons/soldier_lmg.tres")
+const MEDIC_SMG: Resource = preload("res://data/weapons/medic_smg.tres")
+const ENGINEER_CARBINE: Resource = preload("res://data/weapons/engineer_carbine.tres")
+const FIELD_OPS_RIFLE: Resource = preload("res://data/weapons/field_ops_rifle.tres")
+const SCOUT_MARKSMAN: Resource = preload("res://data/weapons/scout_marksman.tres")
 
 @export var weapon: Resource = SERVICE_RIFLE
 
@@ -298,8 +303,17 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 	alive = is_alive
 	downed = is_downed
 	is_reloading = reloading
+	var previous_class: int = player_class
 	player_class = class_id
 	team = player_team
+
+	if player_class != previous_class:
+		current_weapon_index = 0
+		_configure_class_loadout(
+			true,
+			_is_local_player()
+		)
+
 	kills = kill_count
 	deaths = death_count
 	xp = experience
@@ -497,33 +511,75 @@ func _weapon_fire_interval_ms() -> int:
 		return 120
 	return maxi(1, int(round(60000.0 / rounds_per_minute)))
 
+func _class_primary_weapon(class_id: int) -> Resource:
+	match clampi(class_id, 0, 4):
+		PlayerClass.SOLDIER:
+			return SOLDIER_LMG
+		PlayerClass.MEDIC:
+			return MEDIC_SMG
+		PlayerClass.ENGINEER:
+			return ENGINEER_CARBINE
+		PlayerClass.FIELD_OPS:
+			return FIELD_OPS_RIFLE
+		PlayerClass.SCOUT:
+			return SCOUT_MARKSMAN
+		_:
+			return SERVICE_RIFLE
+
+func _configure_class_loadout(
+	reset_ammunition: bool,
+	rebuild_view: bool = true
+) -> void:
+	var primary: Resource = _class_primary_weapon(player_class)
+	weapon_slots = [primary, SERVICE_PISTOL]
+
+	if reset_ammunition or weapon_magazines.size() != weapon_slots.size():
+		weapon_magazines.clear()
+		weapon_reserves.clear()
+
+		for slot_value in weapon_slots:
+			var slot_weapon: Resource = slot_value as Resource
+			weapon_magazines.append(
+				_resource_int(slot_weapon, "magazine_size", 30)
+			)
+			weapon_reserves.append(
+				_resource_int(slot_weapon, "reserve_ammo", 120)
+			)
+	else:
+		for index in weapon_slots.size():
+			var maximum_magazine: int = _resource_int(
+				weapon_slots[index],
+				"magazine_size",
+				30
+			)
+			var maximum_reserve: int = _resource_int(
+				weapon_slots[index],
+				"reserve_ammo",
+				120
+			)
+			weapon_magazines[index] = mini(
+				weapon_magazines[index],
+				maximum_magazine
+			)
+			weapon_reserves[index] = mini(
+				weapon_reserves[index],
+				maximum_reserve
+			)
+
+	current_weapon_index = clampi(
+		current_weapon_index,
+		0,
+		weapon_slots.size() - 1
+	)
+	_apply_weapon_index(current_weapon_index, rebuild_view)
+
 func _initialize_loadout() -> void:
-	weapon_slots = [SERVICE_RIFLE, SERVICE_PISTOL]
-	weapon_magazines.clear()
-	weapon_reserves.clear()
-
-	for slot_value in weapon_slots:
-		var slot_weapon: Resource = slot_value as Resource
-		weapon_magazines.append(
-			_resource_int(slot_weapon, "magazine_size", 30)
-		)
-		weapon_reserves.append(
-			_resource_int(slot_weapon, "reserve_ammo", 120)
-		)
-
 	current_weapon_index = 0
-	_apply_weapon_index(0, false)
+	_configure_class_loadout(true, false)
 
 func _reset_loadout_ammo() -> void:
-	if weapon_slots.is_empty():
-		_initialize_loadout()
-		return
-
-	for index in weapon_slots.size():
-		weapon_magazines[index] = _resource_int(weapon_slots[index], "magazine_size", 30)
-		weapon_reserves[index] = _resource_int(weapon_slots[index], "reserve_ammo", 120)
-
-	_apply_weapon_index(0, true)
+	current_weapon_index = 0
+	_configure_class_loadout(true, true)
 
 func _store_current_weapon_ammo() -> void:
 	if current_weapon_index < 0 or current_weapon_index >= weapon_slots.size():
@@ -881,8 +937,11 @@ func server_set_team_and_class(
 func server_apply_class(class_id: int) -> void:
 	if not multiplayer.is_server():
 		return
+
 	player_class = clampi(class_id, 0, 4)
 	health = _class_health(player_class)
+	current_weapon_index = 0
+	_configure_class_loadout(true, false)
 
 func add_xp(amount: int, reason: String = "") -> void:
 	if not multiplayer.is_server():
@@ -1171,6 +1230,8 @@ func _submit_spawn_selection() -> void:
 	has_deployed = true
 	player_class = selected_class
 	team = selected_team
+	current_weapon_index = 0
+	_configure_class_loadout(true, true)
 	_hide_spawn_menu()
 
 func _build_first_person_weapon() -> void:
@@ -1187,7 +1248,44 @@ func _rebuild_first_person_weapon() -> void:
 		child.queue_free()
 
 	var is_pistol: bool = current_weapon_index == 1
+	var primary_profile: int = player_class
 	weapon_view.position = _base_weapon_position()
+
+	var receiver_length: float = 0.72
+	var barrel_length: float = 0.55
+	var receiver_height: float = 0.16
+	var receiver_width: float = 0.16
+
+	if is_pistol:
+		receiver_length = 0.34
+		barrel_length = 0.28
+		receiver_height = 0.14
+		receiver_width = 0.13
+	else:
+		match primary_profile:
+			PlayerClass.SOLDIER:
+				receiver_length = 0.88
+				barrel_length = 0.68
+				receiver_height = 0.19
+				receiver_width = 0.19
+			PlayerClass.MEDIC:
+				receiver_length = 0.56
+				barrel_length = 0.38
+				receiver_height = 0.15
+				receiver_width = 0.15
+			PlayerClass.ENGINEER:
+				receiver_length = 0.62
+				barrel_length = 0.44
+				receiver_height = 0.17
+				receiver_width = 0.17
+			PlayerClass.FIELD_OPS:
+				receiver_length = 0.74
+				barrel_length = 0.58
+			PlayerClass.SCOUT:
+				receiver_length = 0.92
+				barrel_length = 0.82
+				receiver_height = 0.13
+				receiver_width = 0.14
 
 	var metal := StandardMaterial3D.new()
 	metal.albedo_color = Color(0.18, 0.19, 0.20)
@@ -1197,7 +1295,11 @@ func _rebuild_first_person_weapon() -> void:
 
 	var receiver := MeshInstance3D.new()
 	var receiver_mesh := BoxMesh.new()
-	receiver_mesh.size = Vector3(0.13, 0.14, 0.34) if is_pistol else Vector3(0.16, 0.16, 0.72)
+	receiver_mesh.size = Vector3(
+		receiver_width,
+		receiver_height,
+		receiver_length
+	)
 	receiver.mesh = receiver_mesh
 	receiver.material_override = metal
 	weapon_view.add_child(receiver)
@@ -1206,12 +1308,26 @@ func _rebuild_first_person_weapon() -> void:
 	var barrel_mesh := CylinderMesh.new()
 	barrel_mesh.top_radius = 0.022 if is_pistol else 0.025
 	barrel_mesh.bottom_radius = barrel_mesh.top_radius
-	barrel_mesh.height = 0.28 if is_pistol else 0.55
+	barrel_mesh.height = barrel_length
 	barrel.mesh = barrel_mesh
 	barrel.rotation_degrees.x = 90.0
-	barrel.position.z = -0.27 if is_pistol else -0.55
+	barrel.position.z = -(
+		receiver_length * 0.5 + barrel_length * 0.35
+	)
 	barrel.material_override = metal
 	weapon_view.add_child(barrel)
+
+	if not is_pistol and player_class == PlayerClass.SCOUT:
+		var scope := MeshInstance3D.new()
+		var scope_mesh := CylinderMesh.new()
+		scope_mesh.top_radius = 0.055
+		scope_mesh.bottom_radius = 0.055
+		scope_mesh.height = 0.28
+		scope.mesh = scope_mesh
+		scope.rotation_degrees.z = 90.0
+		scope.position = Vector3(0.0, -0.12, -0.08)
+		scope.material_override = metal
+		weapon_view.add_child(scope)
 
 	var grip := MeshInstance3D.new()
 	var grip_mesh := BoxMesh.new()
@@ -1320,6 +1436,11 @@ func _update_hud() -> void:
 		)
 	)
 	var objective_text: String = str(main.call("objective_status_text"))
+	var primary_name: String = _resource_string(
+		_class_primary_weapon(player_class),
+		"display_name",
+		"Primary"
+	)
 	var protection_seconds: float = float(
 		replicated_spawn_protection_ms
 	) / 1000.0
@@ -1329,7 +1450,7 @@ func _update_hud() -> void:
 		else "Protection off"
 	)
 	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
-	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact  M: spawn menu" % [
+	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact  M: spawn menu" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],
@@ -1349,6 +1470,7 @@ func _update_hud() -> void:
 		weapon_slots.size(),
 		grenades_remaining,
 		protection_text,
+		primary_name,
 		objective_text,
 		minutes,
 		seconds,

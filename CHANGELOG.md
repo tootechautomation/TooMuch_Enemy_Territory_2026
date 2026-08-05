@@ -1,10 +1,11 @@
 # Changelog
 
-## 1.5.0
+## 1.6.0
 
-- Added five-second spawn protection
-- Added authoritative protection countdown
-- Cancelled protection on firing or grenade use
-- Added colored attacker and defender spawn zones
-- Replicated protection state through Main snapshots
-- Bumped protocol to 150
+- Added five class-specific primary weapons
+- Added automatic class loadout selection
+- Added class-specific weapon statistics
+- Added distinct first-person primary models
+- Added Scout scope blockout
+- Added HUD loadout line
+- Bumped protocol to 160
