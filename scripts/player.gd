@@ -76,6 +76,8 @@ var next_grenade_time := 0
 var is_crouching := false
 var weapon_kick_offset := 0.0
 
+var server_logged_first_input := false
+
 func _ready() -> void:
 	_initialize_loadout()
 	target_position = global_position
