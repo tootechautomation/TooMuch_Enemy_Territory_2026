@@ -1,10 +1,13 @@
 # Changelog
 
-## 2.5.0
-- Added authoritative sprint stamina
-- Added suppression state and accuracy penalty
-- Added health and ammo pack deployment
-- Added procedural shell-ejection feedback
-- Added team-only middle-mouse squad pings
-- Added stamina and suppression HUD elements
-- Bumped protocol to 250
+## 3.0.0
+- Added secondary command-post capture objective
+- Added team reinforcement tickets
+- Added forward spawns
+- Added command-post reinforcement wave bonus
+- Added overtime rules
+- Added ticket-based victory conditions
+- Added dynamic battlefield lighting
+- Added command-post world and HUD presentation
+- Updated bot goals, objective text, and scoreboard
+- Bumped protocol to 300

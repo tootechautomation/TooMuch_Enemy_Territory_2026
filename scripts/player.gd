@@ -152,6 +152,8 @@ var suppressed_until_ms := 0
 var replicated_suppression_ms := 0
 var stamina_bar: ProgressBar
 var suppression_overlay: ColorRect
+var operations_label: Label
+var command_post_bar: ProgressBar
 var squad_ping_cooldown_until_ms := 0
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
@@ -2676,6 +2678,24 @@ func _build_hud() -> void:
 	stamina_bar.show_percentage = false
 	layer.add_child(stamina_bar)
 
+	operations_label = Label.new()
+	operations_label.position = Vector2(420, 92)
+	operations_label.custom_minimum_size = Vector2(440, 28)
+	operations_label.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	operations_label.add_theme_font_size_override("font_size", 18)
+	layer.add_child(operations_label)
+
+	command_post_bar = ProgressBar.new()
+	command_post_bar.position = Vector2(440, 122)
+	command_post_bar.size = Vector2(400, 18)
+	command_post_bar.min_value = -100.0
+	command_post_bar.max_value = 100.0
+	command_post_bar.value = 0.0
+	command_post_bar.show_percentage = false
+	layer.add_child(command_post_bar)
+
 	suppression_overlay = ColorRect.new()
 	suppression_overlay.set_anchors_and_offsets_preset(
 		Control.PRESET_FULL_RECT
@@ -2942,6 +2962,38 @@ func _update_hud() -> void:
 	var protocol_status := "Protocol pending"
 	if main != null:
 		protocol_status = str(main.get("protocol_message"))
+
+	if operations_label != null and main != null:
+		var post_control: int = int(main.get("command_post_control"))
+		var post_state := (
+			"NEUTRAL"
+			if post_control < 0
+			else (
+				"ATTACKERS"
+				if post_control == 0
+				else "DEFENDERS"
+			)
+		)
+		if bool(main.get("command_post_contested")):
+			post_state = "CONTESTED"
+		var overtime_suffix := (
+			" · OVERTIME"
+			if bool(main.get("overtime_active"))
+			else ""
+		)
+		operations_label.text = (
+			"ATK %d tickets · CP %s · DEF %d tickets%s"
+			% [
+				int(main.get("attacker_tickets")),
+				post_state,
+				int(main.get("defender_tickets")),
+				overtime_suffix
+			]
+		)
+	if command_post_bar != null and main != null:
+		command_post_bar.value = float(
+			main.get("command_post_progress")
+		)
 
 	var minutes := int(main.get("match_time_remaining")) / 60
 	var seconds := int(main.get("match_time_remaining")) % 60

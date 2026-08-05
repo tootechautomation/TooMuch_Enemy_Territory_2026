@@ -1,36 +1,44 @@
 # Frontline: Objective
 
-## Version 2.5.0 squad and combat polish
+## Version 3.0.0 Frontline Operations
 
-### Stamina
-- Sprint drains server-authoritative stamina.
-- Stamina regenerates after a short delay.
-- Sprint automatically stops when stamina is depleted.
-- HUD includes a stamina bar and percentage.
+This is a major round-structure expansion.
 
-### Suppression
-- Taking enemy damage applies a temporary suppression state.
-- Suppression increases weapon spread.
-- A red screen tint and SUPPRESSED HUD state show the effect.
+### Command post
+- A secondary command post unlocks after the bridge is built.
+- Living players capture it automatically by occupying its radius.
+- Multiple players accelerate capture.
+- Opposing players contest and freeze capture.
+- Ownership grants a forward spawn and faster reinforcement waves.
+- Capturing the post restores five team tickets.
+- Bots actively contest the post.
 
-### Support packs
-- Medic Healing Burst also deploys a health pack.
-- Field Ops Ammo Pulse also deploys an ammunition pack.
-- Packs remain team-restricted and expire automatically.
+### Reinforcement tickets
+- Both teams begin with 80 tickets.
+- Each elimination consumes one ticket from the victim's team.
+- Players cannot respawn after their team reaches zero tickets.
+- A team loses when it has zero tickets and no living players.
+- Tickets appear in the HUD, objective text, and scoreboard.
 
-### Weapon feedback
-- Local shots eject a procedural brass shell.
-- Existing muzzle flash, recoil, tracers, sounds, and hit feedback remain.
+### Forward spawns
+- The team controlling the command post respawns near the front line.
+- Spawn validation remains active for forward positions.
+- Losing the command post returns the team to its original spawn.
 
-### Squad pings
-- Middle mouse marks the aimed location for teammates.
-- Team-only world marker lasts five seconds.
-- Ping has a short anti-spam cooldown.
+### Overtime
+- The round enters overtime when time expires during:
+  - an armed charge,
+  - a contested command post, or
+  - an attacker pressing the active primary objective.
+- Overtime ends when defenders fully secure the battlefield.
 
-Install the same package on Windows and Linux.
+### Battlefield atmosphere
+- Lighting gradually shifts toward dusk during the round.
+- Ambient energy and sun angle change with match progress.
+- Command post lighting changes by ownership and contest state.
 
 Expected status:
 
 ```text
-Connected: v2.5.0 protocol 250
+Connected: v3.0.0 protocol 300
 ```

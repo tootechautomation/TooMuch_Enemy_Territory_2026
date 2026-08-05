@@ -5,13 +5,17 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "2.5.0"
-const NETWORK_PROTOCOL := 250
+const BUILD_VERSION := "3.0.0"
+const NETWORK_PROTOCOL := 300
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
 const SPAWN_WAVE_SECONDS := 10.0
 const DYNAMITE_FUSE_SECONDS := 8.0
+const INITIAL_TEAM_TICKETS := 80
+const COMMAND_POST_CAPTURE_SECONDS := 12.0
+const COMMAND_POST_RADIUS := 5.5
+const FORWARD_SPAWN_WAVE_BONUS := 2.0
 
 var players: Dictionary = {}
 var player_teams: Dictionary = {}
@@ -67,6 +71,30 @@ var dynamite_light: OmniLight3D
 var round_results_layer: CanvasLayer
 var round_results_panel: PanelContainer
 var round_results_label: Label
+var attacker_tickets := INITIAL_TEAM_TICKETS
+var defender_tickets := INITIAL_TEAM_TICKETS
+var command_post_control := -1
+var command_post_progress := 0.0
+var command_post_contested := false
+var overtime_active := false
+var command_post_marker: Label3D
+var command_post_progress_label: Label3D
+var command_post_beacon: OmniLight3D
+var battlefield_environment: Environment
+var battlefield_sun: DirectionalLight3D
+var atmosphere_elapsed := 0.0
+var forward_spawn_points := {
+	0: [
+		Vector3(3.5, 1.0, -8.5),
+		Vector3(5.0, 1.0, -6.5),
+		Vector3(6.5, 1.0, -8.5)
+	],
+	1: [
+		Vector3(5.0, 1.0, -9.5),
+		Vector3(7.0, 1.0, -7.0),
+		Vector3(8.5, 1.0, -9.0)
+	]
+}
 
 func _ready() -> void:
 	_build_world()
@@ -79,7 +107,10 @@ func _ready() -> void:
 	_parse_command_line()
 
 func _process(delta: float) -> void:
+	atmosphere_elapsed += delta
 	_update_objective_visuals()
+	_update_command_post_visuals()
+	_update_battlefield_atmosphere()
 
 	if not multiplayer.is_server():
 		return
@@ -101,17 +132,35 @@ func _process(delta: float) -> void:
 			dynamite_armed,
 			dynamite_remaining,
 			defuse_progress,
-			defuse_required
+			defuse_required,
+			attacker_tickets,
+			defender_tickets,
+			command_post_control,
+			command_post_progress,
+			command_post_contested,
+			overtime_active
 		)
 		if round_restart_remaining <= 0.0:
 			_reset_round()
 		return
 
-	match_time_remaining = maxf(0.0, match_time_remaining - delta)
-	spawn_wave_remaining -= delta
+	_update_command_post_capture(delta)
 
+	if not overtime_active:
+		match_time_remaining = maxf(
+			0.0,
+			match_time_remaining - delta
+		)
+
+	spawn_wave_remaining -= delta
 	if spawn_wave_remaining <= 0.0:
-		spawn_wave_remaining += SPAWN_WAVE_SECONDS
+		var wave_interval := SPAWN_WAVE_SECONDS
+		if command_post_control >= 0:
+			wave_interval = maxf(
+				5.0,
+				SPAWN_WAVE_SECONDS - FORWARD_SPAWN_WAVE_BONUS
+			)
+		spawn_wave_remaining += wave_interval
 		_respawn_wave()
 
 	if dynamite_armed:
@@ -121,6 +170,17 @@ func _process(delta: float) -> void:
 			defuse_progress = 0
 			_update_objective_visuals()
 			damage_objective(100, 0)
+
+	_check_ticket_victory()
+
+	if match_time_remaining <= 0.0 and not match_over:
+		if _should_overtime_continue():
+			if not overtime_active:
+				overtime_active = true
+				push_kill_feed.rpc("OVERTIME — objective remains active")
+		else:
+			overtime_active = false
+			_end_match("DEFENDERS WIN — objective secured")
 
 	broadcast_match_state.rpc(
 		match_time_remaining,
@@ -132,11 +192,183 @@ func _process(delta: float) -> void:
 		dynamite_armed,
 		dynamite_remaining,
 		defuse_progress,
-		defuse_required
+		defuse_required,
+		attacker_tickets,
+		defender_tickets,
+		command_post_control,
+		command_post_progress,
+		command_post_contested,
+		overtime_active
 	)
 
-	if match_time_remaining <= 0.0:
-		_end_match("DEFENDERS WIN — time expired")
+func _command_post_node() -> Node3D:
+	return get_node_or_null("CommandPost") as Node3D
+
+func _update_command_post_capture(delta: float) -> void:
+	if not multiplayer.is_server() or match_over:
+		return
+	if objective_stage == 0:
+		command_post_contested = false
+		return
+
+	var command_post: Node3D = _command_post_node()
+	if command_post == null:
+		return
+
+	var attackers := 0
+	var defenders := 0
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+		if not bool(player.get("alive")) or bool(player.get("downed")):
+			continue
+		if player.global_position.distance_to(
+			command_post.global_position
+		) > COMMAND_POST_RADIUS:
+			continue
+
+		if int(player.get("team")) == 0:
+			attackers += 1
+		else:
+			defenders += 1
+
+	command_post_contested = attackers > 0 and defenders > 0
+	if attackers == defenders:
+		return
+
+	var advantage: int = clampi(abs(attackers - defenders), 1, 3)
+	var capture_rate: float = (
+		100.0 / COMMAND_POST_CAPTURE_SECONDS
+	) * float(advantage)
+
+	if attackers > defenders:
+		command_post_progress = minf(
+			100.0,
+			command_post_progress + capture_rate * delta
+		)
+	else:
+		command_post_progress = maxf(
+			-100.0,
+			command_post_progress - capture_rate * delta
+		)
+
+	var new_control := command_post_control
+	if command_post_progress >= 100.0:
+		new_control = 0
+	elif command_post_progress <= -100.0:
+		new_control = 1
+	elif absf(command_post_progress) < 8.0:
+		new_control = -1
+
+	if new_control != command_post_control:
+		command_post_control = new_control
+		if command_post_control == 0:
+			attacker_tickets = mini(
+				INITIAL_TEAM_TICKETS,
+				attacker_tickets + 5
+			)
+			push_kill_feed.rpc(
+				"ATTACKERS captured the command post — forward spawn active"
+			)
+		elif command_post_control == 1:
+			defender_tickets = mini(
+				INITIAL_TEAM_TICKETS,
+				defender_tickets + 5
+			)
+			push_kill_feed.rpc(
+				"DEFENDERS captured the command post — forward spawn active"
+			)
+		else:
+			push_kill_feed.rpc("Command post neutralized")
+
+func _should_overtime_continue() -> bool:
+	if dynamite_armed or command_post_contested:
+		return true
+
+	var target: Node3D = (
+		get_node_or_null("BridgeBuildSite") as Node3D
+		if objective_stage == 0
+		else get_node_or_null("Objective") as Node3D
+	)
+	if target == null:
+		return false
+
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+		if int(player.get("team")) != 0:
+			continue
+		if not bool(player.get("alive")) or bool(player.get("downed")):
+			continue
+		if player.global_position.distance_to(target.global_position) <= 5.0:
+			return true
+
+	return false
+
+func _living_team_count(team_id: int) -> int:
+	var count := 0
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+		if int(player.get("team")) != team_id:
+			continue
+		if bool(player.get("alive")):
+			count += 1
+	return count
+
+func _check_ticket_victory() -> void:
+	if match_over:
+		return
+	if attacker_tickets <= 0 and _living_team_count(0) <= 0:
+		_end_match("DEFENDERS WIN — attackers exhausted")
+	elif defender_tickets <= 0 and _living_team_count(1) <= 0:
+		_end_match("ATTACKERS WIN — defenders exhausted")
+
+func _ticket_value(team_id: int) -> int:
+	return attacker_tickets if team_id == 0 else defender_tickets
+
+func _consume_ticket(team_id: int) -> void:
+	if team_id == 0:
+		attacker_tickets = maxi(0, attacker_tickets - 1)
+	else:
+		defender_tickets = maxi(0, defender_tickets - 1)
+
+func _update_battlefield_atmosphere() -> void:
+	if battlefield_environment == null or battlefield_sun == null:
+		return
+
+	var match_fraction: float = clampf(
+		1.0 - (
+			match_time_remaining / MATCH_LENGTH_SECONDS
+		),
+		0.0,
+		1.0
+	)
+	var pulse: float = sin(atmosphere_elapsed * 0.08) * 0.02
+	var daylight := Color(0.12, 0.16, 0.19)
+	var dusk := Color(0.24, 0.10, 0.08)
+	battlefield_environment.background_color = daylight.lerp(
+		dusk,
+		match_fraction * 0.62
+	) + Color(pulse, pulse, pulse)
+	battlefield_environment.ambient_light_energy = lerpf(
+		0.78,
+		0.50,
+		match_fraction
+	)
+	battlefield_sun.rotation_degrees.x = lerpf(
+		-55.0,
+		-18.0,
+		match_fraction
+	)
+	battlefield_sun.light_energy = lerpf(
+		1.0,
+		0.62,
+		match_fraction
+	)
 
 func _parse_command_line() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -729,6 +961,15 @@ func remove_player(peer_id: int) -> void:
 func _get_spawn(team: int, peer_id: int) -> Vector3:
 	var safe_team: int = clampi(team, 0, 1)
 	var points: Array = spawn_points.get(safe_team, spawn_points[0])
+
+	if (
+		objective_stage >= 1
+		and command_post_control == safe_team
+	):
+		points = forward_spawn_points.get(
+			safe_team,
+			points
+		)
 	var start_index: int = posmod(peer_id, points.size())
 
 	for offset in range(points.size()):
@@ -911,9 +1152,12 @@ func _respawn_wave() -> void:
 		if player == null:
 			continue
 		if not bool(player.get("alive")):
+			var player_team: int = int(player.get("team"))
+			if _ticket_value(player_team) <= 0:
+				continue
 			player.call(
 				"server_respawn",
-				_get_spawn(int(player.get("team")), peer_id)
+				_get_spawn(player_team, peer_id)
 			)
 
 func server_engineer_interact(engineer: Node3D) -> bool:
@@ -981,6 +1225,8 @@ func damage_objective(amount: int, attacker_team: int) -> void:
 
 func register_elimination(victim_id: int, attacker_id: int) -> void:
 	var victim: Node3D = players.get(victim_id) as Node3D
+	if victim != null:
+		_consume_ticket(int(victim.get("team")))
 
 	if players.has(attacker_id) and attacker_id != victim_id:
 		var attacker: Node3D = players[attacker_id] as Node3D
@@ -1259,7 +1505,13 @@ func broadcast_match_state(
 	armed: bool,
 	fuse_remaining: float,
 	current_defuse: int,
-	required_defuse: int
+	required_defuse: int,
+	attacker_ticket_count: int,
+	defender_ticket_count: int,
+	post_control: int,
+	post_progress: float,
+	post_contested: bool,
+	overtime: bool
 ) -> void:
 	match_time_remaining = time_remaining
 	spawn_wave_remaining = wave_remaining
@@ -1271,6 +1523,12 @@ func broadcast_match_state(
 	dynamite_remaining = fuse_remaining
 	defuse_progress = current_defuse
 	defuse_required = required_defuse
+	attacker_tickets = attacker_ticket_count
+	defender_tickets = defender_ticket_count
+	command_post_control = post_control
+	command_post_progress = post_progress
+	command_post_contested = post_contested
+	overtime_active = overtime
 
 	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
@@ -1414,6 +1672,45 @@ func announce(message: String) -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
 	var label := Label.new(); label.text = message; label.position = Vector2(390, 50); label.add_theme_font_size_override("font_size", 28); layer.add_child(label)
 
+func _update_command_post_visuals() -> void:
+	if (
+		command_post_marker == null
+		or command_post_progress_label == null
+		or command_post_beacon == null
+	):
+		return
+
+	if objective_stage == 0:
+		command_post_marker.text = "COMMAND POST LOCKED"
+		command_post_progress_label.text = "Build the bridge first"
+		command_post_marker.modulate = Color(0.62, 0.62, 0.65)
+		command_post_beacon.light_color = Color(0.55, 0.55, 0.58)
+		return
+
+	var owner_text := "NEUTRAL"
+	var owner_color := Color(0.72, 0.72, 0.72)
+	if command_post_control == 0:
+		owner_text = "ATTACKER FORWARD POST"
+		owner_color = Color(0.20, 0.48, 1.0)
+	elif command_post_control == 1:
+		owner_text = "DEFENDER FORWARD POST"
+		owner_color = Color(1.0, 0.22, 0.16)
+
+	if command_post_contested:
+		owner_text = "COMMAND POST CONTESTED"
+		owner_color = Color(1.0, 0.72, 0.10)
+
+	command_post_marker.text = owner_text
+	command_post_marker.modulate = owner_color
+	command_post_progress_label.text = (
+		"Capture %+d%%" % int(round(command_post_progress))
+	)
+	command_post_progress_label.modulate = owner_color.lightened(0.2)
+	command_post_beacon.light_color = owner_color
+	command_post_beacon.light_energy = (
+		2.8 if command_post_contested else 1.8
+	)
+
 func _update_objective_visuals() -> void:
 	if objective_marker == null or objective_progress_label == null:
 		return
@@ -1520,11 +1817,54 @@ func interaction_prompt_for(player: Node3D) -> String:
 func objective_status_text() -> String:
 	if match_over:
 		return "Round restarts in %.1fs" % round_restart_remaining
+
+	var overtime_text := " · OVERTIME" if overtime_active else ""
+	var post_text := (
+		"Neutral"
+		if command_post_control < 0
+		else (
+			"Attackers"
+			if command_post_control == 0
+			else "Defenders"
+		)
+	)
+
 	if objective_stage == 0:
-		return "Stage 1: Build bridge %d/%d" % [bridge_progress, bridge_required]
+		return (
+			"Stage 1: Build bridge %d/%d · Tickets %d-%d%s"
+			% [
+				bridge_progress,
+				bridge_required,
+				attacker_tickets,
+				defender_tickets,
+				overtime_text
+			]
+		)
+
 	if dynamite_armed:
-		return "Stage 2: Charge %.1fs | Defuse %d/%d" % [dynamite_remaining, defuse_progress, defuse_required]
-	return "Stage 2: Destroy bunker | Integrity %d%%" % objective_health
+		return (
+			"Charge %.1fs · Defuse %d/%d · CP %s · Tickets %d-%d%s"
+			% [
+				dynamite_remaining,
+				defuse_progress,
+				defuse_required,
+				post_text,
+				attacker_tickets,
+				defender_tickets,
+				overtime_text
+			]
+		)
+
+	return (
+		"Destroy bunker %d%% · CP %s · Tickets %d-%d%s"
+		% [
+			objective_health,
+			post_text,
+			attacker_tickets,
+			defender_tickets,
+			overtime_text
+		]
+	)
 
 func scoreboard_text() -> String:
 	var class_names: Array[String] = [
@@ -1535,7 +1875,19 @@ func scoreboard_text() -> String:
 		"Scout"
 	]
 	var lines: Array[String] = [
-		"SCOREBOARD",
+		"SCOREBOARD · Tickets ATK %d / DEF %d · Command Post %s" % [
+			attacker_tickets,
+			defender_tickets,
+			(
+				"Neutral"
+				if command_post_control < 0
+				else (
+					"Attackers"
+					if command_post_control == 0
+					else "Defenders"
+				)
+			)
+		],
 		"Player          Team  Class      K   D   XP   Rank       Type   State"
 	]
 
@@ -1640,6 +1992,18 @@ func bot_goal_position(bot: Node3D) -> Vector3:
 	var lateral_offsets: Array[float] = [-6.0, -2.0, 2.0, 6.0]
 	var lateral: float = lateral_offsets[patrol_variant]
 
+	if (
+		objective_stage >= 1
+		and command_post_control != bot_team
+	):
+		var command_post: Node3D = _command_post_node()
+		if command_post != null:
+			return command_post.global_position + Vector3(
+				0.0,
+				0.0,
+				lateral * 0.28
+			)
+
 	if bot_team == 0:
 		if objective_stage == 0:
 			var build_site: Node3D = get_node_or_null(
@@ -1734,6 +2098,13 @@ func _reset_round() -> void:
 	match_time_remaining = MATCH_LENGTH_SECONDS
 	spawn_wave_remaining = SPAWN_WAVE_SECONDS
 	objective_health = 100
+	attacker_tickets = INITIAL_TEAM_TICKETS
+	defender_tickets = INITIAL_TEAM_TICKETS
+	command_post_control = -1
+	command_post_progress = 0.0
+	command_post_contested = false
+	overtime_active = false
+	atmosphere_elapsed = 0.0
 	objective_stage = 0
 	bridge_progress = 0
 	defuse_progress = 0
@@ -1770,19 +2141,21 @@ func _reset_round() -> void:
 
 func _build_world() -> void:
 	var env := WorldEnvironment.new()
-	var environment := Environment.new()
-	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(0.12, 0.16, 0.19)
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.7, 0.75, 0.8)
-	environment.ambient_light_energy = 0.75
-	env.environment = environment
+	battlefield_environment = Environment.new()
+	battlefield_environment.background_mode = Environment.BG_COLOR
+	battlefield_environment.background_color = Color(0.12, 0.16, 0.19)
+	battlefield_environment.ambient_light_source = (
+		Environment.AMBIENT_SOURCE_COLOR
+	)
+	battlefield_environment.ambient_light_color = Color(0.7, 0.75, 0.8)
+	battlefield_environment.ambient_light_energy = 0.75
+	env.environment = battlefield_environment
 	add_child(env)
 
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-55, -35, 0)
-	light.shadow_enabled = true
-	add_child(light)
+	battlefield_sun = DirectionalLight3D.new()
+	battlefield_sun.rotation_degrees = Vector3(-55, -35, 0)
+	battlefield_sun.shadow_enabled = true
+	add_child(battlefield_sun)
 
 	_make_static_box("GroundWest", Vector3(-11, -0.5, 0), Vector3(18, 1, 24), Color(0.22, 0.27, 0.22))
 	_make_static_box("GroundEast", Vector3(11, -0.5, 0), Vector3(18, 1, 24), Color(0.22, 0.27, 0.22))
@@ -1854,6 +2227,53 @@ func _build_world() -> void:
 		Vector3(7.0, 0.12, 19.0),
 		Color(0.82, 0.16, 0.12, 0.34)
 	)
+
+	var command_post := Node3D.new()
+	command_post.name = "CommandPost"
+	command_post.position = Vector3(5.0, 0.2, -8.0)
+	add_child(command_post)
+
+	_make_marker(
+		command_post,
+		Vector3(5.5, 0.16, 5.5),
+		Color(0.42, 0.42, 0.46)
+	)
+
+	var radio_mesh := MeshInstance3D.new()
+	var radio_box := BoxMesh.new()
+	radio_box.size = Vector3(1.4, 1.7, 1.1)
+	radio_mesh.mesh = radio_box
+	radio_mesh.position = Vector3(0.0, 0.85, 0.0)
+	var radio_material := StandardMaterial3D.new()
+	radio_material.albedo_color = Color(0.20, 0.22, 0.18)
+	radio_material.metallic = 0.3
+	radio_mesh.material_override = radio_material
+	command_post.add_child(radio_mesh)
+
+	command_post_marker = Label3D.new()
+	command_post_marker.name = "CommandPostMarker"
+	command_post_marker.position = Vector3(0.0, 3.0, 0.0)
+	command_post_marker.font_size = 34
+	command_post_marker.outline_size = 10
+	command_post_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	command_post_marker.fixed_size = true
+	command_post.add_child(command_post_marker)
+
+	command_post_progress_label = Label3D.new()
+	command_post_progress_label.position = Vector3(0.0, 2.55, 0.0)
+	command_post_progress_label.font_size = 24
+	command_post_progress_label.outline_size = 8
+	command_post_progress_label.billboard = (
+		BaseMaterial3D.BILLBOARD_ENABLED
+	)
+	command_post_progress_label.fixed_size = true
+	command_post.add_child(command_post_progress_label)
+
+	command_post_beacon = OmniLight3D.new()
+	command_post_beacon.position = Vector3(0.0, 2.0, 0.0)
+	command_post_beacon.omni_range = 7.0
+	command_post_beacon.light_energy = 1.8
+	command_post.add_child(command_post_beacon)
 
 	var build_site := Node3D.new()
 	build_site.name = "BridgeBuildSite"
