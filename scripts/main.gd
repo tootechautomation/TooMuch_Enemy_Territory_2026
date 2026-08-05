@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.9.0"
-const NETWORK_PROTOCOL := 190
+const BUILD_VERSION := "2.0.0"
+const NETWORK_PROTOCOL := 200
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -1189,6 +1189,56 @@ func _configure_bot(bot_id: int, class_id: int) -> void:
 	bot.set("is_bot", true)
 	bot.set("player_class", class_id)
 	bot.call("server_apply_class", class_id)
+
+func bot_goal_position(bot: Node3D) -> Vector3:
+	if bot == null:
+		return Vector3.ZERO
+
+	var bot_team: int = int(bot.get("team"))
+	var bot_id: int = int(bot.get("peer_id"))
+	var patrol_variant: int = posmod(bot_id, 4)
+	var lateral_offsets: Array[float] = [-6.0, -2.0, 2.0, 6.0]
+	var lateral: float = lateral_offsets[patrol_variant]
+
+	if bot_team == 0:
+		if objective_stage == 0:
+			var build_site: Node3D = get_node_or_null(
+				"BridgeBuildSite"
+			) as Node3D
+			if build_site != null:
+				return build_site.global_position + Vector3(
+					-2.0,
+					0.0,
+					lateral * 0.35
+				)
+
+		var objective: Node3D = get_node_or_null(
+			"Objective"
+		) as Node3D
+		if objective != null:
+			return objective.global_position + Vector3(
+				-3.0,
+				0.0,
+				lateral * 0.45
+			)
+
+		return Vector3(6.0, 1.0, lateral)
+
+	if dynamite_armed:
+		var defense_objective: Node3D = get_node_or_null(
+			"Objective"
+		) as Node3D
+		if defense_objective != null:
+			return defense_objective.global_position + Vector3(
+				3.0,
+				0.0,
+				lateral * 0.45
+			)
+
+	if objective_stage == 0:
+		return Vector3(-2.0, 1.0, lateral)
+
+	return Vector3(7.0, 1.0, lateral)
 
 func nearest_enemy(from_player: Node3D) -> Node3D:
 	var best: Node3D = null

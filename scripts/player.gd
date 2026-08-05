@@ -64,6 +64,10 @@ var is_bot := false
 var interact_accumulator := 0.0
 var bot_think_accumulator := 0.0
 var bot_fire_accumulator := 0.0
+var bot_ability_accumulator := 0.0
+var bot_stuck_accumulator := 0.0
+var bot_last_position := Vector3.ZERO
+var bot_strafe_direction := 1.0
 var target_position := Vector3.ZERO
 var target_yaw := 0.0
 var target_pitch := 0.0
@@ -116,6 +120,7 @@ var server_logged_first_input := false
 
 func _ready() -> void:
 	_initialize_loadout()
+	bot_last_position = global_position
 	_build_spotted_marker()
 	_build_identity_visuals()
 	_refresh_identity_visuals(true)
@@ -376,7 +381,7 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 		weapon_magazines[current_weapon_index] = ammo_in_mag
 		weapon_reserves[current_weapon_index] = reserve_ammo
 
-	visible = alive
+	visible = alive and not downed
 	if class_accent_mesh != null:
 		class_accent_mesh.visible = alive and not downed
 	if weapon_view:
@@ -756,6 +761,12 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 	damage_feedback.rpc_id(peer_id, attacker_position, amount)
 
 	if health == 0:
+		set_meta("last_attacker_id", attacker_id)
+
+		if is_bot:
+			_finish_death(attacker_id)
+			return
+
 		downed = true
 		health = 1
 		bleedout_finish_ms = Time.get_ticks_msec() + BLEEDOUT_MS
@@ -767,12 +778,33 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 				player_name
 			]
 		)
-		set_meta("last_attacker_id", attacker_id)
 
 func _finish_death(attacker_override: int) -> void:
-	if not multiplayer.is_server() or not alive: return
-	var attacker_id := attacker_override if attacker_override != 0 else int(get_meta("last_attacker_id", 0))
-	alive = false; downed = false; health = 0; deaths += 1; visible = false; velocity = Vector3.ZERO
+	if not multiplayer.is_server() or not alive:
+		return
+
+	var attacker_id: int = (
+		attacker_override
+		if attacker_override != 0
+		else int(get_meta("last_attacker_id", 0))
+	)
+
+	alive = false
+	downed = false
+	health = 0
+	deaths += 1
+	visible = false
+	velocity = Vector3.ZERO
+	input_vector = Vector2.ZERO
+	is_reloading = false
+	aim_requested = false
+
+	var collision: CollisionShape3D = (
+		$CollisionShape3D as CollisionShape3D
+	)
+	if collision != null:
+		collision.set_deferred("disabled", true)
+
 	get_parent().register_elimination(peer_id, attacker_id)
 
 @rpc("authority", "call_remote", "reliable")
@@ -834,6 +866,13 @@ func server_respawn(spawn_position: Vector3) -> void:
 	downed = false
 	is_reloading = false
 	visible = true
+
+	var collision: CollisionShape3D = (
+		$CollisionShape3D as CollisionShape3D
+	)
+	if collision != null:
+		collision.set_deferred("disabled", false)
+
 	velocity = Vector3.ZERO
 	input_vector = Vector2.ZERO
 
@@ -1150,72 +1189,292 @@ func server_class_request(index: int) -> void:
 
 
 func _server_bot_tick(delta: float) -> void:
-	if not alive or downed or get_parent().match_over:
+	var main: Node = get_parent()
+	if main == null:
+		return
+
+	if not alive:
 		velocity = Vector3.ZERO
 		return
 
-	var now := Time.get_ticks_msec()
+	if downed or bool(main.get("match_over")):
+		velocity = Vector3.ZERO
+		return
+
+	var now: int = Time.get_ticks_msec()
+
 	if is_reloading and now >= reload_finish_ms:
 		_finish_reload()
 
-	bot_fire_accumulator = maxf(0.0, bot_fire_accumulator - delta)
-	var target: Node3D = null
+	bot_fire_accumulator = maxf(
+		0.0,
+		bot_fire_accumulator - delta
+	)
+	bot_ability_accumulator = maxf(
+		0.0,
+		bot_ability_accumulator - delta
+	)
+
+	var target_player: Node3D = null
+	var movement_goal := Vector3.ZERO
+	var has_movement_goal := false
 
 	if player_class == PlayerClass.MEDIC:
-		target = get_parent().nearest_downed_teammate(self)
-		if target and global_position.distance_to(target.global_position) <= 2.6:
-			target.server_revive(peer_id)
-			return
-
-	if player_class == PlayerClass.ENGINEER:
-		if get_parent().objective_stage == 0 and team == 0:
-			target = get_parent().get_node_or_null("BridgeBuildSite")
-			if target and global_position.distance_to(target.global_position) <= 3.2:
-				get_parent().server_engineer_interact(self)
-				return
-		elif get_parent().objective_stage == 1:
-			target = get_parent().get_node_or_null("Objective")
-			if target and global_position.distance_to(target.global_position) <= 3.2:
-				get_parent().server_engineer_interact(self)
-				return
-
-	if target == null:
-		target = get_parent().nearest_enemy(self)
-
-	if target == null:
-		velocity.x = 0.0
-		velocity.z = 0.0
-		move_and_slide()
-		return
-
-	var flat_direction := target.global_position - global_position
-	flat_direction.y = 0.0
-	var distance := flat_direction.length()
-
-	if distance > 0.05:
-		flat_direction = flat_direction.normalized()
-		look_at(global_position + flat_direction, Vector3.UP)
-
-	var target_is_player: bool = get_parent().players.values().has(target)
-	if target_is_player and distance <= _weapon_range_meters():
-		velocity.x = 0.0
-		velocity.z = 0.0
-
-		if bot_fire_accumulator <= 0.0 and _bot_has_line_of_sight(target):
-			bot_fire_accumulator = maxf(
-				0.12,
-				float(_weapon_fire_interval_ms()) / 1000.0
+		var downed_teammate: Node3D = main.call(
+			"nearest_downed_teammate",
+			self
+		) as Node3D
+		if downed_teammate != null:
+			var revive_distance: float = global_position.distance_to(
+				downed_teammate.global_position
 			)
-			_server_bot_fire(target)
+			if revive_distance <= REVIVE_RANGE:
+				downed_teammate.call(
+					"server_revive",
+					peer_id
+				)
+				return
+			movement_goal = downed_teammate.global_position
+			has_movement_goal = true
+
+	if (
+		player_class == PlayerClass.ENGINEER
+		and not has_movement_goal
+	):
+		var objective_goal: Vector3 = Vector3(
+			main.call("bot_goal_position", self)
+		)
+		var objective_distance: float = global_position.distance_to(
+			objective_goal
+		)
+		if objective_distance <= 3.4:
+			main.call("server_engineer_interact", self)
+		else:
+			movement_goal = objective_goal
+			has_movement_goal = true
+
+	target_player = main.call("nearest_enemy", self) as Node3D
+
+	if target_player != null:
+		var enemy_distance: float = global_position.distance_to(
+			target_player.global_position
+		)
+		var combat_range: float = minf(
+			_weapon_range_meters(),
+			28.0 if player_class != PlayerClass.SCOUT else 42.0
+		)
+
+		if (
+			enemy_distance <= combat_range
+			and _bot_has_line_of_sight(target_player)
+		):
+			_bot_face_position(target_player.global_position)
+
+			var desired_spacing: float = (
+				18.0
+				if player_class == PlayerClass.SCOUT
+				else 10.0
+			)
+
+			if enemy_distance < desired_spacing * 0.65:
+				var retreat: Vector3 = (
+					global_position
+					- target_player.global_position
+				)
+				retreat.y = 0.0
+				if retreat.length() > 0.01:
+					movement_goal = (
+						global_position
+						+ retreat.normalized() * 4.0
+					)
+					has_movement_goal = true
+			elif enemy_distance > desired_spacing:
+				movement_goal = target_player.global_position
+				has_movement_goal = true
+			else:
+				var right: Vector3 = global_transform.basis.x
+				movement_goal = (
+					global_position
+					+ right * bot_strafe_direction * 3.0
+				)
+				has_movement_goal = true
+
+			if bot_fire_accumulator <= 0.0:
+				bot_fire_accumulator = maxf(
+					0.10,
+					float(_weapon_fire_interval_ms())
+					/ 1000.0
+				)
+				_server_bot_fire(target_player)
+		elif not has_movement_goal:
+			movement_goal = target_player.global_position
+			has_movement_goal = true
+
+	if not has_movement_goal:
+		movement_goal = Vector3(
+			main.call("bot_goal_position", self)
+		)
+		has_movement_goal = true
+
+	if bot_ability_accumulator <= 0.0:
+		bot_ability_accumulator = 2.5
+		_bot_try_ability()
+
+	if has_movement_goal:
+		_bot_move_toward(movement_goal, delta)
 	else:
-		var bot_speed := 4.8
-		velocity.x = flat_direction.x * bot_speed
-		velocity.z = flat_direction.z * bot_speed
+		velocity.x = 0.0
+		velocity.z = 0.0
+
+	_bot_update_stuck_state(delta)
 
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
 	move_and_slide()
+
+func _bot_face_position(world_position: Vector3) -> void:
+	var flat_direction: Vector3 = world_position - global_position
+	flat_direction.y = 0.0
+	if flat_direction.length() <= 0.01:
+		return
+	look_at(
+		global_position + flat_direction.normalized(),
+		Vector3.UP
+	)
+
+func _bot_move_toward(
+	world_position: Vector3,
+	delta: float
+) -> void:
+	var flat_direction: Vector3 = world_position - global_position
+	flat_direction.y = 0.0
+	var distance: float = flat_direction.length()
+
+	if distance <= 0.65:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return
+
+	flat_direction = flat_direction.normalized()
+	_bot_face_position(world_position)
+
+	var bot_speed: float = (
+		4.4
+		if player_class == PlayerClass.SCOUT
+		else 5.2
+	)
+	velocity.x = flat_direction.x * bot_speed
+	velocity.z = flat_direction.z * bot_speed
+
+	if is_on_floor() and _bot_obstacle_ahead(flat_direction):
+		velocity.y = JUMP_SPEED
+
+func _bot_obstacle_ahead(direction: Vector3) -> bool:
+	var space_state: PhysicsDirectSpaceState3D = (
+		get_world_3d().direct_space_state
+	)
+
+	var low_from: Vector3 = global_position + Vector3.UP * 0.35
+	var low_to: Vector3 = low_from + direction * 0.9
+	var low_query := PhysicsRayQueryParameters3D.create(
+		low_from,
+		low_to
+	)
+	low_query.exclude = [self]
+	var low_hit: Dictionary = space_state.intersect_ray(low_query)
+
+	if low_hit.is_empty():
+		return false
+
+	var high_from: Vector3 = global_position + Vector3.UP * 1.25
+	var high_to: Vector3 = high_from + direction * 0.9
+	var high_query := PhysicsRayQueryParameters3D.create(
+		high_from,
+		high_to
+	)
+	high_query.exclude = [self]
+	var high_hit: Dictionary = space_state.intersect_ray(
+		high_query
+	)
+
+	return high_hit.is_empty()
+
+func _bot_update_stuck_state(delta: float) -> void:
+	var moved_distance: float = global_position.distance_to(
+		bot_last_position
+	)
+
+	if moved_distance < 0.04 and Vector2(
+		velocity.x,
+		velocity.z
+	).length() > 0.5:
+		bot_stuck_accumulator += delta
+	else:
+		bot_stuck_accumulator = 0.0
+		bot_last_position = global_position
+
+	if bot_stuck_accumulator >= 1.1:
+		bot_stuck_accumulator = 0.0
+		bot_strafe_direction *= -1.0
+		rotation.y += deg_to_rad(
+			90.0 * bot_strafe_direction
+		)
+		if is_on_floor():
+			velocity.y = JUMP_SPEED
+
+func _bot_try_ability() -> void:
+	if Time.get_ticks_msec() < next_ability_time:
+		return
+
+	match player_class:
+		PlayerClass.SOLDIER:
+			if reserve_ammo < int(
+				_weapon_reserve_ammo() * 0.5
+			):
+				server_ability_request()
+
+		PlayerClass.MEDIC:
+			var needs_healing := health < int(
+				_class_health(player_class) * 0.7
+			)
+			if not needs_healing:
+				for player_value in get_parent().players.values():
+					var teammate: Node3D = player_value as Node3D
+					if teammate == null:
+						continue
+					if int(teammate.get("team")) != team:
+						continue
+					if int(teammate.get("health")) < int(
+						teammate.call(
+							"_class_health",
+							int(teammate.get("player_class"))
+						)
+					):
+						needs_healing = true
+						break
+			if needs_healing:
+				server_ability_request()
+
+		PlayerClass.ENGINEER:
+			if health < int(
+				_class_health(player_class) * 0.75
+			):
+				server_ability_request()
+
+		PlayerClass.FIELD_OPS:
+			if reserve_ammo < int(
+				_weapon_reserve_ammo() * 0.65
+			):
+				server_ability_request()
+
+		PlayerClass.SCOUT:
+			var enemy: Node3D = get_parent().call(
+				"nearest_enemy",
+				self
+			) as Node3D
+			if enemy != null:
+				server_ability_request()
 
 func _bot_has_line_of_sight(target: Node3D) -> bool:
 	var from := global_position + Vector3.UP * 0.8
@@ -1226,18 +1485,37 @@ func _bot_has_line_of_sight(target: Node3D) -> bool:
 	return hit.is_empty() or hit.get("collider") == target
 
 func _server_bot_fire(target: Node3D) -> void:
-	if is_reloading:
+	if is_reloading or target == null:
 		return
 
 	if ammo_in_mag <= 0:
 		_server_start_reload()
 		return
 
+	_cancel_spawn_protection()
+	aim_requested = (
+		player_class == PlayerClass.SCOUT
+		or global_position.distance_to(
+			target.global_position
+		) > 14.0
+	)
+
 	ammo_in_mag -= 1
 	_store_current_weapon_ammo()
 
-	if target.has_method("server_take_damage"):
-		target.server_take_damage(_weapon_damage(), peer_id)
+	var accuracy_scale: float = (
+		0.88
+		if aim_requested
+		else 0.70
+	)
+	if randf() <= accuracy_scale and target.has_method(
+		"server_take_damage"
+	):
+		target.call(
+			"server_take_damage",
+			_weapon_damage(),
+			peer_id
+		)
 
 func server_force_respawn(spawn_position: Vector3) -> void:
 	if not multiplayer.is_server():
@@ -1252,6 +1530,13 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 	_apply_server_crouch(false)
 	_activate_spawn_protection()
 	bleedout_finish_ms = 0
+
+	var collision: CollisionShape3D = (
+		$CollisionShape3D as CollisionShape3D
+	)
+	if collision != null:
+		collision.set_deferred("disabled", false)
+
 	show()
 
 func server_set_team_and_class(

@@ -1,10 +1,14 @@
 # Changelog
 
-## 1.9.0
+## 2.0.0
 
-- Added procedural team-colored player skins
-- Added class accent colors
-- Added friendly nameplates
-- Added friendly class labels
-- Added spotted-enemy identification
-- Bumped protocol to 190
+- Added immediate bot elimination
+- Disabled dead bot collision
+- Restored bot collision on respawn waves
+- Added objective-aware bot navigation
+- Added enemy approach, retreat, and strafe behavior
+- Added low-obstacle jump checks
+- Added stuck recovery
+- Added automatic bot class abilities
+- Added bot aim and accuracy behavior
+- Bumped protocol to 200
