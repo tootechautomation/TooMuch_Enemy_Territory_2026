@@ -1,36 +1,21 @@
 # Frontline: Objective
 
-## Version 3.4.0 Visual Identity & Skins
+## Version 3.4.1 skin script resolution fix
 
-This phase adds original procedural skins and sprite artwork.
+This release corrects the dependency resolution error introduced in v3.4.0.
 
-### Player and weapon skins
-- Attackers use a blue tactical uniform texture.
-- Defenders use a red tactical uniform texture.
-- Rifles use a brushed-steel skin.
-- Pistols use a darker steel-and-wood skin.
-- Weapon skins switch automatically with the active weapon.
+Fixed:
 
-### Object skins
-- Engineer barricades use textured wood planks with team tinting.
-- Automatic emplacements use worn metal panels.
-- Destructible cover uses damaged concrete artwork.
-- Command-post equipment and selected map structures use metal textures.
+- `constructible.gd` now begins with `extends StaticBody3D`.
+- `field_emplacement.gd` now begins with `extends Node3D`.
+- `destructible_cover.gd` now begins with `extends StaticBody3D`.
+- Texture preload constants now appear after each `extends` declaration.
+- Added a package validation pass that checks the first declaration of every GDScript file.
 
-### Environment sprites
-- Added billboard foliage around the side lanes and map edges.
-- Sprites add visual depth with minimal rendering cost.
+All v3.4.0 uniforms, weapon skins, object textures, and foliage sprites remain included.
 
-### Included original assets
-- uniform_attackers.png
-- uniform_defenders.png
-- weapon_rifle.png
-- weapon_pistol.png
-- wood_planks.png
-- metal_panel.png
-- concrete_damage.png
-- objective_hazard.png
-- supply_crate.png
-- foliage_sprite.png
+Expected status:
 
-Expected status: `Connected: v3.4.0 protocol 340`
+```text
+Connected: v3.4.1 protocol 341
+```

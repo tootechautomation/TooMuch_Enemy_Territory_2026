@@ -1,5 +1,6 @@
-const TEX_CONCRETE: Texture2D = preload("res://assets/textures/concrete_damage.png")
 extends StaticBody3D
+
+const TEX_CONCRETE: Texture2D = preload("res://assets/textures/concrete_damage.png")
 
 var cover_id := 0
 var health := 260

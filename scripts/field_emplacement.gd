@@ -1,5 +1,6 @@
-const TEX_METAL: Texture2D = preload("res://assets/textures/metal_panel.png")
 extends Node3D
+
+const TEX_METAL: Texture2D = preload("res://assets/textures/metal_panel.png")
 
 var emplacement_id := 0
 var preferred_team := 0

@@ -1,11 +1,10 @@
 # Changelog
 
-## 3.4.0
-- Added original team uniform skins
-- Added rifle and pistol skins
-- Added wood, metal and concrete object textures
-- Added foliage billboard sprites
-- Applied skins to barricades, emplacements and cover
-- Added map material variation
-- Added reusable objective and supply artwork
-- Bumped protocol to 340
+## 3.4.1
+
+- Fixed unresolved `constructible.gd` preload
+- Fixed unresolved `field_emplacement.gd` preload
+- Fixed unresolved `destructible_cover.gd` preload
+- Moved texture constants below required `extends` declarations
+- Added GDScript first-declaration validation
+- Bumped protocol to 341

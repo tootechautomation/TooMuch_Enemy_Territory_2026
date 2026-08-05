@@ -1,5 +1,6 @@
-const TEX_WOOD: Texture2D = preload("res://assets/textures/wood_planks.png")
 extends StaticBody3D
+
+const TEX_WOOD: Texture2D = preload("res://assets/textures/wood_planks.png")
 
 var constructible_id := 0
 var owner_id := 0
