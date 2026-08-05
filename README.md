@@ -1,21 +1,22 @@
 # Frontline: Objective
 
-An original Godot 4 class-based objective-shooter prototype. No Wolfenstein game data, maps, branding, characters, audio, or artwork are included.
+An original Godot 4 class-based objective-shooter prototype. It contains no Wolfenstein game data, maps, branding, characters, audio, or artwork.
 
-## Version 0.7: bots, held interactions, and round flow
+## Version 0.8: stable bots and spectating
 
-New features:
+This release replaces the affected project files completely and fixes the v0.7 bot startup, reload, firing, and round-restart failures.
 
-- Server-side bots for local and VPS testing
-- Bots select all five classes
-- Engineer bots build, arm, and defuse objectives
-- Medic bots seek and revive downed teammates
-- Combat bots locate and fire at enemies
-- Hold **E** for construction, arming, defusing, and reviving
-- Automatic ten-second round restart
-- Round objectives, players, scores, and spawn state reset cleanly
+### Added
 
-## Start a dedicated server with bots
+- Death spectating of living teammates
+- Press **F** while dead to cycle teammates
+- Respawn-wave status in the HUD
+- Hold-to-interact construction, reviving, arming, and defusing
+- Reliable automatic round restart
+- Correct `--bots N` command-line parsing and spawning
+- Correct bot weapon range, fire interval, damage, and reload behavior
+
+## Dedicated server
 
 ```bash
 flatpak run org.godotengine.Godot \
@@ -25,8 +26,6 @@ flatpak run org.godotengine.Godot \
   --port 27960 \
   --bots 8
 ```
-
-The bot count is clamped between 0 and 16.
 
 ## Controls
 
@@ -38,18 +37,11 @@ The bot count is clamped between 0 and 16.
 - Left mouse: fire
 - R: reload
 - Hold E: revive, construct, arm, or defuse
-- Q: class ability / supply pack
+- Q: class ability
 - 1–5: select class
 - Tab: scoreboard
+- F while dead: cycle spectator target
 - Escape: release mouse
-
-## Mission
-
-1. Attacking Engineers construct the bridge.
-2. Attackers cross the river.
-3. Attacking Engineers arm the bunker charge.
-4. Defending Engineers may defuse it.
-5. Attackers win on detonation; defenders win on time.
 
 ## Validate
 
@@ -57,6 +49,4 @@ The bot count is clamped between 0 and 16.
 ./tools/validate_project.sh
 ```
 
-## Alpha limitations
-
-The bots use direct steering rather than a navigation mesh. Advanced prediction, reconciliation, lag compensation, polished animation, audio, final models, anti-cheat, and public-server hardening remain future work.
+This is still an alpha prototype. Navigation meshes, prediction, lag compensation, animation, audio, final assets, and public-server hardening remain future work.

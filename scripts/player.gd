@@ -50,6 +50,8 @@ var hud: Label
 var scoreboard: Label
 var feed: Label
 var weapon_view: Node3D
+var spectator_target_id := 0
+var spectator_index := -1
 
 func _ready() -> void:
 	ammo_in_mag = weapon.magazine_size
@@ -62,19 +64,28 @@ func _ready() -> void:
 		_build_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not _is_local_player(): return
+	if not _is_local_player():
+		return
+
 	if event is InputEventMouseMotion and alive and not downed:
 		rotation.y -= event.relative.x * 0.0025
 		pitch = clampf(pitch - event.relative.y * 0.0025, -1.35, 1.35)
 		$Head.rotation.x = pitch
-	if event.is_action_pressed("ui_cancel"): Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	if event.is_action_pressed("spectator_next") and not alive:
+		_cycle_spectator_target()
+
+	if event.is_action_pressed("ui_cancel"):
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _physics_process(delta: float) -> void:
 	if multiplayer.is_server() and is_bot:
 		_server_bot_tick(delta)
 		return
+
 	if _is_local_player():
 		_collect_and_send_input()
+		_update_spectator_camera()
 		_update_hud()
 	elif not multiplayer.is_server():
 		global_position = global_position.lerp(target_position, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
@@ -83,18 +94,49 @@ func _physics_process(delta: float) -> void:
 	if multiplayer.is_server(): _server_simulate(delta)
 
 func _collect_and_send_input() -> void:
-	if not alive: return
+	if not alive:
+		return
+
 	local_sequence += 1
-	var move := Vector2.ZERO if downed else Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	submit_input.rpc_id(1, move, rotation.y, pitch, Input.is_action_just_pressed("jump"), Input.is_action_pressed("sprint"), Input.is_action_pressed("crouch"), local_sequence)
+	var move := Vector2.ZERO if downed else Input.get_vector(
+		"move_left",
+		"move_right",
+		"move_forward",
+		"move_back"
+	)
+
+	submit_input.rpc_id(
+		1,
+		move,
+		rotation.y,
+		pitch,
+		Input.is_action_just_pressed("jump"),
+		Input.is_action_pressed("sprint"),
+		Input.is_action_pressed("crouch"),
+		local_sequence
+	)
+
 	if not downed and Input.is_action_pressed("fire"):
 		var camera := $Head/Camera3D as Camera3D
 		request_fire.rpc_id(1, camera.global_position, -camera.global_transform.basis.z)
-	if not downed and Input.is_action_just_pressed("reload"): request_reload.rpc_id(1)
-	if Input.is_action_just_pressed("interact"): request_interact.rpc_id(1)
-	if not downed and Input.is_action_just_pressed("ability"): request_class_ability.rpc_id(1)
+
+	if not downed and Input.is_action_just_pressed("reload"):
+		request_reload.rpc_id(1)
+
+	if Input.is_action_pressed("interact"):
+		interact_accumulator += get_physics_process_delta_time()
+		if interact_accumulator >= 0.25:
+			interact_accumulator = 0.0
+			request_interact.rpc_id(1)
+	else:
+		interact_accumulator = 0.0
+
+	if not downed and Input.is_action_just_pressed("ability"):
+		request_class_ability.rpc_id(1)
+
 	for index in 5:
-		if Input.is_action_just_pressed("class_%d" % (index + 1)): request_class.rpc_id(1, index)
+		if Input.is_action_just_pressed("class_%d" % (index + 1)):
+			request_class.rpc_id(1, index)
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func submit_input(move: Vector2, yaw: float, look_pitch: float, wants_jump: bool, wants_sprint: bool, wants_crouch: bool, sequence: int) -> void:
@@ -147,13 +189,36 @@ func _apply_spread(direction: Vector3, degrees: float) -> Vector3:
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_reload() -> void:
-	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id or not alive or downed: return
-	if is_reloading or ammo_in_mag >= weapon.magazine_size or reserve_ammo <= 0: return
-	is_reloading = true; reload_finish_ms = Time.get_ticks_msec() + int(weapon.reload_seconds * 1000.0)
+	if not multiplayer.is_server():
+		return
+	if multiplayer.get_remote_sender_id() != peer_id:
+		return
+	if not alive or downed:
+		return
+	_server_start_reload()
+
+func _server_start_reload() -> void:
+	if not multiplayer.is_server():
+		return
+	if is_reloading:
+		return
+	if ammo_in_mag >= weapon.magazine_size:
+		return
+	if reserve_ammo <= 0:
+		return
+
+	is_reloading = true
+	reload_finish_ms = (
+		Time.get_ticks_msec()
+		+ int(weapon.reload_seconds * 1000.0)
+	)
 
 func _finish_reload() -> void:
-	var needed := weapon.magazine_size - ammo_in_mag; var transferred := mini(needed, reserve_ammo)
-	ammo_in_mag += transferred; reserve_ammo -= transferred; is_reloading = false
+	var needed := weapon.magazine_size - ammo_in_mag
+	var transferred := mini(needed, reserve_ammo)
+	ammo_in_mag += transferred
+	reserve_ammo -= transferred
+	is_reloading = false
 
 func server_take_damage(amount: int, attacker_id: int) -> void:
 	if not multiplayer.is_server() or not alive or downed: return
@@ -221,15 +286,17 @@ func _server_bot_tick(delta: float) -> void:
 		velocity = Vector3.ZERO
 		return
 
-	bot_think_accumulator += delta
-	bot_fire_accumulator = maxf(0.0, bot_fire_accumulator - delta)
+	var now := Time.get_ticks_msec()
+	if is_reloading and now >= reload_finish_ms:
+		_finish_reload()
 
+	bot_fire_accumulator = maxf(0.0, bot_fire_accumulator - delta)
 	var target: Node3D = null
+
 	if player_class == PlayerClass.MEDIC:
 		target = get_parent().nearest_downed_teammate(self)
 		if target and global_position.distance_to(target.global_position) <= 2.6:
 			target.server_revive(peer_id)
-			add_xp(15, "bot revive")
 			return
 
 	if player_class == PlayerClass.ENGINEER:
@@ -256,15 +323,21 @@ func _server_bot_tick(delta: float) -> void:
 	var flat_direction := target.global_position - global_position
 	flat_direction.y = 0.0
 	var distance := flat_direction.length()
+
 	if distance > 0.05:
 		flat_direction = flat_direction.normalized()
 		look_at(global_position + flat_direction, Vector3.UP)
 
-	if target in get_parent().players.values() and distance <= weapon.range:
+	var target_is_player := target in get_parent().players.values()
+	if target_is_player and distance <= weapon.range_meters:
 		velocity.x = 0.0
 		velocity.z = 0.0
+
 		if bot_fire_accumulator <= 0.0 and _bot_has_line_of_sight(target):
-			bot_fire_accumulator = maxf(0.12, weapon.fire_interval)
+			bot_fire_accumulator = maxf(
+				0.12,
+				float(weapon.fire_interval_ms()) / 1000.0
+			)
 			_server_bot_fire(target)
 	else:
 		var bot_speed := 4.8
@@ -273,6 +346,7 @@ func _server_bot_tick(delta: float) -> void:
 
 	if not is_on_floor():
 		velocity.y -= gravity * delta
+
 	move_and_slide()
 
 func _bot_has_line_of_sight(target: Node3D) -> bool:
@@ -284,12 +358,17 @@ func _bot_has_line_of_sight(target: Node3D) -> bool:
 	return hit.is_empty() or hit.get("collider") == target
 
 func _server_bot_fire(target: Node3D) -> void:
-	if ammo_in_mag <= 0:
-		_server_begin_reload()
+	if is_reloading:
 		return
+
+	if ammo_in_mag <= 0:
+		_server_start_reload()
+		return
+
 	ammo_in_mag -= 1
-	if target.has_method("apply_damage"):
-		target.apply_damage(weapon.damage, peer_id)
+
+	if target.has_method("server_take_damage"):
+		target.server_take_damage(weapon.damage, peer_id)
 
 func server_force_respawn(spawn_position: Vector3) -> void:
 	if not multiplayer.is_server():
@@ -337,6 +416,52 @@ func _class_health(class_id: int) -> int:
 
 func _is_local_player() -> bool: return peer_id != 0 and peer_id == multiplayer.get_unique_id()
 
+func _living_teammates() -> Array:
+	var result: Array = []
+	for candidate in get_parent().players.values():
+		if candidate == self:
+			continue
+		if candidate.team == team and candidate.alive and not candidate.downed:
+			result.append(candidate)
+	return result
+
+func _cycle_spectator_target() -> void:
+	var candidates := _living_teammates()
+	if candidates.is_empty():
+		spectator_target_id = 0
+		spectator_index = -1
+		return
+
+	spectator_index = (spectator_index + 1) % candidates.size()
+	spectator_target_id = int(candidates[spectator_index].peer_id)
+
+func _update_spectator_camera() -> void:
+	if not _is_local_player():
+		return
+
+	var camera := $Head/Camera3D as Camera3D
+
+	if alive:
+		spectator_target_id = 0
+		spectator_index = -1
+		camera.position = Vector3.ZERO
+		camera.rotation = Vector3.ZERO
+		return
+
+	var candidates := _living_teammates()
+	if candidates.is_empty():
+		return
+
+	var target = get_parent().players.get(spectator_target_id)
+	if target == null or not target.alive or target.downed or target.team != team:
+		spectator_index = 0
+		target = candidates[0]
+		spectator_target_id = int(target.peer_id)
+
+	var target_head := target.get_node_or_null("Head")
+	if target_head:
+		camera.global_transform = target_head.global_transform
+
 func _build_first_person_weapon() -> void:
 	weapon_view = Node3D.new(); weapon_view.name = "FirstPersonWeapon"; weapon_view.position = Vector3(0.34, -0.28, -0.72); $Head/Camera3D.add_child(weapon_view)
 	var receiver := MeshInstance3D.new(); var receiver_mesh := BoxMesh.new(); receiver_mesh.size = Vector3(0.16, 0.16, 0.72); receiver.mesh = receiver_mesh; var metal := StandardMaterial3D.new(); metal.albedo_color = Color(0.18, 0.19, 0.20); receiver.material_override = metal; weapon_view.add_child(receiver)
@@ -354,7 +479,9 @@ func _update_hud() -> void:
 	if hud == null: return
 	var names := ["Soldier", "Medic", "Engineer", "Field Ops", "Scout"]
 	var main = get_parent(); var minutes := int(main.match_time_remaining) / 60; var seconds := int(main.match_time_remaining) % 60
-	var life_text := "DOWNED" if downed else ("ALIVE" if alive else "RESPAWN IN %.1f" % main.spawn_wave_remaining)
+	var life_text := "DOWNED" if downed else (
+		"ALIVE" if alive else "RESPAWN IN %.1f · F cycles teammate" % main.spawn_wave_remaining
+	)
 	var objective_text: String = main.objective_status_text()
 	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
 	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  E: interact" % [player_name, "Attackers" if team == 0 else "Defenders", life_text, health, ammo_in_mag, reserve_ammo, "RELOADING" if is_reloading else weapon.display_name, objective_text, minutes, seconds, names[player_class], xp, rank_name(), cooldown]

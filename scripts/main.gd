@@ -46,19 +46,41 @@ func _ready() -> void:
 	_parse_command_line()
 
 func _process(delta: float) -> void:
-	if not multiplayer.is_server() or match_over:
+	if not multiplayer.is_server():
 		return
+
+	if match_over:
+		round_restart_remaining = maxf(0.0, round_restart_remaining - delta)
+		broadcast_match_state.rpc(
+			match_time_remaining,
+			spawn_wave_remaining,
+			objective_health,
+			objective_stage,
+			bridge_progress,
+			bridge_required,
+			dynamite_armed,
+			dynamite_remaining,
+			defuse_progress,
+			defuse_required
+		)
+		if round_restart_remaining <= 0.0:
+			_reset_round()
+		return
+
 	match_time_remaining = maxf(0.0, match_time_remaining - delta)
 	spawn_wave_remaining -= delta
+
 	if spawn_wave_remaining <= 0.0:
 		spawn_wave_remaining += SPAWN_WAVE_SECONDS
 		_respawn_wave()
+
 	if dynamite_armed:
 		dynamite_remaining = maxf(0.0, dynamite_remaining - delta)
 		if dynamite_remaining <= 0.0:
 			dynamite_armed = false
 			defuse_progress = 0
 			damage_objective(100, 0)
+
 	broadcast_match_state.rpc(
 		match_time_remaining,
 		spawn_wave_remaining,
@@ -71,6 +93,7 @@ func _process(delta: float) -> void:
 		defuse_progress,
 		defuse_required
 	)
+
 	if match_time_remaining <= 0.0:
 		_end_match("DEFENDERS WIN — time expired")
 
@@ -79,12 +102,21 @@ func _parse_command_line() -> void:
 	var is_server := "--server" in args or DisplayServer.get_name() == "headless"
 	var port := PORT_DEFAULT
 	var connect_address := ""
+
 	for i in args.size():
-		if args[i] == "--port" and i + 1 < args.size(): port = int(args[i + 1])
-		elif args[i] == "--connect" and i + 1 < args.size(): connect_address = args[i + 1]
-	if is_server: start_server(port)
-	elif connect_address != "": join_server(connect_address, port)
-	else: _show_connection_menu()
+		if args[i] == "--port" and i + 1 < args.size():
+			port = int(args[i + 1])
+		elif args[i] == "--connect" and i + 1 < args.size():
+			connect_address = args[i + 1]
+		elif args[i] == "--bots" and i + 1 < args.size():
+			desired_bot_count = clampi(int(args[i + 1]), 0, 16)
+
+	if is_server:
+		start_server(port)
+	elif connect_address != "":
+		join_server(connect_address, port)
+	else:
+		_show_connection_menu()
 
 func start_server(port: int = PORT_DEFAULT) -> void:
 	var peer := ENetMultiplayerPeer.new()
@@ -95,6 +127,10 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 		return
 	multiplayer.multiplayer_peer = peer
 	print("Frontline dedicated server listening on UDP %d" % port)
+	for index in desired_bot_count:
+		_spawn_bot(index)
+	if desired_bot_count > 0:
+		print("Spawned %d server bots" % desired_bot_count)
 
 func join_server(address: String, port: int = PORT_DEFAULT) -> void:
 	var peer := ENetMultiplayerPeer.new()
@@ -267,8 +303,12 @@ func remove_supply_pack(pack_id: int) -> void:
 	if supply_packs.has(pack_id): supply_packs[pack_id].queue_free(); supply_packs.erase(pack_id)
 
 func _end_match(message: String) -> void:
-	if match_over: return
-	match_over = true; announce.rpc(message); print(message)
+	if match_over:
+		return
+	match_over = true
+	round_restart_remaining = ROUND_RESTART_SECONDS
+	announce.rpc(message)
+	print(message)
 
 @rpc("authority", "call_remote", "unreliable_ordered")
 func broadcast_match_state(
@@ -343,7 +383,7 @@ func _spawn_bot(index: int) -> void:
 	next_bot_peer_id += 1
 	var team := index % 2
 	var class_id := index % 5
-	_spawn_player.rpc(bot_id, team, "Bot%02d" % (index + 1))
+	spawn_player.rpc(bot_id, team, "Bot%02d" % (index + 1), _get_spawn(team, bot_id))
 	call_deferred("_configure_bot", bot_id, class_id)
 
 func _configure_bot(bot_id: int, class_id: int) -> void:
