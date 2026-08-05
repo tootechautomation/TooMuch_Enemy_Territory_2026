@@ -1,10 +1,11 @@
 # Changelog
 
-## 1.4.0
+## 1.4.1
 
-- Added team/class spawn menu
-- Added server-validated deploy selection
-- Added M-key menu toggle
-- Added automatic mouse capture handling
-- Added selected-team respawn
-- Bumped protocol to 140
+- Prevented the initial player snapshot from hiding the spawn menu
+- Prevented closing the menu before first deployment
+- Added frame-polled M menu toggle
+- Added visible team/class selection status
+- Replicated authoritative player team in snapshots
+- Corrected spawn_menu InputMap placement
+- Bumped protocol to 141

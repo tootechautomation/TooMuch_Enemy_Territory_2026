@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.4.0"
-const NETWORK_PROTOCOL := 140
+const BUILD_VERSION := "1.4.1"
+const NETWORK_PROTOCOL := 141
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -444,6 +444,7 @@ func receive_player_snapshot(
 	is_downed: bool,
 	reloading: bool,
 	class_id: int,
+	player_team: int,
 	kill_count: int,
 	death_count: int,
 	experience: int,
@@ -475,6 +476,7 @@ func receive_player_snapshot(
 		is_downed,
 		reloading,
 		class_id,
+		player_team,
 		kill_count,
 		death_count,
 		experience,

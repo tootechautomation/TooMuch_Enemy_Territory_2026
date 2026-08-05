@@ -74,6 +74,9 @@ var spawn_menu: Control
 var selected_team := 0
 var selected_class := 0
 var spawn_menu_open := false
+var has_deployed := false
+var menu_toggle_latched := false
+var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
 var next_grenade_time := 0
@@ -105,12 +108,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("spectator_next") and not alive:
 		_cycle_spectator_target()
 
-	if event.is_action_pressed("spawn_menu"):
-		if spawn_menu_open:
-			_hide_spawn_menu()
-		else:
-			_show_spawn_menu()
-
 	if event.is_action_pressed("ui_cancel"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -120,6 +117,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if _is_local_player():
+		_poll_spawn_menu_toggle()
 		_collect_and_send_input()
 		_update_spectator_camera()
 		_update_hud()
@@ -128,6 +126,19 @@ func _physics_process(delta: float) -> void:
 		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
 		$Head.rotation.x = lerp_angle($Head.rotation.x, target_pitch, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
 	if multiplayer.is_server(): _server_simulate(delta)
+
+func _poll_spawn_menu_toggle() -> void:
+	var pressed: bool = Input.is_action_pressed("spawn_menu")
+
+	if pressed and not menu_toggle_latched:
+		menu_toggle_latched = true
+		if spawn_menu_open:
+			if has_deployed:
+				_hide_spawn_menu()
+		else:
+			_show_spawn_menu()
+	elif not pressed:
+		menu_toggle_latched = false
 
 func _collect_and_send_input() -> void:
 	if spawn_menu_open:
@@ -306,7 +317,7 @@ func _send_snapshot() -> void:
 		is_crouching
 	)
 
-func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool) -> void:
+func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool) -> void:
 	if multiplayer.is_server():
 		return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
@@ -316,6 +327,7 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 	downed = is_downed
 	is_reloading = reloading
 	player_class = class_id
+	team = player_team
 	kills = kill_count
 	deaths = death_count
 	xp = experience
@@ -336,10 +348,10 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 		weapon_view.visible = alive and not downed
 
 	if _is_local_player():
-		if not alive and not spawn_menu_open:
+		if not has_deployed and not spawn_menu_open:
 			_show_spawn_menu()
-		elif alive and spawn_menu_open and spawn_menu != null:
-			_hide_spawn_menu()
+		elif not alive and not spawn_menu_open:
+			_show_spawn_menu()
 
 func server_fire(origin: Vector3, direction: Vector3) -> void:
 	if not multiplayer.is_server() or not alive or downed or is_reloading:
@@ -1046,6 +1058,7 @@ func _build_spawn_menu() -> void:
 	attackers_button.custom_minimum_size = Vector2(220, 45)
 	attackers_button.pressed.connect(func():
 		selected_team = 0
+		_update_selection_status()
 	)
 	team_row.add_child(attackers_button)
 
@@ -1054,6 +1067,7 @@ func _build_spawn_menu() -> void:
 	defenders_button.custom_minimum_size = Vector2(220, 45)
 	defenders_button.pressed.connect(func():
 		selected_team = 1
+		_update_selection_status()
 	)
 	team_row.add_child(defenders_button)
 
@@ -1076,8 +1090,15 @@ func _build_spawn_menu() -> void:
 		class_button.custom_minimum_size = Vector2(450, 40)
 		class_button.pressed.connect(func(index := class_index):
 			selected_class = index
+			_update_selection_status()
 		)
 		root_box.add_child(class_button)
+
+	selection_status = Label.new()
+	selection_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	selection_status.add_theme_font_size_override("font_size", 18)
+	root_box.add_child(selection_status)
+	_update_selection_status()
 
 	var deploy_button := Button.new()
 	deploy_button.text = "DEPLOY"
@@ -1091,6 +1112,26 @@ func _build_spawn_menu() -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root_box.add_child(hint)
 
+func _update_selection_status() -> void:
+	if selection_status == null:
+		return
+
+	var team_name := "Attackers" if selected_team == 0 else "Defenders"
+	var class_names := [
+		"Soldier",
+		"Medic",
+		"Engineer",
+		"Field Ops",
+		"Scout"
+	]
+	var class_name: String = class_names[
+		clampi(selected_class, 0, class_names.size() - 1)
+	]
+	selection_status.text = "Selected: %s · %s" % [
+		team_name,
+		class_name
+	]
+
 func _show_spawn_menu() -> void:
 	if spawn_menu == null:
 		return
@@ -1100,6 +1141,8 @@ func _show_spawn_menu() -> void:
 
 func _hide_spawn_menu() -> void:
 	if spawn_menu == null:
+		return
+	if not has_deployed:
 		return
 	spawn_menu_open = false
 	spawn_menu.visible = false
@@ -1117,6 +1160,7 @@ func _submit_spawn_selection() -> void:
 		selected_class
 	)
 
+	has_deployed = true
 	player_class = selected_class
 	team = selected_team
 	_hide_spawn_menu()
