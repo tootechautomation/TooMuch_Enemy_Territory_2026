@@ -1,33 +1,27 @@
 # Frontline: Objective
 
-## Version 2.0.0 bot lifecycle and combat AI
+## Version 2.1.0 objective presentation
 
-Fixed:
+Added:
 
-- Bots no longer remain as permanent dead/downed bodies.
-- Bots are eliminated immediately when health reaches zero.
-- Dead bot collision is disabled.
-- Dead bots disappear from all clients.
-- Bots return on the next respawn wave with collision restored.
+- Large world-space objective marker
+- Live bridge construction percentage
+- Live bunker integrity
+- Visible dynamite model when armed
+- Pulsing red charge light
+- Live fuse countdown
+- Live defuse progress
+- Context-sensitive Engineer prompts
+- Non-Engineer role guidance
+- Objective visuals synchronized through the existing match-state RPC
 
-Improved bot behavior:
-
-- Attackers advance toward the active objective.
-- Defenders move to defensive positions.
-- Engineers travel to and interact with objectives.
-- Medics move toward and revive downed teammates.
-- Bots search for enemies, approach, retreat, and strafe.
-- Scouts maintain longer engagement distance.
-- Bots attempt to jump over low obstacles.
-- Stuck detection changes direction and triggers a jump.
-- Bots reload automatically.
-- Bots use class abilities when useful.
-- Bot accuracy changes when aiming.
-
-Install the same package on Windows and Linux.
-
-Expected HUD:
+Typical prompts:
 
 ```text
-Connected: v2.0.0 protocol 200
+Hold E: Construct bridge  4/10
+Hold E: Arm dynamite
+Hold E: Defuse charge  2/5
+Defend the armed charge  18.4s
 ```
+
+Install the same package on Windows and Linux.

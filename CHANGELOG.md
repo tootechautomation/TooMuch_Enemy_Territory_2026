@@ -1,14 +1,11 @@
 # Changelog
 
-## 2.0.0
+## 2.1.0
 
-- Added immediate bot elimination
-- Disabled dead bot collision
-- Restored bot collision on respawn waves
-- Added objective-aware bot navigation
-- Added enemy approach, retreat, and strafe behavior
-- Added low-obstacle jump checks
-- Added stuck recovery
-- Added automatic bot class abilities
-- Added bot aim and accuracy behavior
-- Bumped protocol to 200
+- Added world-space objective labels
+- Added construction percentage
+- Added visible dynamite and warning light
+- Added fuse and defuse progress displays
+- Added contextual objective interaction prompts
+- Synchronized objective visuals through match state
+- Bumped protocol to 210

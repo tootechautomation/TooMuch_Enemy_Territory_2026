@@ -2149,6 +2149,11 @@ func _update_hud() -> void:
 		)
 	)
 	var objective_text: String = str(main.call("objective_status_text"))
+	var interaction_prompt: String = str(
+		main.call("interaction_prompt_for", self)
+	)
+	if interaction_prompt == "":
+		interaction_prompt = "Follow the active objective marker"
 	var primary_name: String = _resource_string(
 		_class_primary_weapon(player_class),
 		"display_name",
@@ -2171,7 +2176,7 @@ func _update_hud() -> void:
 		if replicated_ability_cooldown_ms <= 0
 		else "%.1fs" % cooldown
 	)
-	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu\nBlue=Attackers  Red=Defenders  Accent=Class" % [
+	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu\nBlue=Attackers  Red=Defenders  Accent=Class" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],
@@ -2192,6 +2197,7 @@ func _update_hud() -> void:
 		grenades_remaining,
 		protection_text,
 		primary_name,
+		interaction_prompt,
 		objective_text,
 		minutes,
 		seconds,

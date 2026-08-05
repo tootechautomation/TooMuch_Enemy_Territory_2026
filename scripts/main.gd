@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "2.0.0"
-const NETWORK_PROTOCOL := 200
+const BUILD_VERSION := "2.1.0"
+const NETWORK_PROTOCOL := 210
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -59,9 +59,14 @@ var snapshot_accumulator := 0.0
 const SNAPSHOT_INTERVAL := 0.05
 var verified_peers: Dictionary = {}
 var kill_feed: Array[String] = []
+var objective_marker: Label3D
+var objective_progress_label: Label3D
+var dynamite_model: MeshInstance3D
+var dynamite_light: OmniLight3D
 
 func _ready() -> void:
 	_build_world()
+	_update_objective_visuals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -69,6 +74,8 @@ func _ready() -> void:
 	_parse_command_line()
 
 func _process(delta: float) -> void:
+	_update_objective_visuals()
+
 	if not multiplayer.is_server():
 		return
 
@@ -107,6 +114,7 @@ func _process(delta: float) -> void:
 		if dynamite_remaining <= 0.0:
 			dynamite_armed = false
 			defuse_progress = 0
+			_update_objective_visuals()
 			damage_objective(100, 0)
 
 	broadcast_match_state.rpc(
@@ -828,6 +836,7 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 		if engineer_team == 0 and build_site and engineer.global_position.distance_to(build_site.global_position) <= 3.5:
 			bridge_progress = mini(bridge_required, bridge_progress + 1)
 			engineer.add_xp(5, "construction")
+			_update_objective_visuals()
 			if bridge_progress >= bridge_required:
 				objective_stage = 1
 				var bridge: Node = get_node_or_null("ConstructedBridge")
@@ -836,6 +845,7 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 					bridge.process_mode = Node.PROCESS_MODE_INHERIT
 				push_kill_feed.rpc("%s constructed the bridge" % player_names.get(engineer_id, "Engineer"))
 				engineer.add_xp(50, "bridge completed")
+				_update_objective_visuals()
 			return true
 		return false
 
@@ -853,6 +863,7 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 			dynamite_armed = false
 			dynamite_remaining = 0.0
 			defuse_progress = 0
+			_update_objective_visuals()
 			push_kill_feed.rpc("%s defused the charge" % player_names.get(engineer_id, "Engineer"))
 			engineer.add_xp(40, "charge defused")
 		return true
@@ -865,6 +876,7 @@ func arm_dynamite(engineer_id: int) -> bool:
 	dynamite_armed = true
 	dynamite_remaining = DYNAMITE_FUSE_SECONDS
 	defuse_progress = 0
+	_update_objective_visuals()
 	push_kill_feed.rpc("%s armed the bunker charge" % player_names.get(engineer_id, "Engineer"))
 	if players.has(engineer_id):
 		players[engineer_id].add_xp(25, "charge armed")
@@ -1099,6 +1111,13 @@ func broadcast_match_state(
 	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
 		bridge.visible = objective_stage >= 1
+		bridge.process_mode = (
+			Node.PROCESS_MODE_INHERIT
+			if objective_stage >= 1
+			else Node.PROCESS_MODE_DISABLED
+		)
+
+	_update_objective_visuals()
 
 @rpc("authority", "call_local", "reliable")
 func push_kill_feed(message: String) -> void:
@@ -1112,6 +1131,109 @@ func announce(message: String) -> void:
 	if DisplayServer.get_name() == "headless": return
 	var layer := CanvasLayer.new(); add_child(layer)
 	var label := Label.new(); label.text = message; label.position = Vector2(390, 50); label.add_theme_font_size_override("font_size", 28); layer.add_child(label)
+
+func _update_objective_visuals() -> void:
+	if objective_marker == null or objective_progress_label == null:
+		return
+
+	if match_over:
+		objective_marker.text = "ROUND COMPLETE"
+		objective_marker.modulate = Color(1.0, 0.82, 0.22)
+		objective_progress_label.text = (
+			"Restart in %.1fs" % round_restart_remaining
+		)
+	elif objective_stage == 0:
+		var build_percent: int = int(round(
+			100.0 * float(bridge_progress)
+			/ float(maxi(1, bridge_required))
+		))
+		objective_marker.text = "BUILD THE BRIDGE"
+		objective_marker.modulate = Color(0.92, 0.76, 0.16)
+		objective_progress_label.text = "%d%%  (%d/%d)" % [
+			build_percent,
+			bridge_progress,
+			bridge_required
+		]
+	elif dynamite_armed:
+		objective_marker.text = "CHARGE ARMED"
+		objective_marker.modulate = Color(1.0, 0.16, 0.08)
+		objective_progress_label.text = (
+			"Fuse %.1fs  ·  Defuse %d/%d"
+			% [
+				dynamite_remaining,
+				defuse_progress,
+				defuse_required
+			]
+		)
+	else:
+		objective_marker.text = "DESTROY THE BUNKER"
+		objective_marker.modulate = Color(0.90, 0.22, 0.14)
+		objective_progress_label.text = "Integrity %d%%" % objective_health
+
+	if dynamite_model != null:
+		dynamite_model.visible = dynamite_armed
+	if dynamite_light != null:
+		dynamite_light.visible = dynamite_armed
+		if dynamite_armed:
+			var pulse: float = 1.4 + sin(
+				Time.get_ticks_msec() * 0.012
+			) * 0.8
+			dynamite_light.light_energy = pulse
+
+func interaction_prompt_for(player: Node3D) -> String:
+	if player == null or not bool(player.get("alive")):
+		return ""
+
+	var player_class: int = int(player.get("player_class"))
+	var player_team: int = int(player.get("team"))
+	var player_position: Vector3 = player.global_position
+
+	if player_class != 2:
+		if objective_stage == 0:
+			return "Engineer required to construct the bridge"
+		if dynamite_armed and player_team == 1:
+			return "Engineer required to defuse the charge"
+		return ""
+
+	if objective_stage == 0:
+		var build_site: Node3D = get_node_or_null(
+			"BridgeBuildSite"
+		) as Node3D
+		if build_site == null:
+			return ""
+		var distance: float = player_position.distance_to(
+			build_site.global_position
+		)
+		if distance <= 4.5:
+			return "Hold E: Construct bridge  %d/%d" % [
+				bridge_progress,
+				bridge_required
+			]
+		return "Reach the yellow bridge construction zone"
+
+	var objective: Node3D = get_node_or_null("Objective") as Node3D
+	if objective == null:
+		return ""
+
+	var objective_distance: float = player_position.distance_to(
+		objective.global_position
+	)
+	if player_team == 0:
+		if dynamite_armed:
+			return "Defend the armed charge  %.1fs" % dynamite_remaining
+		if objective_distance <= 4.5:
+			return "Hold E: Arm dynamite"
+		return "Reach the bunker and arm dynamite"
+
+	if dynamite_armed:
+		if objective_distance <= 4.5:
+			return "Hold E: Defuse charge  %d/%d" % [
+				defuse_progress,
+				defuse_required
+			]
+		return "Reach the bunker and defuse the charge"
+
+	return "Defend the bunker"
 
 func objective_status_text() -> String:
 	if match_over:
@@ -1407,6 +1529,49 @@ func _build_world() -> void:
 	collision.shape = shape
 	objective.add_child(collision)
 	add_child(objective)
+
+	objective_marker = Label3D.new()
+	objective_marker.name = "ObjectiveMarker"
+	objective_marker.position = Vector3(13.0, 4.25, 0.0)
+	objective_marker.font_size = 42
+	objective_marker.outline_size = 12
+	objective_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	objective_marker.fixed_size = true
+	objective_marker.no_depth_test = false
+	add_child(objective_marker)
+
+	objective_progress_label = Label3D.new()
+	objective_progress_label.name = "ObjectiveProgress"
+	objective_progress_label.position = Vector3(13.0, 3.7, 0.0)
+	objective_progress_label.font_size = 28
+	objective_progress_label.outline_size = 10
+	objective_progress_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	objective_progress_label.fixed_size = true
+	add_child(objective_progress_label)
+
+	dynamite_model = MeshInstance3D.new()
+	dynamite_model.name = "DynamiteModel"
+	var dynamite_mesh := BoxMesh.new()
+	dynamite_mesh.size = Vector3(0.65, 0.28, 0.30)
+	dynamite_model.mesh = dynamite_mesh
+	dynamite_model.position = Vector3(10.85, 1.45, 0.0)
+	var dynamite_material := StandardMaterial3D.new()
+	dynamite_material.albedo_color = Color(0.65, 0.10, 0.07)
+	dynamite_material.emission_enabled = true
+	dynamite_material.emission = Color(0.42, 0.03, 0.02)
+	dynamite_model.material_override = dynamite_material
+	dynamite_model.visible = false
+	add_child(dynamite_model)
+
+	dynamite_light = OmniLight3D.new()
+	dynamite_light.name = "DynamiteLight"
+	dynamite_light.position = Vector3(10.85, 1.55, 0.0)
+	dynamite_light.light_color = Color(1.0, 0.10, 0.04)
+	dynamite_light.omni_range = 4.0
+	dynamite_light.light_energy = 2.3
+	dynamite_light.visible = false
+	add_child(dynamite_light)
+
 
 func _make_spawn_zone(
 	zone_name: String,
