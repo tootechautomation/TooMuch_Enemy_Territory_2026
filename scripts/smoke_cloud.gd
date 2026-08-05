@@ -1,5 +1,19 @@
 extends Node3D
 
+
+func _has_active_multiplayer_peer() -> bool:
+	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
+	if peer == null:
+		return false
+	return (
+		peer.get_connection_status()
+		!= MultiplayerPeer.CONNECTION_DISCONNECTED
+	)
+
+func _is_active_server() -> bool:
+	if not _has_active_multiplayer_peer():
+		return false
+	return multiplayer.is_server()
 var smoke_id := 0
 var team := 0
 var lifetime_remaining := 12.0
@@ -40,7 +54,7 @@ func _process(delta: float) -> void:
 	if lifetime_remaining <= 0.0:
 		set_process(false)
 
-		if multiplayer.is_server():
+		if _is_active_server():
 			var main_node: Node = get_parent()
 			if main_node != null:
 				main_node.call("server_remove_smoke", smoke_id)

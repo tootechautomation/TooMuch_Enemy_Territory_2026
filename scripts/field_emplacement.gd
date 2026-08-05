@@ -1,5 +1,19 @@
 extends Node3D
 
+
+func _has_active_multiplayer_peer() -> bool:
+	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
+	if peer == null:
+		return false
+	return (
+		peer.get_connection_status()
+		!= MultiplayerPeer.CONNECTION_DISCONNECTED
+	)
+
+func _is_active_server() -> bool:
+	if not _has_active_multiplayer_peer():
+		return false
+	return multiplayer.is_server()
 const TEX_METAL: Texture2D = preload("res://assets/textures/metal_panel.png")
 
 var emplacement_id := 0
@@ -99,7 +113,7 @@ func _build_visuals() -> void:
 func _process(delta: float) -> void:
 	_update_control_state()
 
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return
 	if effective_team < 0:
 		return

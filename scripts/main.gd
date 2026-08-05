@@ -1,5 +1,19 @@
 extends Node
 
+
+func _has_active_multiplayer_peer() -> bool:
+	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
+	if peer == null:
+		return false
+	return (
+		peer.get_connection_status()
+		!= MultiplayerPeer.CONNECTION_DISCONNECTED
+	)
+
+func _is_active_server() -> bool:
+	if not _has_active_multiplayer_peer():
+		return false
+	return multiplayer.is_server()
 const PlayerScene = preload("res://scenes/player.tscn")
 const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
@@ -13,8 +27,8 @@ const TEX_OBJECTIVE: Texture2D = preload("res://assets/textures/objective_hazard
 const TEX_FOLIAGE: Texture2D = preload("res://assets/textures/foliage_sprite.png")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.4.1"
-const NETWORK_PROTOCOL := 341
+const BUILD_VERSION := "3.4.2"
+const NETWORK_PROTOCOL := 342
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -130,6 +144,7 @@ func _ready() -> void:
 	_build_world()
 	_build_round_results_ui()
 	_update_objective_visuals()
+	protocol_message = "Offline preview — host or connect to begin"
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -142,7 +157,7 @@ func _process(delta: float) -> void:
 	_update_command_post_visuals()
 	_update_battlefield_atmosphere()
 
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return
 
 	_update_pending_artillery(delta)
@@ -313,7 +328,7 @@ func _command_post_node() -> Node3D:
 	return get_node_or_null("CommandPost") as Node3D
 
 func _update_command_post_capture(delta: float) -> void:
-	if not multiplayer.is_server() or match_over:
+	if not _is_active_server() or match_over:
 		return
 	if objective_stage == 0:
 		command_post_contested = false
@@ -559,7 +574,7 @@ func _on_connection_failed() -> void:
 	push_error("Connection failed")
 
 func _on_peer_connected(id: int) -> void:
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return
 
 	verified_peers[id] = false
@@ -614,7 +629,7 @@ func _on_peer_connected(id: int) -> void:
 	spawn_player.rpc(id, team, player_names[id], _get_spawn(team, id))
 
 func _on_peer_disconnected(id: int) -> void:
-	if not multiplayer.is_server(): return
+	if not _is_active_server(): return
 	remove_player.rpc(id)
 	player_teams.erase(id)
 	player_names.erase(id)
@@ -625,7 +640,7 @@ func receive_server_protocol(
 	server_protocol: int,
 	server_version: String
 ) -> void:
-	if multiplayer.is_server():
+	if _is_active_server():
 		return
 
 	if server_protocol != NETWORK_PROTOCOL:
@@ -661,7 +676,7 @@ func client_protocol_ack(
 	client_protocol: int,
 	client_version: String
 ) -> void:
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
@@ -691,7 +706,7 @@ func is_peer_protocol_verified(peer_id: int) -> bool:
 	return bool(verified_peers.get(peer_id, false))
 
 func _player_from_remote_sender() -> Node3D:
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return null
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
@@ -814,7 +829,7 @@ func show_squad_ping(
 	push_kill_feed.rpc("%s marked a squad target" % sender_name)
 
 func server_call_artillery(caller: Node3D, target_position: Vector3) -> void:
-	if not multiplayer.is_server() or caller == null:
+	if not _is_active_server() or caller == null:
 		return
 	target_position.y = 0.15
 	pending_artillery.append({
@@ -827,7 +842,7 @@ func server_call_artillery(caller: Node3D, target_position: Vector3) -> void:
 	push_kill_feed.rpc("%s called artillery" % str(caller.get("player_name")))
 
 func _update_pending_artillery(delta: float) -> void:
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return
 	var completed: Array[int] = []
 	for index in pending_artillery.size():
@@ -917,7 +932,7 @@ func show_artillery_impact(target_position: Vector3) -> void:
 	timer.start()
 
 func create_sensor_beacon(owner: Node3D) -> void:
-	if not multiplayer.is_server() or owner == null:
+	if not _is_active_server() or owner == null:
 		return
 	var owner_id: int = int(owner.get("peer_id"))
 	var old_ids: Array[int] = []
@@ -946,7 +961,7 @@ func spawn_sensor_beacon(beacon_id: int, owner_id: int, team: int, position: Vec
 	sensor_beacons[beacon_id] = beacon
 
 func server_sensor_beacon_pulse(beacon: Node3D) -> void:
-	if not multiplayer.is_server() or beacon == null:
+	if not _is_active_server() or beacon == null:
 		return
 	var beacon_team: int = int(beacon.get("team"))
 	var radius: float = float(beacon.get("radius"))
@@ -960,7 +975,7 @@ func server_sensor_beacon_pulse(beacon: Node3D) -> void:
 			target.call("server_set_spotted", 2600)
 
 func server_remove_sensor_beacon(beacon_id: int) -> void:
-	if multiplayer.is_server():
+	if _is_active_server():
 		remove_sensor_beacon.rpc(beacon_id)
 
 @rpc("authority", "call_local", "reliable")
@@ -981,7 +996,7 @@ func remove_sensor_beacon(beacon_id: int) -> void:
 		beacon.queue_free()
 
 func repair_nearby_barricades(engineer: Node3D, amount: int) -> int:
-	if not multiplayer.is_server() or engineer == null:
+	if not _is_active_server() or engineer == null:
 		return 0
 	var repaired := 0
 	for constructible_value in constructibles.values():
@@ -1040,7 +1055,7 @@ func spawn_constructible(constructible_id: int, owner_id: int, team: int, spawn_
 	constructibles[constructible_id] = barricade
 
 func server_destroy_constructible(constructible_id: int, attacker_id: int) -> void:
-	if not multiplayer.is_server() or not constructibles.has(constructible_id):
+	if not _is_active_server() or not constructibles.has(constructible_id):
 		return
 	var barricade: Node = constructibles[constructible_id] as Node
 	var owner_id := 0
@@ -1150,7 +1165,7 @@ func server_scout_recon(
 	radius: float = 36.0,
 	duration_ms: int = 8000
 ) -> int:
-	if not multiplayer.is_server() or scout == null:
+	if not _is_active_server() or scout == null:
 		return 0
 
 	var scout_team: int = int(scout.get("team"))
@@ -1192,12 +1207,12 @@ func request_player_class(
 
 @rpc("authority", "call_remote", "unreliable_ordered", 3)
 func receive_input_ack(sequence: int) -> void:
-	if multiplayer.is_server():
+	if _is_active_server():
 		return
 	last_server_input_ack = sequence
 
 func _broadcast_player_snapshots() -> void:
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return
 
 	for player_value in players.values():
@@ -1266,7 +1281,7 @@ func receive_player_snapshot(
 	smoke_count: int,
 	heavy_fire_ms: int
 ) -> void:
-	if multiplayer.is_server():
+	if _is_active_server():
 		return
 
 	if not players.has(peer_id):
@@ -1318,7 +1333,7 @@ func spawn_player(peer_id: int, team: int, pname: String, spawn_position: Vector
 	add_child(player)
 	players[peer_id] = player
 
-	if multiplayer.is_server():
+	if _is_active_server():
 		print(
 			"Spawned %s peer=%d team=%d at %s" % [
 				pname,
@@ -1393,7 +1408,7 @@ func _validate_spawn_candidate(
 	base_candidate: Vector3,
 	peer_id: int
 ) -> Dictionary:
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return {
 			"valid": true,
 			"position": base_candidate
@@ -1535,7 +1550,7 @@ func _respawn_wave() -> void:
 			)
 
 func server_engineer_interact(engineer: Node3D) -> bool:
-	if not multiplayer.is_server() or match_over:
+	if not _is_active_server() or match_over:
 		return false
 
 	var engineer_team: int = int(engineer.get("team"))
@@ -1581,7 +1596,7 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 	return false
 
 func arm_dynamite(engineer_id: int) -> bool:
-	if not multiplayer.is_server() or match_over or objective_stage != 1 or dynamite_armed:
+	if not _is_active_server() or match_over or objective_stage != 1 or dynamite_armed:
 		return false
 	dynamite_armed = true
 	dynamite_remaining = DYNAMITE_FUSE_SECONDS
@@ -1593,7 +1608,7 @@ func arm_dynamite(engineer_id: int) -> bool:
 	return true
 
 func damage_objective(amount: int, attacker_team: int) -> void:
-	if not multiplayer.is_server() or match_over or attacker_team != 0: return
+	if not _is_active_server() or match_over or attacker_team != 0: return
 	objective_health = maxi(0, objective_health - amount)
 	if objective_health <= 0: _end_match("ATTACKERS WIN — objective destroyed")
 
@@ -1676,7 +1691,7 @@ func spawn_smoke(smoke_id: int, team: int, spawn_position: Vector3, duration: fl
 	smoke_clouds[smoke_id] = cloud
 
 func server_remove_smoke(smoke_id: int) -> void:
-	if multiplayer.is_server():
+	if _is_active_server():
 		remove_smoke.rpc(smoke_id)
 
 @rpc("authority", "call_local", "reliable")
@@ -1745,7 +1760,7 @@ func server_throw_grenade(
 	origin: Vector3,
 	direction: Vector3
 ) -> bool:
-	if not multiplayer.is_server() or match_over:
+	if not _is_active_server() or match_over:
 		return false
 	if owner == null:
 		return false
@@ -1805,7 +1820,7 @@ func server_explode_grenade(
 	radius: float,
 	maximum_damage: int
 ) -> void:
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return
 	if not grenades.has(grenade_id):
 		return
@@ -1897,7 +1912,7 @@ func explode_grenade(
 	tween.chain().tween_callback(flash.queue_free)
 
 func create_supply_pack(owner: Node3D, pack_type: int, amount: int) -> void:
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return
 
 	var id: int = next_supply_pack_id
@@ -2137,7 +2152,7 @@ func announce(message: String) -> void:
 	var label := Label.new(); label.text = message; label.position = Vector2(390, 50); label.add_theme_font_size_override("font_size", 28); layer.add_child(label)
 
 func _update_command_post_stations() -> void:
-	if not multiplayer.is_server() or objective_stage == 0 or command_post_control < 0:
+	if not _is_active_server() or objective_stage == 0 or command_post_control < 0:
 		return
 	var command_post: Node3D = _command_post_node()
 	if command_post == null:
@@ -2450,7 +2465,7 @@ func scoreboard_text() -> String:
 
 
 func _spawn_bot(index: int) -> void:
-	if not multiplayer.is_server():
+	if not _is_active_server():
 		return
 
 	var bot_id: int = next_bot_peer_id
