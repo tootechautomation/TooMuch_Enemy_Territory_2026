@@ -23,6 +23,10 @@ const JUMP_SPEED := 5.2
 const SNAPSHOT_LERP_SPEED := 14.0
 const ABILITY_COOLDOWN_MS := 12000
 const SCOUT_SPOT_DURATION_MS := 8000
+const DEFAULT_FOV := 75.0
+const ADS_FOV := 58.0
+const SCOUT_ADS_FOV := 24.0
+const ADS_MOVE_MULTIPLIER := 0.58
 const REVIVE_RANGE := 2.8
 const BLEEDOUT_MS := 15000
 const STANDING_HEAD_Y := 0.65
@@ -46,6 +50,8 @@ var input_vector := Vector2.ZERO
 var jump_requested := false
 var sprint_requested := false
 var crouch_requested := false
+var aim_requested := false
+var is_aiming := false
 var last_received_sequence := 0
 var local_sequence := 0
 var next_fire_time := 0
@@ -89,6 +95,9 @@ var replicated_ability_cooldown_ms := 0
 var spotted_until_ms := 0
 var replicated_spotted_ms := 0
 var spotted_label: Label3D
+var crosshair: Label
+var scope_overlay: Control
+var scope_reticle: Label
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -156,8 +165,12 @@ func _poll_spawn_menu_toggle() -> void:
 
 func _collect_and_send_input() -> void:
 	if spawn_menu_open:
+		is_aiming = false
+		_update_aim_view()
 		return
 	if not alive:
+		is_aiming = false
+		_update_aim_view()
 		return
 
 	local_sequence += 1
@@ -170,6 +183,13 @@ func _collect_and_send_input() -> void:
 
 	var local_crouch: bool = Input.is_action_pressed("crouch") and not downed
 	_apply_crouch_visual(local_crouch)
+
+	is_aiming = (
+		Input.is_action_pressed("aim")
+		and not downed
+		and not is_reloading
+	)
+	_update_aim_view()
 
 	if not downed and Input.is_action_just_pressed("weapon_switch"):
 		_local_request_weapon_switch()
@@ -186,6 +206,7 @@ func _collect_and_send_input() -> void:
 			Input.is_action_just_pressed("jump"),
 			Input.is_action_pressed("sprint"),
 			Input.is_action_pressed("crouch"),
+			Input.is_action_pressed("aim"),
 			local_sequence
 		)
 
@@ -237,7 +258,7 @@ func _collect_and_send_input() -> void:
 			if main_node != null:
 				main_node.request_player_class.rpc_id(1, local_peer_id, index)
 
-func server_receive_input(move: Vector2, yaw: float, look_pitch: float, wants_jump: bool, wants_sprint: bool, wants_crouch: bool, sequence: int) -> void:
+func server_receive_input(move: Vector2, yaw: float, look_pitch: float, wants_jump: bool, wants_sprint: bool, wants_crouch: bool, wants_aim: bool, sequence: int) -> void:
 	if not multiplayer.is_server() or sequence <= last_received_sequence:
 		return
 
@@ -258,6 +279,7 @@ func server_receive_input(move: Vector2, yaw: float, look_pitch: float, wants_ju
 	jump_requested = jump_requested or wants_jump
 	sprint_requested = wants_sprint
 	crouch_requested = wants_crouch
+	aim_requested = wants_aim
 
 func _server_simulate(delta: float) -> void:
 	var now: int = Time.get_ticks_msec()
@@ -285,10 +307,13 @@ func _server_simulate(delta: float) -> void:
 		if crouch_requested
 		else (
 			SPRINT_SPEED
-			if sprint_requested and input_vector.y < -0.2
+			if sprint_requested and input_vector.y < -0.2 and not aim_requested
 			else WALK_SPEED
 		)
 	)
+
+	if aim_requested:
+		move_speed *= ADS_MOVE_MULTIPLIER
 
 	var direction: Vector3 = (
 		transform.basis
@@ -367,6 +392,15 @@ func server_fire(direction: Vector3) -> void:
 		if input_vector.length() > 0.15
 		else _weapon_hip_spread()
 	)
+
+	if aim_requested:
+		var ads_multiplier: float = (
+			0.18
+			if player_class == PlayerClass.SCOUT
+			and current_weapon_index == 0
+			else 0.42
+		)
+		spread *= ads_multiplier
 	var shot_direction: Vector3 = _apply_spread(
 		direction.normalized(),
 		spread
@@ -440,6 +474,8 @@ func _server_start_reload() -> void:
 		return
 
 	is_reloading = true
+	aim_requested = false
+	is_aiming = false
 	reload_finish_ms = (
 		Time.get_ticks_msec()
 		+ int(_weapon_reload_seconds() * 1000.0)
@@ -605,6 +641,8 @@ func _apply_weapon_index(index: int, rebuild_view: bool = true) -> void:
 		_store_current_weapon_ammo()
 
 	current_weapon_index = safe_index
+	aim_requested = false
+	is_aiming = false
 	weapon = weapon_slots[current_weapon_index]
 	ammo_in_mag = weapon_magazines[current_weapon_index]
 	reserve_ammo = weapon_reserves[current_weapon_index]
@@ -1400,6 +1438,52 @@ func _submit_spawn_selection() -> void:
 	_configure_class_loadout(true, true)
 	_hide_spawn_menu()
 
+func _is_scout_scope_active() -> bool:
+	return (
+		is_aiming
+		and player_class == PlayerClass.SCOUT
+		and current_weapon_index == 0
+	)
+
+func _update_aim_view() -> void:
+	if not _is_local_player():
+		return
+
+	var camera: Camera3D = $Head/Camera3D as Camera3D
+	if camera == null:
+		return
+
+	var target_fov: float = DEFAULT_FOV
+	if is_aiming:
+		target_fov = (
+			SCOUT_ADS_FOV
+			if _is_scout_scope_active()
+			else ADS_FOV
+		)
+
+	camera.fov = lerpf(
+		camera.fov,
+		target_fov,
+		clampf(get_process_delta_time() * 14.0, 0.0, 1.0)
+	)
+
+	if weapon_view != null:
+		var target_position: Vector3 = _base_weapon_position()
+		if is_aiming:
+			target_position.x = 0.0
+			target_position.y += 0.04
+			target_position.z -= 0.08
+		weapon_view.position = weapon_view.position.lerp(
+			target_position,
+			clampf(get_process_delta_time() * 16.0, 0.0, 1.0)
+		)
+
+	if scope_overlay != null:
+		scope_overlay.visible = _is_scout_scope_active()
+
+	if crosshair != null:
+		crosshair.visible = not _is_scout_scope_active()
+
 func _build_first_person_weapon() -> void:
 	weapon_view = Node3D.new()
 	weapon_view.name = "FirstPersonWeapon"
@@ -1527,11 +1611,48 @@ func _rebuild_first_person_weapon() -> void:
 func _build_hud() -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
 	hud = Label.new(); hud.position = Vector2(18, 18); hud.add_theme_font_size_override("font_size", 18); layer.add_child(hud)
-	var crosshair := Label.new()
+	crosshair = Label.new()
 	crosshair.text = "+"
 	crosshair.position = Vector2(638, 350)
 	crosshair.add_theme_font_size_override("font_size", 24)
 	layer.add_child(crosshair)
+
+	scope_overlay = Control.new()
+	scope_overlay.name = "ScoutScopeOverlay"
+	scope_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scope_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scope_overlay.visible = false
+	layer.add_child(scope_overlay)
+
+	var scope_top := ColorRect.new()
+	scope_top.color = Color(0.0, 0.0, 0.0, 0.88)
+	scope_top.position = Vector2(0, 0)
+	scope_top.size = Vector2(1280, 205)
+	scope_overlay.add_child(scope_top)
+
+	var scope_bottom := ColorRect.new()
+	scope_bottom.color = Color(0.0, 0.0, 0.0, 0.88)
+	scope_bottom.position = Vector2(0, 515)
+	scope_bottom.size = Vector2(1280, 205)
+	scope_overlay.add_child(scope_bottom)
+
+	var scope_left := ColorRect.new()
+	scope_left.color = Color(0.0, 0.0, 0.0, 0.88)
+	scope_left.position = Vector2(0, 205)
+	scope_left.size = Vector2(435, 310)
+	scope_overlay.add_child(scope_left)
+
+	var scope_right := ColorRect.new()
+	scope_right.color = Color(0.0, 0.0, 0.0, 0.88)
+	scope_right.position = Vector2(845, 205)
+	scope_right.size = Vector2(435, 310)
+	scope_overlay.add_child(scope_right)
+
+	scope_reticle = Label.new()
+	scope_reticle.text = "───┼───\n   │"
+	scope_reticle.position = Vector2(566, 314)
+	scope_reticle.add_theme_font_size_override("font_size", 34)
+	scope_overlay.add_child(scope_reticle)
 
 	hit_marker = Label.new()
 	hit_marker.text = "×"
@@ -1624,7 +1745,7 @@ func _update_hud() -> void:
 		if replicated_ability_cooldown_ms <= 0
 		else "%.1fs" % cooldown
 	)
-	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  G: grenade  X: switch  E: interact  M: spawn menu" % [
+	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],

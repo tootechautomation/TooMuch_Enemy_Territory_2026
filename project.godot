@@ -39,3 +39,4 @@ weapon_switch={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":
 throw_grenade={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":71)]}
 
 spawn_menu={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":77)]}
+aim={"deadzone":0.5,"events":[Object(InputEventMouseButton,"button_index":2)]}

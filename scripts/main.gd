@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.7.0"
-const NETWORK_PROTOCOL := 170
+const BUILD_VERSION := "1.8.0"
+const NETWORK_PROTOCOL := 180
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -359,6 +359,7 @@ func submit_player_input(
 	wants_jump: bool,
 	wants_sprint: bool,
 	wants_crouch: bool,
+	wants_aim: bool,
 	sequence: int
 ) -> void:
 	var player: Node3D = _player_from_remote_sender()
@@ -372,6 +373,7 @@ func submit_player_input(
 		wants_jump,
 		wants_sprint,
 		wants_crouch,
+		wants_aim,
 		sequence
 	)
 	var sender_id: int = multiplayer.get_remote_sender_id()
