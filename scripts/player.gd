@@ -27,6 +27,9 @@ const DEFAULT_FOV := 75.0
 const ADS_FOV := 58.0
 const SCOUT_ADS_FOV := 24.0
 const ADS_MOVE_MULTIPLIER := 0.58
+const ASSIST_WINDOW_MS := 10000
+const FALL_DAMAGE_START_SPEED := 12.0
+const FALL_DAMAGE_MAX_SPEED := 24.0
 const REVIVE_RANGE := 2.8
 const BLEEDOUT_MS := 15000
 const STANDING_HEAD_Y := 0.65
@@ -115,6 +118,12 @@ var objective_progress_bar: ProgressBar
 var objective_progress_text: Label
 var elimination_notice: Label
 var elimination_notice_until_ms := 0
+var tactical_indicator: Label
+var damage_number: Label
+var damage_number_until_ms := 0
+var recent_damage: Dictionary = {}
+var current_kill_streak := 0
+var previous_vertical_velocity := 0.0
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -305,6 +314,8 @@ func server_receive_input(move: Vector2, yaw: float, look_pitch: float, wants_ju
 
 func _server_simulate(delta: float) -> void:
 	var now: int = Time.get_ticks_msec()
+	var was_on_floor: bool = is_on_floor()
+	var falling_speed: float = -previous_vertical_velocity
 
 	if is_reloading and now >= reload_finish_ms:
 		_finish_reload()
@@ -344,7 +355,29 @@ func _server_simulate(delta: float) -> void:
 
 	velocity.x = direction.x * move_speed
 	velocity.z = direction.z * move_speed
+	previous_vertical_velocity = velocity.y
 	move_and_slide()
+
+	if (
+		not was_on_floor
+		and is_on_floor()
+		and falling_speed > FALL_DAMAGE_START_SPEED
+	):
+		var fall_ratio: float = clampf(
+			(
+				falling_speed - FALL_DAMAGE_START_SPEED
+			)
+			/ (
+				FALL_DAMAGE_MAX_SPEED
+				- FALL_DAMAGE_START_SPEED
+			),
+			0.0,
+			1.0
+		)
+		var fall_damage: int = int(round(
+			lerpf(8.0, 100.0, fall_ratio)
+		))
+		server_take_damage(fall_damage, 0)
 
 
 func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int) -> void:
@@ -499,7 +532,6 @@ func server_fire(direction: Vector3) -> void:
 				else:
 					confirm_hit.rpc_id(peer_id)
 
-	var main_node: Node = get_parent()
 	if main_node != null and main_node.has_method(
 		"show_shot_effect"
 	):
@@ -833,6 +865,79 @@ func _cancel_spawn_protection() -> void:
 func _has_spawn_protection() -> bool:
 	return spawn_protection_remaining_ms() > 0
 
+func recent_damage_contributors() -> Dictionary:
+	if not multiplayer.is_server():
+		return {}
+
+	var now: int = Time.get_ticks_msec()
+	var result: Dictionary = {}
+	var expired: Array[int] = []
+
+	for attacker_id_value in recent_damage:
+		var attacker_id: int = int(attacker_id_value)
+		var entry: Dictionary = recent_damage[attacker_id]
+		var timestamp: int = int(entry.get("time", 0))
+		var total_damage: int = int(entry.get("damage", 0))
+
+		if now - timestamp > ASSIST_WINDOW_MS:
+			expired.append(attacker_id)
+			continue
+		if total_damage >= 20:
+			result[attacker_id] = total_damage
+
+	for attacker_id in expired:
+		recent_damage.erase(attacker_id)
+
+	return result
+
+func server_register_elimination() -> void:
+	if not multiplayer.is_server():
+		return
+
+	current_kill_streak += 1
+	var message := "ELIMINATION"
+	if current_kill_streak >= 5:
+		message = "RAMPAGE x%d" % current_kill_streak
+	elif current_kill_streak >= 3:
+		message = "KILL STREAK x%d" % current_kill_streak
+
+	combat_notice.rpc_id(peer_id, message)
+
+func server_confirm_assist() -> void:
+	if not multiplayer.is_server():
+		return
+	combat_notice.rpc_id(peer_id, "ASSIST +5 XP")
+
+@rpc("authority", "call_remote", "reliable")
+func confirm_damage_amount(
+	amount: int,
+	target_health: int
+) -> void:
+	if not _is_local_player():
+		return
+	if damage_number == null:
+		return
+
+	damage_number.text = "%d  ·  enemy HP %d" % [
+		amount,
+		maxi(0, target_health)
+	]
+	damage_number_until_ms = Time.get_ticks_msec() + 520
+	damage_number.visible = true
+
+@rpc("authority", "call_remote", "reliable")
+func combat_notice(message: String) -> void:
+	if not _is_local_player():
+		return
+	if elimination_notice == null:
+		return
+
+	elimination_notice.text = message
+	elimination_notice_until_ms = (
+		Time.get_ticks_msec() + 1100
+	)
+	elimination_notice.visible = true
+
 func server_take_damage(amount: int, attacker_id: int) -> void:
 	if not multiplayer.is_server() or not alive or downed:
 		return
@@ -840,6 +945,31 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 		return
 
 	health = maxi(0, health - amount)
+
+	if attacker_id != peer_id and attacker_id != 0:
+		var existing: Dictionary = recent_damage.get(
+			attacker_id,
+			{"damage": 0, "time": 0}
+		)
+		existing["damage"] = (
+			int(existing.get("damage", 0)) + amount
+		)
+		existing["time"] = Time.get_ticks_msec()
+		recent_damage[attacker_id] = existing
+
+		if get_parent().players.has(attacker_id):
+			var damage_attacker: Node3D = (
+				get_parent().players[attacker_id] as Node3D
+			)
+			if (
+				damage_attacker != null
+				and not bool(damage_attacker.get("is_bot"))
+			):
+				confirm_damage_amount.rpc_id(
+					attacker_id,
+					amount,
+					health
+				)
 
 	var attacker_position: Vector3 = global_position
 	if get_parent().players.has(attacker_id):
@@ -881,6 +1011,8 @@ func _finish_death(attacker_override: int) -> void:
 	downed = false
 	health = 0
 	deaths += 1
+	current_kill_streak = 0
+	recent_damage.clear()
 	visible = false
 	velocity = Vector3.ZERO
 	input_vector = Vector2.ZERO
@@ -946,6 +1078,8 @@ func server_respawn(spawn_position: Vector3) -> void:
 	global_position = spawn_position
 	target_position = spawn_position
 	health = _class_health(player_class)
+	recent_damage.clear()
+	previous_vertical_velocity = 0.0
 	_reset_loadout_ammo()
 	grenades_remaining = 2
 	_apply_server_crouch(false)
@@ -1624,10 +1758,19 @@ func _server_bot_fire(target: Node3D) -> void:
 	ammo_in_mag -= 1
 	_store_current_weapon_ammo()
 
-	var accuracy_scale: float = (
-		0.88
-		if aim_requested
-		else 0.70
+	var main_node: Node = get_parent()
+	var skill_multiplier: float = 1.0
+	if main_node != null:
+		skill_multiplier = float(main_node.get("bot_skill"))
+
+	var accuracy_scale: float = clampf(
+		(
+			0.88
+			if aim_requested
+			else 0.70
+		) * skill_multiplier,
+		0.35,
+		0.97
 	)
 	var shot_origin: Vector3 = $Head.global_position
 	var shot_end: Vector3 = target.global_position + Vector3.UP * 0.75
@@ -2272,6 +2415,31 @@ func _build_hud() -> void:
 	elimination_notice.visible = false
 	layer.add_child(elimination_notice)
 
+	damage_number = Label.new()
+	damage_number.position = Vector2(555, 390)
+	damage_number.custom_minimum_size = Vector2(220, 32)
+	damage_number.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	damage_number.add_theme_font_size_override(
+		"font_size",
+		22
+	)
+	damage_number.visible = false
+	layer.add_child(damage_number)
+
+	tactical_indicator = Label.new()
+	tactical_indicator.position = Vector2(390, 54)
+	tactical_indicator.custom_minimum_size = Vector2(500, 42)
+	tactical_indicator.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	tactical_indicator.add_theme_font_size_override(
+		"font_size",
+		22
+	)
+	layer.add_child(tactical_indicator)
+
 	scoreboard = Label.new()
 	scoreboard.position = Vector2(210, 100)
 	scoreboard.custom_minimum_size = Vector2(860, 520)
@@ -2297,6 +2465,13 @@ func _update_hud() -> void:
 		and now >= elimination_notice_until_ms
 	):
 		elimination_notice.visible = false
+
+	if (
+		damage_number != null
+		and damage_number.visible
+		and now >= damage_number_until_ms
+	):
+		damage_number.visible = false
 
 	if damage_indicator != null and damage_indicator.visible and now >= damage_indicator_until_ms:
 		damage_indicator.visible = false
@@ -2333,6 +2508,75 @@ func _update_hud() -> void:
 		)
 	)
 	var objective_text: String = str(main.call("objective_status_text"))
+
+	var active_target := Vector3.ZERO
+	if int(main.get("objective_stage")) == 0:
+		var build_site: Node3D = main.get_node_or_null(
+			"BridgeBuildSite"
+		) as Node3D
+		if build_site != null:
+			active_target = build_site.global_position
+	else:
+		var objective_node: Node3D = main.get_node_or_null(
+			"Objective"
+		) as Node3D
+		if objective_node != null:
+			active_target = objective_node.global_position
+
+	var to_objective: Vector3 = active_target - global_position
+	to_objective.y = 0.0
+	var objective_distance: float = to_objective.length()
+	var direction_name := "AHEAD"
+
+	if objective_distance > 0.01:
+		to_objective = to_objective.normalized()
+		var forward: Vector3 = -global_transform.basis.z
+		forward.y = 0.0
+		forward = forward.normalized()
+		var right: Vector3 = global_transform.basis.x
+		right.y = 0.0
+		right = right.normalized()
+
+		var forward_dot: float = forward.dot(to_objective)
+		var right_dot: float = right.dot(to_objective)
+		if absf(right_dot) > absf(forward_dot):
+			direction_name = (
+				"RIGHT" if right_dot > 0.0 else "LEFT"
+			)
+		elif forward_dot < 0.0:
+			direction_name = "BEHIND"
+
+	var grenade_warning := ""
+	var nearest_grenade_distance := INF
+	var grenade_map: Dictionary = main.get("grenades")
+	for grenade_value in grenade_map.values():
+		var grenade: Node3D = grenade_value as Node3D
+		if grenade == null:
+			continue
+		if int(grenade.get("owner_team")) == team:
+			continue
+		var grenade_distance: float = global_position.distance_to(
+			grenade.global_position
+		)
+		nearest_grenade_distance = minf(
+			nearest_grenade_distance,
+			grenade_distance
+		)
+
+	if nearest_grenade_distance <= 7.5:
+		grenade_warning = "  ·  GRENADE %.1fm!" % (
+			nearest_grenade_distance
+		)
+
+	if tactical_indicator != null:
+		tactical_indicator.text = (
+			"OBJECTIVE %s · %.0fm%s"
+			% [
+				direction_name,
+				objective_distance,
+				grenade_warning
+			]
+		)
 
 	var progress_value := 0.0
 	var progress_title := "OBJECTIVE"

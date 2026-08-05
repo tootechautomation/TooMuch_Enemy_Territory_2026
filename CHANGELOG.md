@@ -1,15 +1,12 @@
 # Changelog
 
-## 2.2.0
+## 2.3.0
 
-- Added headshots and headshot confirmation
-- Added bullet tracers and impact effects
-- Added bot grenade use
-- Added objective progress bar
-- Added downed teammate revive markers
-- Kept human downed bodies visible
-- Expanded map cover and elevated positions
-- Improved scoreboard columns and sorting
-- Added round-end results screen
-- Removed temporary networking diagnostics
-- Bumped protocol to 220
+- Added objective direction and distance HUD
+- Added nearby enemy grenade warning
+- Added damage numbers and enemy-health confirmation
+- Added assist tracking and assist XP
+- Added kill-streak notifications
+- Added server-authoritative fall damage
+- Added configurable bot skill multiplier
+- Bumped protocol to 230

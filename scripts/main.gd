@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "2.2.0"
-const NETWORK_PROTOCOL := 220
+const BUILD_VERSION := "2.3.0"
+const NETWORK_PROTOCOL := 230
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -38,6 +38,7 @@ var spawn_points := {
 }
 var next_team := 0
 var desired_bot_count := 8
+var bot_skill := 1.0
 var next_bot_peer_id := BOT_PEER_ID_START
 var round_restart_remaining := 0.0
 var objective_health := 100
@@ -152,6 +153,8 @@ func _parse_command_line() -> void:
 		elif args[i] == "--bots" and i + 1 < args.size():
 			desired_bot_count = clampi(int(args[i + 1]), 0, 16)
 			bots_argument_seen = true
+		elif args[i] == "--bot-skill" and i + 1 < args.size():
+			bot_skill = clampf(float(args[i + 1]), 0.5, 2.0)
 
 	if is_server:
 		if DisplayServer.get_name() != "headless" and not bots_argument_seen:
@@ -178,6 +181,7 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 		]
 	)
 	print("Requested bot count: %d" % desired_bot_count)
+	print("Bot skill multiplier: %.2f" % bot_skill)
 
 	for index in range(desired_bot_count):
 		_spawn_bot(index)
@@ -892,10 +896,55 @@ func damage_objective(amount: int, attacker_team: int) -> void:
 	if objective_health <= 0: _end_match("ATTACKERS WIN — objective destroyed")
 
 func register_elimination(victim_id: int, attacker_id: int) -> void:
+	var victim: Node3D = players.get(victim_id) as Node3D
+
 	if players.has(attacker_id) and attacker_id != victim_id:
-		players[attacker_id].kills += 1
-		players[attacker_id].add_xp(10, "elimination")
-	push_kill_feed.rpc("%s eliminated %s" % [player_names.get(attacker_id, "World"), player_names.get(victim_id, "Player")])
+		var attacker: Node3D = players[attacker_id] as Node3D
+		if attacker != null:
+			attacker.set(
+				"kills",
+				int(attacker.get("kills")) + 1
+			)
+			attacker.call("add_xp", 10, "elimination")
+			attacker.call("server_register_elimination")
+
+	if victim != null:
+		var contributors: Dictionary = victim.call(
+			"recent_damage_contributors"
+		)
+		for contributor_id_value in contributors:
+			var contributor_id: int = int(contributor_id_value)
+			if contributor_id == attacker_id:
+				continue
+			if contributor_id == victim_id:
+				continue
+			if not players.has(contributor_id):
+				continue
+
+			var contributor: Node3D = players[
+				contributor_id
+			] as Node3D
+			if contributor == null:
+				continue
+
+			contributor.call("add_xp", 5, "assist")
+			contributor.call("server_confirm_assist")
+			push_kill_feed.rpc(
+				"%s assisted against %s" % [
+					player_names.get(
+						contributor_id,
+						"Player"
+					),
+					player_names.get(victim_id, "Player")
+				]
+			)
+
+	push_kill_feed.rpc(
+		"%s eliminated %s" % [
+			player_names.get(attacker_id, "World"),
+			player_names.get(victim_id, "Player")
+		]
+	)
 
 func server_throw_grenade(
 	owner: Node3D,
