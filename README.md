@@ -1,20 +1,21 @@
 # Frontline: Objective
 
-An original Godot 4 class-based objective-shooter prototype. It contains no Wolfenstein game data, maps, branding, characters, audio, or artwork.
+Original Godot 4 multiplayer objective-shooter prototype.
 
-## Version 0.8: stable bots and spectating
+## Version 0.9: weapon loadouts and hit confirmation
 
-This release replaces the affected project files completely and fixes the v0.7 bot startup, reload, firing, and round-restart failures.
+Added:
 
-### Added
+- Service Rifle primary weapon
+- Service Pistol sidearm
+- Separate magazine and reserve ammunition for each weapon
+- Server-authoritative weapon switching
+- Press **X** to switch between primary and sidearm
+- Weapon-dependent first-person blockout models
+- Brief hit-confirmation marker when a shot damages an enemy
+- Updated HUD showing the active weapon slot
 
-- Death spectating of living teammates
-- Press **F** while dead to cycle teammates
-- Respawn-wave status in the HUD
-- Hold-to-interact construction, reviving, arming, and defusing
-- Reliable automatic round restart
-- Correct `--bots N` command-line parsing and spawning
-- Correct bot weapon range, fire interval, damage, and reload behavior
+No Wolfenstein code, assets, branding, maps, characters, or audio are included.
 
 ## Dedicated server
 
@@ -36,11 +37,12 @@ flatpak run org.godotengine.Godot \
 - Mouse: aim
 - Left mouse: fire
 - R: reload
+- X: switch rifle/pistol
 - Hold E: revive, construct, arm, or defuse
 - Q: class ability
 - 1–5: select class
 - Tab: scoreboard
-- F while dead: cycle spectator target
+- F while dead: cycle teammate cameras
 - Escape: release mouse
 
 ## Validate
@@ -48,5 +50,3 @@ flatpak run org.godotengine.Godot \
 ```bash
 ./tools/validate_project.sh
 ```
-
-This is still an alpha prototype. Navigation meshes, prediction, lag compensation, animation, audio, final assets, and public-server hardening remain future work.

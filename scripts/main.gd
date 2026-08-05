@@ -161,10 +161,31 @@ func _on_peer_connected(id: int) -> void:
 	if not multiplayer.is_server(): return
 	var team := next_team; next_team = 1 - next_team
 	player_teams[id] = team; player_names[id] = "Player%d" % id
-	for existing_id in players:
-		var existing = players[existing_id]
-		spawn_player.rpc_id(id, existing_id, existing.team, existing.player_name, existing.global_position)
-	for pack in supply_packs.values(): spawn_supply_pack.rpc_id(id, pack.pack_id, pack.team, pack.pack_type, pack.amount, pack.global_position)
+	for existing_id_value in players:
+		var existing_id: int = int(existing_id_value)
+		var existing: Node3D = players[existing_id] as Node3D
+		if existing == null:
+			continue
+		spawn_player.rpc_id(
+			id,
+			existing_id,
+			int(existing.get("team")),
+			str(existing.get("player_name")),
+			existing.global_position
+		)
+
+	for pack_value in supply_packs.values():
+		var pack: Node3D = pack_value as Node3D
+		if pack == null:
+			continue
+		spawn_supply_pack.rpc_id(
+			id,
+			int(pack.get("pack_id")),
+			int(pack.get("team")),
+			int(pack.get("pack_type")),
+			int(pack.get("amount")),
+			pack.global_position
+		)
 	spawn_player.rpc(id, team, player_names[id], _get_spawn(team, id))
 
 func _on_peer_disconnected(id: int) -> void:
@@ -185,9 +206,16 @@ func _get_spawn(team: int, peer_id: int) -> Vector3:
 	var points: Array = spawn_points.get(team, spawn_points[0]); return points[peer_id % points.size()]
 
 func _respawn_wave() -> void:
-	for peer_id in players:
-		var player = players[peer_id]
-		if not player.alive: player.server_respawn(_get_spawn(player.team, peer_id))
+	for peer_id_value in players:
+		var peer_id: int = int(peer_id_value)
+		var player: Node3D = players[peer_id] as Node3D
+		if player == null:
+			continue
+		if not bool(player.get("alive")):
+			player.call(
+				"server_respawn",
+				_get_spawn(int(player.get("team")), peer_id)
+			)
 
 func server_engineer_interact(engineer: Node3D) -> bool:
 	if not multiplayer.is_server() or match_over:
@@ -203,7 +231,7 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 			engineer.add_xp(5, "construction")
 			if bridge_progress >= bridge_required:
 				objective_stage = 1
-				var bridge := get_node_or_null("ConstructedBridge")
+				var bridge: Node = get_node_or_null("ConstructedBridge")
 				if bridge:
 					bridge.visible = true
 					bridge.process_mode = Node.PROCESS_MODE_INHERIT
@@ -334,7 +362,7 @@ func broadcast_match_state(
 	defuse_progress = current_defuse
 	defuse_required = required_defuse
 
-	var bridge := get_node_or_null("ConstructedBridge")
+	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
 		bridge.visible = objective_stage >= 1
 
@@ -361,18 +389,32 @@ func objective_status_text() -> String:
 	return "Stage 2: Destroy bunker | Integrity %d%%" % objective_health
 
 func scoreboard_text() -> String:
-	var lines := ["SCOREBOARD", "Player          Team       K   D   XP   Rank       State"]
-	for player in players.values():
-		var state := "Down" if player.downed else ("Alive" if player.alive else "Dead")
+	var lines: Array[String] = [
+		"SCOREBOARD",
+		"Player          Team       K   D   XP   Rank       State"
+	]
+
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+
+		var is_alive: bool = bool(player.get("alive"))
+		var is_downed: bool = bool(player.get("downed"))
+		var state: String = "Down" if is_downed else ("Alive" if is_alive else "Dead")
+		var player_team: int = int(player.get("team"))
+		var rank: String = str(player.call("rank_name"))
+
 		lines.append("%-15s %-10s %2d  %2d  %3d  %-10s %s" % [
-			player.player_name,
-			"Attackers" if player.team == 0 else "Defenders",
-			player.kills,
-			player.deaths,
-			player.xp,
-			player.rank_name(),
+			str(player.get("player_name")),
+			"Attackers" if player_team == 0 else "Defenders",
+			int(player.get("kills")),
+			int(player.get("deaths")),
+			int(player.get("xp")),
+			rank,
 			state
 		])
+
 	return "\n".join(lines)
 
 
@@ -389,42 +431,66 @@ func _spawn_bot(index: int) -> void:
 func _configure_bot(bot_id: int, class_id: int) -> void:
 	if not players.has(bot_id):
 		return
-	var bot = players[bot_id]
-	bot.is_bot = true
-	bot.player_class = class_id
-	bot.server_apply_class(class_id)
+
+	var bot: Node3D = players[bot_id] as Node3D
+	if bot == null:
+		return
+
+	bot.set("is_bot", true)
+	bot.set("player_class", class_id)
+	bot.call("server_apply_class", class_id)
 
 func nearest_enemy(from_player: Node3D) -> Node3D:
 	var best: Node3D = null
-	var best_distance := INF
-	for candidate in players.values():
-		if candidate == from_player:
+	var best_distance: float = INF
+	var from_team: int = int(from_player.get("team"))
+
+	for candidate_value in players.values():
+		var candidate: Node3D = candidate_value as Node3D
+		if candidate == null or candidate == from_player:
 			continue
-		if candidate.team == from_player.team or not candidate.alive or candidate.downed:
+
+		if int(candidate.get("team")) == from_team:
 			continue
-		var distance := from_player.global_position.distance_to(candidate.global_position)
+		if not bool(candidate.get("alive")) or bool(candidate.get("downed")):
+			continue
+
+		var distance: float = from_player.global_position.distance_to(
+			candidate.global_position
+		)
 		if distance < best_distance:
 			best = candidate
 			best_distance = distance
+
 	return best
 
 func nearest_downed_teammate(from_player: Node3D) -> Node3D:
 	var best: Node3D = null
-	var best_distance := INF
-	for candidate in players.values():
-		if candidate == from_player:
+	var best_distance: float = INF
+	var from_team: int = int(from_player.get("team"))
+
+	for candidate_value in players.values():
+		var candidate: Node3D = candidate_value as Node3D
+		if candidate == null or candidate == from_player:
 			continue
-		if candidate.team != from_player.team or not candidate.alive or not candidate.downed:
+
+		if int(candidate.get("team")) != from_team:
 			continue
-		var distance := from_player.global_position.distance_to(candidate.global_position)
+		if not bool(candidate.get("alive")) or not bool(candidate.get("downed")):
+			continue
+
+		var distance: float = from_player.global_position.distance_to(
+			candidate.global_position
+		)
 		if distance < best_distance:
 			best = candidate
 			best_distance = distance
+
 	return best
 
 func _reset_round() -> void:
 	match_over = false
-	match_time_remaining = MATCH_DURATION_SECONDS
+	match_time_remaining = MATCH_LENGTH_SECONDS
 	spawn_wave_remaining = SPAWN_WAVE_SECONDS
 	objective_health = 100
 	objective_stage = 0
@@ -433,17 +499,25 @@ func _reset_round() -> void:
 	dynamite_armed = false
 	dynamite_remaining = 0.0
 	round_restart_remaining = 0.0
-	pending_respawns.clear()
 
-	var bridge := get_node_or_null("ConstructedBridge")
+	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
 		bridge.visible = false
 		bridge.process_mode = Node.PROCESS_MODE_DISABLED
 
-	for player in players.values():
-		player.kills = 0
-		player.deaths = 0
-		player.server_force_respawn(_get_spawn(player.team, player.peer_id))
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+		player.set("kills", 0)
+		player.set("deaths", 0)
+		player.call(
+			"server_force_respawn",
+			_get_spawn(
+				int(player.get("team")),
+				int(player.get("peer_id"))
+			)
+		)
 
 	push_kill_feed.rpc("New round started")
 

@@ -33,3 +33,5 @@ ability={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":81)]}
 scoreboard={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":4194308)]}
 
 spectator_next={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":70)]}
+
+weapon_switch={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":88)]}

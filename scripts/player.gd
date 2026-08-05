@@ -6,7 +6,10 @@ enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
 @export var team := 0
 @export var player_name := "Player"
 @export var player_class: PlayerClass = PlayerClass.SOLDIER
-@export var weapon: WeaponDefinition = preload("res://data/weapons/service_rifle.tres")
+const SERVICE_RIFLE: WeaponDefinition = preload("res://data/weapons/service_rifle.tres")
+const SERVICE_PISTOL: WeaponDefinition = preload("res://data/weapons/service_pistol.tres")
+
+@export var weapon: WeaponDefinition = SERVICE_RIFLE
 
 const WALK_SPEED := 7.0
 const SPRINT_SPEED := 10.0
@@ -52,10 +55,15 @@ var feed: Label
 var weapon_view: Node3D
 var spectator_target_id := 0
 var spectator_index := -1
+var weapon_slots: Array[WeaponDefinition] = []
+var weapon_magazines: Array[int] = []
+var weapon_reserves: Array[int] = []
+var current_weapon_index := 0
+var hit_marker: Label
+var hit_marker_until_ms := 0
 
 func _ready() -> void:
-	ammo_in_mag = weapon.magazine_size
-	reserve_ammo = weapon.reserve_ammo
+	_initialize_loadout()
 	target_position = global_position
 	if _is_local_player() and DisplayServer.get_name() != "headless":
 		$Head/Camera3D.current = true
@@ -74,6 +82,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event.is_action_pressed("spectator_next") and not alive:
 		_cycle_spectator_target()
+
+	if event.is_action_pressed("weapon_switch") and alive and not downed:
+		request_weapon_switch.rpc_id(1)
 
 	if event.is_action_pressed("ui_cancel"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -150,7 +161,7 @@ func _server_simulate(delta: float) -> void:
 	if downed and now >= bleedout_finish_ms: _finish_death(0)
 	if not alive or downed:
 		velocity = Vector3.ZERO
-		replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp)
+		replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index)
 		return
 	if not is_on_floor(): velocity.y -= gravity * delta
 	elif jump_requested and not crouch_requested: velocity.y = JUMP_SPEED
@@ -158,30 +169,54 @@ func _server_simulate(delta: float) -> void:
 	var move_speed := CROUCH_SPEED if crouch_requested else (SPRINT_SPEED if sprint_requested and input_vector.y < -0.2 else WALK_SPEED)
 	var direction := (transform.basis * Vector3(input_vector.x, 0, input_vector.y)).normalized()
 	velocity.x = direction.x * move_speed; velocity.z = direction.z * move_speed; move_and_slide()
-	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp)
+	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index)
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int) -> void:
+func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int, weapon_index: int) -> void:
 	if multiplayer.is_server(): return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
 	if _is_local_player(): global_position = pos
-	health = hp; ammo_in_mag = magazine; reserve_ammo = reserve; alive = is_alive; downed = is_downed; is_reloading = reloading; player_class = class_id; kills = kill_count; deaths = death_count; xp = experience
+	health = hp
+	alive = is_alive
+	downed = is_downed
+	is_reloading = reloading
+	player_class = class_id
+	kills = kill_count
+	deaths = death_count
+	xp = experience
+
+	if weapon_index != current_weapon_index:
+		_apply_weapon_index(weapon_index, false)
+
+	ammo_in_mag = magazine
+	reserve_ammo = reserve
+	if current_weapon_index < weapon_magazines.size():
+		weapon_magazines[current_weapon_index] = ammo_in_mag
+		weapon_reserves[current_weapon_index] = reserve_ammo
+
 	visible = alive
-	if weapon_view: weapon_view.visible = alive and not downed
+	if weapon_view:
+		weapon_view.visible = alive and not downed
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_fire(origin: Vector3, direction: Vector3) -> void:
 	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id or not alive or downed or is_reloading: return
 	var now := Time.get_ticks_msec()
 	if now < next_fire_time or ammo_in_mag <= 0 or origin.distance_to($Head.global_position) > 2.0: return
-	next_fire_time = now + weapon.fire_interval_ms(); ammo_in_mag -= 1
+	next_fire_time = now + weapon.fire_interval_ms()
+	ammo_in_mag -= 1
+	_store_current_weapon_ammo()
 	var spread := weapon.moving_spread_degrees if input_vector.length() > 0.15 else weapon.hip_spread_degrees
 	var shot_direction := _apply_spread(direction.normalized(), spread)
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + shot_direction * weapon.range_meters); query.exclude = [self]
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if hit and hit.collider is CharacterBody3D:
-		var target = hit.collider
-		if target.has_method("server_take_damage") and target.team != team: target.server_take_damage(weapon.damage, peer_id)
+	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty() and hit.get("collider") is CharacterBody3D:
+		var target: CharacterBody3D = hit.get("collider") as CharacterBody3D
+		if target != null and target.has_method("server_take_damage"):
+			var target_team: int = int(target.get("team"))
+			if target_team != team:
+				target.call("server_take_damage", weapon.damage, peer_id)
+				confirm_hit.rpc_id(peer_id)
 
 func _apply_spread(direction: Vector3, degrees: float) -> Vector3:
 	var spread_radians := deg_to_rad(degrees)
@@ -219,6 +254,71 @@ func _finish_reload() -> void:
 	ammo_in_mag += transferred
 	reserve_ammo -= transferred
 	is_reloading = false
+	_store_current_weapon_ammo()
+
+func _initialize_loadout() -> void:
+	weapon_slots = [SERVICE_RIFLE, SERVICE_PISTOL]
+	weapon_magazines.clear()
+	weapon_reserves.clear()
+
+	for slot_weapon in weapon_slots:
+		weapon_magazines.append(slot_weapon.magazine_size)
+		weapon_reserves.append(slot_weapon.reserve_ammo)
+
+	current_weapon_index = 0
+	_apply_weapon_index(0, false)
+
+func _reset_loadout_ammo() -> void:
+	if weapon_slots.is_empty():
+		_initialize_loadout()
+		return
+
+	for index in weapon_slots.size():
+		weapon_magazines[index] = weapon_slots[index].magazine_size
+		weapon_reserves[index] = weapon_slots[index].reserve_ammo
+
+	_apply_weapon_index(0, true)
+
+func _store_current_weapon_ammo() -> void:
+	if current_weapon_index < 0 or current_weapon_index >= weapon_slots.size():
+		return
+	weapon_magazines[current_weapon_index] = ammo_in_mag
+	weapon_reserves[current_weapon_index] = reserve_ammo
+
+func _apply_weapon_index(index: int, rebuild_view: bool = true) -> void:
+	if weapon_slots.is_empty():
+		return
+
+	var safe_index: int = posmod(index, weapon_slots.size())
+	if current_weapon_index >= 0 and current_weapon_index < weapon_slots.size():
+		_store_current_weapon_ammo()
+
+	current_weapon_index = safe_index
+	weapon = weapon_slots[current_weapon_index]
+	ammo_in_mag = weapon_magazines[current_weapon_index]
+	reserve_ammo = weapon_reserves[current_weapon_index]
+	is_reloading = false
+
+	if rebuild_view and _is_local_player() and DisplayServer.get_name() != "headless":
+		_rebuild_first_person_weapon()
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_weapon_switch() -> void:
+	if not multiplayer.is_server():
+		return
+	if multiplayer.get_remote_sender_id() != peer_id:
+		return
+	if not alive or downed:
+		return
+	_apply_weapon_index(current_weapon_index + 1, false)
+
+@rpc("authority", "call_remote", "reliable")
+func confirm_hit() -> void:
+	if not _is_local_player():
+		return
+	hit_marker_until_ms = Time.get_ticks_msec() + 140
+	if hit_marker != null:
+		hit_marker.visible = true
 
 func server_take_damage(amount: int, attacker_id: int) -> void:
 	if not multiplayer.is_server() or not alive or downed: return
@@ -245,9 +345,18 @@ func server_revive(reviver_id: int = 0) -> void:
 	get_parent().push_kill_feed.rpc("%s was revived" % player_name)
 
 func server_respawn(spawn_position: Vector3) -> void:
-	if not multiplayer.is_server(): return
-	global_position = spawn_position; target_position = spawn_position; health = _class_health(player_class); ammo_in_mag = weapon.magazine_size; reserve_ammo = weapon.reserve_ammo
-	alive = true; downed = false; is_reloading = false; visible = true; velocity = Vector3.ZERO; input_vector = Vector2.ZERO
+	if not multiplayer.is_server():
+		return
+	global_position = spawn_position
+	target_position = spawn_position
+	health = _class_health(player_class)
+	_reset_loadout_ammo()
+	alive = true
+	downed = false
+	is_reloading = false
+	visible = true
+	velocity = Vector3.ZERO
+	input_vector = Vector2.ZERO
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_interact() -> void:
@@ -366,6 +475,7 @@ func _server_bot_fire(target: Node3D) -> void:
 		return
 
 	ammo_in_mag -= 1
+	_store_current_weapon_ammo()
 
 	if target.has_method("server_take_damage"):
 		target.server_take_damage(weapon.damage, peer_id)
@@ -378,8 +488,7 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 	alive = true
 	downed = false
 	health = _class_health(player_class)
-	ammo_in_mag = weapon.magazine_size
-	reserve_ammo = weapon.reserve_ammo
+	_reset_loadout_ammo()
 	bleedout_finish_ms = 0
 	show()
 
@@ -452,31 +561,91 @@ func _update_spectator_camera() -> void:
 	if candidates.is_empty():
 		return
 
-	var target = get_parent().players.get(spectator_target_id)
-	if target == null or not target.alive or target.downed or target.team != team:
+	var target: Node3D = get_parent().players.get(spectator_target_id) as Node3D
+	if target == null or not bool(target.get("alive")) or bool(target.get("downed")) or int(target.get("team")) != team:
 		spectator_index = 0
-		target = candidates[0]
-		spectator_target_id = int(target.peer_id)
+		target = candidates[0] as Node3D
+		spectator_target_id = int(target.get("peer_id"))
 
-	var target_head := target.get_node_or_null("Head")
-	if target_head:
+	var target_head: Node3D = target.get_node_or_null("Head") as Node3D
+	if target_head != null:
 		camera.global_transform = target_head.global_transform
 
 func _build_first_person_weapon() -> void:
-	weapon_view = Node3D.new(); weapon_view.name = "FirstPersonWeapon"; weapon_view.position = Vector3(0.34, -0.28, -0.72); $Head/Camera3D.add_child(weapon_view)
-	var receiver := MeshInstance3D.new(); var receiver_mesh := BoxMesh.new(); receiver_mesh.size = Vector3(0.16, 0.16, 0.72); receiver.mesh = receiver_mesh; var metal := StandardMaterial3D.new(); metal.albedo_color = Color(0.18, 0.19, 0.20); receiver.material_override = metal; weapon_view.add_child(receiver)
-	var barrel := MeshInstance3D.new(); var barrel_mesh := CylinderMesh.new(); barrel_mesh.top_radius = 0.025; barrel_mesh.bottom_radius = 0.025; barrel_mesh.height = 0.55; barrel.mesh = barrel_mesh; barrel.rotation_degrees.x = 90; barrel.position.z = -0.55; barrel.material_override = metal; weapon_view.add_child(barrel)
-	var stock := MeshInstance3D.new(); var stock_mesh := BoxMesh.new(); stock_mesh.size = Vector3(0.18, 0.22, 0.34); stock.mesh = stock_mesh; stock.position.z = 0.42; var wood := StandardMaterial3D.new(); wood.albedo_color = Color(0.28, 0.16, 0.08); stock.material_override = wood; weapon_view.add_child(stock)
+	weapon_view = Node3D.new()
+	weapon_view.name = "FirstPersonWeapon"
+	$Head/Camera3D.add_child(weapon_view)
+	_rebuild_first_person_weapon()
+
+func _rebuild_first_person_weapon() -> void:
+	if weapon_view == null:
+		return
+
+	for child in weapon_view.get_children():
+		child.queue_free()
+
+	var is_pistol: bool = current_weapon_index == 1
+	weapon_view.position = Vector3(0.30, -0.27, -0.62) if is_pistol else Vector3(0.34, -0.28, -0.72)
+
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.18, 0.19, 0.20)
+
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.28, 0.16, 0.08)
+
+	var receiver := MeshInstance3D.new()
+	var receiver_mesh := BoxMesh.new()
+	receiver_mesh.size = Vector3(0.13, 0.14, 0.34) if is_pistol else Vector3(0.16, 0.16, 0.72)
+	receiver.mesh = receiver_mesh
+	receiver.material_override = metal
+	weapon_view.add_child(receiver)
+
+	var barrel := MeshInstance3D.new()
+	var barrel_mesh := CylinderMesh.new()
+	barrel_mesh.top_radius = 0.022 if is_pistol else 0.025
+	barrel_mesh.bottom_radius = barrel_mesh.top_radius
+	barrel_mesh.height = 0.28 if is_pistol else 0.55
+	barrel.mesh = barrel_mesh
+	barrel.rotation_degrees.x = 90.0
+	barrel.position.z = -0.27 if is_pistol else -0.55
+	barrel.material_override = metal
+	weapon_view.add_child(barrel)
+
+	var grip := MeshInstance3D.new()
+	var grip_mesh := BoxMesh.new()
+	grip_mesh.size = Vector3(0.12, 0.25, 0.12) if is_pistol else Vector3(0.18, 0.22, 0.34)
+	grip.mesh = grip_mesh
+	grip.position = Vector3(0.0, 0.15, 0.10) if is_pistol else Vector3(0.0, 0.0, 0.42)
+	grip.rotation_degrees.x = -15.0 if is_pistol else 0.0
+	grip.material_override = wood
+	weapon_view.add_child(grip)
+
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
 	hud = Label.new(); hud.position = Vector2(18, 18); hud.add_theme_font_size_override("font_size", 18); layer.add_child(hud)
-	var crosshair := Label.new(); crosshair.text = "+"; crosshair.position = Vector2(638, 350); crosshair.add_theme_font_size_override("font_size", 24); layer.add_child(crosshair)
+	var crosshair := Label.new()
+	crosshair.text = "+"
+	crosshair.position = Vector2(638, 350)
+	crosshair.add_theme_font_size_override("font_size", 24)
+	layer.add_child(crosshair)
+
+	hit_marker = Label.new()
+	hit_marker.text = "×"
+	hit_marker.position = Vector2(634, 344)
+	hit_marker.add_theme_font_size_override("font_size", 30)
+	hit_marker.visible = false
+	layer.add_child(hit_marker)
+
 	scoreboard = Label.new(); scoreboard.position = Vector2(390, 150); scoreboard.add_theme_font_size_override("font_size", 18); scoreboard.visible = false; layer.add_child(scoreboard)
 	feed = Label.new(); feed.position = Vector2(930, 24); feed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; feed.custom_minimum_size = Vector2(320, 150); layer.add_child(feed)
 
 func _update_hud() -> void:
-	if hud == null: return
+	if hud == null:
+		return
+
+	if hit_marker != null and hit_marker.visible and Time.get_ticks_msec() >= hit_marker_until_ms:
+		hit_marker.visible = false
 	var names := ["Soldier", "Medic", "Engineer", "Field Ops", "Scout"]
 	var main = get_parent(); var minutes := int(main.match_time_remaining) / 60; var seconds := int(main.match_time_remaining) % 60
 	var life_text := "DOWNED" if downed else (
@@ -484,7 +653,24 @@ func _update_hud() -> void:
 	)
 	var objective_text: String = main.objective_status_text()
 	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
-	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  E: interact" % [player_name, "Attackers" if team == 0 else "Defenders", life_text, health, ammo_in_mag, reserve_ammo, "RELOADING" if is_reloading else weapon.display_name, objective_text, minutes, seconds, names[player_class], xp, rank_name(), cooldown]
+	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s [%d/%d]\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  X: switch  E: interact" % [
+		player_name,
+		"Attackers" if team == 0 else "Defenders",
+		life_text,
+		health,
+		ammo_in_mag,
+		reserve_ammo,
+		"RELOADING" if is_reloading else weapon.display_name,
+		current_weapon_index + 1,
+		weapon_slots.size(),
+		objective_text,
+		minutes,
+		seconds,
+		names[player_class],
+		xp,
+		rank_name(),
+		cooldown
+	]
 	scoreboard.visible = Input.is_action_pressed("scoreboard")
 	if scoreboard.visible: scoreboard.text = main.scoreboard_text()
 	feed.text = "\n".join(main.kill_feed)
