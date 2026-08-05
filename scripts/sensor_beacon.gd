@@ -63,5 +63,13 @@ func _process(delta: float) -> void:
 			pulse_accumulator = 0.0
 			if main_node != null:
 				main_node.call("server_sensor_beacon_pulse", self)
-		if lifetime_remaining <= 0.0 and main_node != null:
-			main_node.call("server_remove_sensor_beacon", beacon_id)
+		if lifetime_remaining <= 0.0:
+			set_process(false)
+
+			if main_node != null:
+				main_node.call(
+					"server_remove_sensor_beacon",
+					beacon_id
+				)
+			elif not is_queued_for_deletion():
+				queue_free()

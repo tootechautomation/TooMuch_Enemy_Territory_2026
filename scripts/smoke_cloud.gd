@@ -38,9 +38,13 @@ func _process(delta: float) -> void:
 		var pulse := 1.0 + sin(Time.get_ticks_msec() * 0.002) * 0.04
 		cloud_mesh.scale = Vector3.ONE * pulse
 	if lifetime_remaining <= 0.0:
+		set_process(false)
+
 		if multiplayer.is_server():
 			var main_node: Node = get_parent()
 			if main_node != null:
 				main_node.call("server_remove_smoke", smoke_id)
-		else:
+			elif not is_queued_for_deletion():
+				queue_free()
+		elif not is_queued_for_deletion():
 			queue_free()

@@ -79,6 +79,8 @@ var bot_stuck_accumulator := 0.0
 var bot_last_position := Vector3.ZERO
 var bot_strafe_direction := 1.0
 var bot_grenade_accumulator := 2.0
+var bot_squad_role := 0
+var bot_role_initialized := false
 var target_position := Vector3.ZERO
 var target_yaw := 0.0
 var target_pitch := 0.0
@@ -176,6 +178,9 @@ var server_logged_first_input := false
 
 func _ready() -> void:
 	_initialize_loadout()
+	if is_bot and not bot_role_initialized:
+		bot_squad_role = posmod(peer_id, 4)
+		bot_role_initialized = true
 	bot_last_position = global_position
 	_build_spotted_marker()
 	_build_identity_visuals()
@@ -1705,6 +1710,18 @@ func _server_bot_tick(delta: float) -> void:
 		movement_goal = Vector3(
 			main.call("bot_goal_position", self)
 		)
+
+		# Deterministic bot squad roles spread the team across lanes.
+		match bot_squad_role:
+			0:
+				movement_goal.z -= 4.5
+			1:
+				movement_goal.z += 4.5
+			2:
+				movement_goal.x -= 2.5
+			3:
+				movement_goal.x += 2.5
+
 		has_movement_goal = true
 
 	if bot_ability_accumulator <= 0.0:
@@ -1848,9 +1865,12 @@ func _bot_try_ability() -> void:
 				server_ability_request()
 
 		PlayerClass.ENGINEER:
-			if health < int(
-				_class_health(player_class) * 0.75
-			):
+			var should_fortify := health < int(
+				_class_health(player_class) * 0.85
+			)
+			if not should_fortify:
+				should_fortify = randf() <= 0.28
+			if should_fortify:
 				server_ability_request()
 
 		PlayerClass.FIELD_OPS:
@@ -3022,11 +3042,18 @@ func _update_hud() -> void:
 			if bool(main.get("overtime_active"))
 			else ""
 		)
+		var gun_status := "GUNS OFFLINE"
+		if post_control == 0:
+			gun_status = "GUNS ATK"
+		elif post_control == 1:
+			gun_status = "GUNS DEF"
+
 		operations_label.text = (
-			"ATK %d tickets · CP %s · DEF %d tickets%s"
+			"ATK %d · CP %s · %s · DEF %d%s"
 			% [
 				int(main.get("attacker_tickets")),
 				post_state,
+				gun_status,
 				int(main.get("defender_tickets")),
 				overtime_suffix
 			]

@@ -6,10 +6,12 @@ const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const ConstructibleScript = preload("res://scripts/constructible.gd")
 const SmokeCloudScript = preload("res://scripts/smoke_cloud.gd")
 const SensorBeaconScript = preload("res://scripts/sensor_beacon.gd")
+const FieldEmplacementScript = preload("res://scripts/field_emplacement.gd")
+const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.2.0"
-const NETWORK_PROTOCOL := 320
+const BUILD_VERSION := "3.3.0"
+const NETWORK_PROTOCOL := 330
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -26,6 +28,7 @@ const ARTILLERY_RADIUS := 7.5
 const ARTILLERY_DAMAGE := 92
 const SENSOR_BEACON_DURATION := 18.0
 const SENSOR_BEACON_RADIUS := 24.0
+const FIELD_EMPLACEMENT_COUNT := 2
 
 var players: Dictionary = {}
 var player_teams: Dictionary = {}
@@ -45,6 +48,9 @@ var command_ammo_station: MeshInstance3D
 var sensor_beacons: Dictionary = {}
 var next_sensor_beacon_id := 1
 var pending_artillery: Array[Dictionary] = []
+var field_emplacements: Array[Node3D] = []
+var destructible_covers: Dictionary = {}
+var next_cover_id := 1
 var spawn_points := {
 	0: [
 		Vector3(-16.0, 1.0, 0.0),
@@ -227,6 +233,65 @@ func _process(delta: float) -> void:
 		command_post_progress,
 		command_post_contested,
 		overtime_active
+	)
+
+func _create_field_emplacement(
+	emplacement_id: int,
+	preferred_team: int,
+	position: Vector3,
+	rotation_y: float
+) -> void:
+	var emplacement := Node3D.new()
+	emplacement.name = "FieldEmplacement_%d" % emplacement_id
+	emplacement.set_script(FieldEmplacementScript)
+	add_child(emplacement)
+	emplacement.call(
+		"configure",
+		emplacement_id,
+		preferred_team,
+		position,
+		rotation_y
+	)
+	field_emplacements.append(emplacement)
+
+func _create_destructible_cover(
+	position: Vector3,
+	rotation_y: float,
+	size: Vector3,
+	health: int = 260
+) -> void:
+	var cover_id: int = next_cover_id
+	next_cover_id += 1
+
+	var cover := StaticBody3D.new()
+	cover.name = "DestructibleCover_%d" % cover_id
+	cover.set_script(DestructibleCoverScript)
+	add_child(cover)
+	cover.call(
+		"configure",
+		cover_id,
+		position,
+		rotation_y,
+		size,
+		health
+	)
+	destructible_covers[cover_id] = cover
+
+func _reset_destructible_cover() -> void:
+	for cover_value in destructible_covers.values():
+		if cover_value == null or not is_instance_valid(cover_value):
+			continue
+		var cover: Node = cover_value as Node
+		if cover != null and cover.has_method("reset_cover"):
+			cover.call("reset_cover")
+
+func emplacement_status_text() -> String:
+	if command_post_control < 0:
+		return "AUTO-GUNS OFFLINE"
+	return (
+		"AUTO-GUNS: ATTACKERS"
+		if command_post_control == 0
+		else "AUTO-GUNS: DEFENDERS"
 	)
 
 func _command_post_node() -> Node3D:
@@ -887,10 +952,18 @@ func server_remove_sensor_beacon(beacon_id: int) -> void:
 func remove_sensor_beacon(beacon_id: int) -> void:
 	if not sensor_beacons.has(beacon_id):
 		return
-	var beacon: Node = sensor_beacons[beacon_id] as Node
-	if beacon != null:
-		beacon.queue_free()
+
+	var beacon_variant: Variant = sensor_beacons.get(beacon_id)
 	sensor_beacons.erase(beacon_id)
+
+	if beacon_variant == null:
+		return
+	if not is_instance_valid(beacon_variant):
+		return
+
+	var beacon: Node = beacon_variant as Node
+	if beacon != null and not beacon.is_queued_for_deletion():
+		beacon.queue_free()
 
 func repair_nearby_barricades(engineer: Node3D, amount: int) -> int:
 	if not multiplayer.is_server() or engineer == null:
@@ -970,10 +1043,20 @@ func server_destroy_constructible(constructible_id: int, attacker_id: int) -> vo
 func remove_constructible(constructible_id: int) -> void:
 	if not constructibles.has(constructible_id):
 		return
-	var barricade: Node = constructibles[constructible_id] as Node
-	if barricade != null:
-		barricade.queue_free()
+
+	var barricade_variant: Variant = constructibles.get(
+		constructible_id
+	)
 	constructibles.erase(constructible_id)
+
+	if barricade_variant == null:
+		return
+	if not is_instance_valid(barricade_variant):
+		return
+
+	var barricade: Node = barricade_variant as Node
+	if barricade != null and not barricade.is_queued_for_deletion():
+		barricade.queue_free()
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_fire(
@@ -1585,24 +1668,61 @@ func server_remove_smoke(smoke_id: int) -> void:
 func remove_smoke(smoke_id: int) -> void:
 	if not smoke_clouds.has(smoke_id):
 		return
-	var cloud: Node = smoke_clouds[smoke_id] as Node
-	if cloud != null:
-		cloud.queue_free()
+
+	var cloud_variant: Variant = smoke_clouds.get(smoke_id)
 	smoke_clouds.erase(smoke_id)
 
-func line_blocked_by_smoke(start_position: Vector3, end_position: Vector3) -> bool:
+	if cloud_variant == null:
+		return
+	if not is_instance_valid(cloud_variant):
+		return
+
+	var cloud: Node = cloud_variant as Node
+	if cloud != null and not cloud.is_queued_for_deletion():
+		cloud.queue_free()
+
+func line_blocked_by_smoke(
+	start_position: Vector3,
+	end_position: Vector3
+) -> bool:
 	var segment: Vector3 = end_position - start_position
 	var segment_length_sq: float = segment.length_squared()
 	if segment_length_sq <= 0.001:
 		return false
-	for smoke_value in smoke_clouds.values():
-		var cloud: Node3D = smoke_value as Node3D
-		if cloud == null:
+
+	var stale_ids: Array[int] = []
+
+	for smoke_id_value in smoke_clouds:
+		var smoke_id: int = int(smoke_id_value)
+		var cloud_variant: Variant = smoke_clouds.get(smoke_id)
+
+		if cloud_variant == null or not is_instance_valid(cloud_variant):
+			stale_ids.append(smoke_id)
 			continue
-		var t: float = clampf((cloud.global_position - start_position).dot(segment) / segment_length_sq, 0.0, 1.0)
+
+		var cloud: Node3D = cloud_variant as Node3D
+		if cloud == null or cloud.is_queued_for_deletion():
+			stale_ids.append(smoke_id)
+			continue
+
+		var t: float = clampf(
+			(
+				cloud.global_position - start_position
+			).dot(segment) / segment_length_sq,
+			0.0,
+			1.0
+		)
 		var closest: Vector3 = start_position + segment * t
-		if closest.distance_to(cloud.global_position) <= float(cloud.get("radius")):
+		var radius: float = float(cloud.get("radius"))
+
+		if closest.distance_to(cloud.global_position) <= radius:
+			for stale_id in stale_ids:
+				smoke_clouds.erase(stale_id)
 			return true
+
+	for stale_id in stale_ids:
+		smoke_clouds.erase(stale_id)
+
 	return false
 
 func server_throw_grenade(
@@ -2185,6 +2305,7 @@ func objective_status_text() -> String:
 		return "Round restarts in %.1fs" % round_restart_remaining
 
 	var overtime_text := " · OVERTIME" if overtime_active else ""
+	var guns_text: String = emplacement_status_text()
 	var post_text := (
 		"Neutral"
 		if command_post_control < 0
@@ -2197,19 +2318,20 @@ func objective_status_text() -> String:
 
 	if objective_stage == 0:
 		return (
-			"Stage 1: Build bridge %d/%d · Tickets %d-%d%s"
+			"Stage 1: Build bridge %d/%d · Tickets %d-%d · %s%s"
 			% [
 				bridge_progress,
 				bridge_required,
 				attacker_tickets,
 				defender_tickets,
+				guns_text,
 				overtime_text
 			]
 		)
 
 	if dynamite_armed:
 		return (
-			"Charge %.1fs · Defuse %d/%d · CP %s · Tickets %d-%d%s"
+			"Charge %.1fs · Defuse %d/%d · CP %s · Tickets %d-%d · %s%s"
 			% [
 				dynamite_remaining,
 				defuse_progress,
@@ -2217,17 +2339,19 @@ func objective_status_text() -> String:
 				post_text,
 				attacker_tickets,
 				defender_tickets,
+				guns_text,
 				overtime_text
 			]
 		)
 
 	return (
-		"Destroy bunker %d%% · CP %s · Tickets %d-%d%s"
+		"Destroy bunker %d%% · CP %s · Tickets %d-%d · %s%s"
 		% [
 			objective_health,
 			post_text,
 			attacker_tickets,
 			defender_tickets,
+			guns_text,
 			overtime_text
 		]
 	)
@@ -2491,18 +2615,31 @@ func _reset_round() -> void:
 	constructibles.clear()
 	engineer_constructibles.clear()
 
-	for smoke_value in smoke_clouds.values():
-		var smoke: Node = smoke_value as Node
-		if smoke != null:
-			smoke.queue_free()
+	var smoke_values: Array = smoke_clouds.values()
 	smoke_clouds.clear()
+	for smoke_value in smoke_values:
+		if smoke_value == null or not is_instance_valid(smoke_value):
+			continue
+		var smoke_node: Node = smoke_value as Node
+		if (
+			smoke_node != null
+			and not smoke_node.is_queued_for_deletion()
+		):
+			smoke_node.queue_free()
 
-	for beacon_value in sensor_beacons.values():
-		var beacon: Node = beacon_value as Node
-		if beacon != null:
-			beacon.queue_free()
+	var beacon_values: Array = sensor_beacons.values()
 	sensor_beacons.clear()
+	for beacon_value in beacon_values:
+		if beacon_value == null or not is_instance_valid(beacon_value):
+			continue
+		var beacon_node: Node = beacon_value as Node
+		if (
+			beacon_node != null
+			and not beacon_node.is_queued_for_deletion()
+		):
+			beacon_node.queue_free()
 	pending_artillery.clear()
+	_reset_destructible_cover()
 
 	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
@@ -2599,6 +2736,66 @@ func _build_world() -> void:
 		Vector3(2.8, 0.75, 7.0),
 		Vector3(2.0, 1.5, 4.0),
 		Color(0.34, 0.31, 0.25)
+	)
+
+	# Combined-arms battlefield expansion.
+	_make_static_box(
+		"NorthObservationTower",
+		Vector3(-5.5, 2.0, -10.0),
+		Vector3(4.0, 4.0, 3.0),
+		Color(0.24, 0.23, 0.21)
+	)
+	_make_static_box(
+		"SouthObservationTower",
+		Vector3(5.5, 2.0, 10.0),
+		Vector3(4.0, 4.0, 3.0),
+		Color(0.24, 0.23, 0.21)
+	)
+	_make_static_box(
+		"NorthTrenchFloor",
+		Vector3(-3.5, 0.15, -8.7),
+		Vector3(8.0, 0.30, 2.2),
+		Color(0.20, 0.18, 0.15)
+	)
+	_make_static_box(
+		"SouthTrenchFloor",
+		Vector3(3.5, 0.15, 8.7),
+		Vector3(8.0, 0.30, 2.2),
+		Color(0.20, 0.18, 0.15)
+	)
+
+	_create_destructible_cover(
+		Vector3(-5.0, 0.0, -3.8),
+		deg_to_rad(8.0),
+		Vector3(3.4, 1.9, 0.75)
+	)
+	_create_destructible_cover(
+		Vector3(4.8, 0.0, 3.8),
+		deg_to_rad(-10.0),
+		Vector3(3.4, 1.9, 0.75)
+	)
+	_create_destructible_cover(
+		Vector3(-8.5, 0.0, 5.5),
+		deg_to_rad(82.0),
+		Vector3(3.0, 1.7, 0.70)
+	)
+	_create_destructible_cover(
+		Vector3(8.5, 0.0, -5.5),
+		deg_to_rad(98.0),
+		Vector3(3.0, 1.7, 0.70)
+	)
+
+	_create_field_emplacement(
+		0,
+		0,
+		Vector3(2.0, 0.0, -8.2),
+		deg_to_rad(-90.0)
+	)
+	_create_field_emplacement(
+		1,
+		1,
+		Vector3(8.0, 0.0, -8.2),
+		deg_to_rad(90.0)
 	)
 
 	_make_spawn_zone(

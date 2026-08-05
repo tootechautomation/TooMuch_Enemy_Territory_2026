@@ -1,11 +1,13 @@
 # Changelog
 
-## 3.2.0
-- Reworked all five class abilities
-- Added Soldier Heavy Fire
-- Added Medic area revive
-- Added Engineer barricade repair
-- Added Field Ops artillery
-- Added Scout sensor beacons
-- Added class-mode HUD
-- Bumped protocol to 320
+## 3.3.0
+- Added command-post-controlled automatic emplacements
+- Added emplacement target scanning, tracers and smoke blocking
+- Added destructible multi-state battlefield cover
+- Added cover restoration between rounds
+- Expanded the map with towers, trenches and hardpoints
+- Added deterministic bot squad roles and lane distribution
+- Improved Engineer bot fortification behavior
+- Added combined-arms HUD status
+- Added field emplacement and destructible cover scripts
+- Bumped protocol to 330
