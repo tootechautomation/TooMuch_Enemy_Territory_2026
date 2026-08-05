@@ -19,6 +19,11 @@ const SNAPSHOT_LERP_SPEED := 14.0
 const ABILITY_COOLDOWN_MS := 8000
 const REVIVE_RANGE := 2.8
 const BLEEDOUT_MS := 15000
+const STANDING_HEAD_Y := 0.65
+const CROUCH_HEAD_Y := 0.12
+const STANDING_CAPSULE_HEIGHT := 1.8
+const CROUCH_CAPSULE_HEIGHT := 1.15
+const CROUCH_BODY_SCALE_Y := 0.64
 
 var health := 100
 var ammo_in_mag := 30
@@ -68,6 +73,8 @@ var damage_indicator_until_ms := 0
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
 var next_grenade_time := 0
+var is_crouching := false
+var weapon_kick_offset := 0.0
 
 func _ready() -> void:
 	_initialize_loadout()
@@ -122,6 +129,9 @@ func _collect_and_send_input() -> void:
 		"move_forward",
 		"move_back"
 	)
+
+	var local_crouch: bool = Input.is_action_pressed("crouch") and not downed
+	_apply_crouch_state(local_crouch)
 
 	submit_input.rpc_id(
 		1,
@@ -186,18 +196,24 @@ func _server_simulate(delta: float) -> void:
 	if downed and now >= bleedout_finish_ms: _finish_death(0)
 	if not alive or downed:
 		velocity = Vector3.ZERO
-		replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index, grenades_remaining)
+		replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index, grenades_remaining, is_crouching)
 		return
 	if not is_on_floor(): velocity.y -= gravity * delta
 	elif jump_requested and not crouch_requested: velocity.y = JUMP_SPEED
 	jump_requested = false
-	var move_speed := CROUCH_SPEED if crouch_requested else (SPRINT_SPEED if sprint_requested and input_vector.y < -0.2 else WALK_SPEED)
-	var direction := (transform.basis * Vector3(input_vector.x, 0, input_vector.y)).normalized()
+	_apply_crouch_state(crouch_requested)
+
+	var move_speed := CROUCH_SPEED if crouch_requested else (
+		SPRINT_SPEED if sprint_requested and input_vector.y < -0.2 else WALK_SPEED
+	)
+	var direction := (
+		transform.basis * Vector3(input_vector.x, 0, input_vector.y)
+	).normalized()
 	velocity.x = direction.x * move_speed; velocity.z = direction.z * move_speed; move_and_slide()
-	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index, grenades_remaining)
+	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index, grenades_remaining, is_crouching)
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int) -> void:
+func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool) -> void:
 	if multiplayer.is_server(): return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
 	if _is_local_player(): global_position = pos
@@ -210,9 +226,10 @@ func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magaz
 	deaths = death_count
 	xp = experience
 	grenades_remaining = grenade_count
+	_apply_crouch_state(crouching)
 
 	if weapon_index != current_weapon_index:
-		_apply_weapon_index(weapon_index, false)
+		_apply_weapon_index(weapon_index, true)
 
 	ammo_in_mag = magazine
 	reserve_ammo = reserve
@@ -370,7 +387,19 @@ func request_weapon_switch() -> void:
 		return
 	if not alive or downed:
 		return
-	_apply_weapon_index(current_weapon_index + 1, false)
+
+	var next_index: int = posmod(
+		current_weapon_index + 1,
+		weapon_slots.size()
+	)
+	_apply_weapon_index(next_index, false)
+	apply_weapon_switch.rpc_id(peer_id, next_index)
+
+@rpc("authority", "call_remote", "reliable")
+func apply_weapon_switch(weapon_index: int) -> void:
+	if not _is_local_player():
+		return
+	_apply_weapon_index(weapon_index, true)
 
 @rpc("authority", "call_remote", "reliable")
 func confirm_hit() -> void:
@@ -692,16 +721,58 @@ func _update_spectator_camera() -> void:
 	if target_head != null:
 		camera.global_transform = target_head.global_transform
 
+func _apply_crouch_state(crouching: bool) -> void:
+	is_crouching = crouching
+
+	var collision: CollisionShape3D = $CollisionShape3D as CollisionShape3D
+	if collision != null:
+		var capsule: CapsuleShape3D = collision.shape as CapsuleShape3D
+		if capsule != null:
+			capsule.height = (
+				CROUCH_CAPSULE_HEIGHT
+				if crouching
+				else STANDING_CAPSULE_HEIGHT
+			)
+		collision.position.y = -0.30 if crouching else 0.0
+
+	var body: MeshInstance3D = $Body as MeshInstance3D
+	if body != null:
+		body.scale.y = CROUCH_BODY_SCALE_Y if crouching else 1.0
+		body.position.y = -0.30 if crouching else 0.0
+
+	$Head.position.y = CROUCH_HEAD_Y if crouching else STANDING_HEAD_Y
+
+func _base_weapon_position() -> Vector3:
+	return (
+		Vector3(0.30, -0.27, -0.62)
+		if current_weapon_index == 1
+		else Vector3(0.34, -0.28, -0.72)
+	)
+
+func _apply_weapon_kick() -> void:
+	if weapon_view == null:
+		return
+	var position := _base_weapon_position()
+	position.z += weapon_kick_offset
+	weapon_view.position = position
+
 func _local_fire_feedback() -> void:
 	if not _is_local_player():
 		return
 
+	var recoil_degrees: float = maxf(
+		1.35,
+		weapon.recoil_degrees * 3.0
+	)
 	pitch = clampf(
-		pitch - deg_to_rad(weapon.recoil_degrees),
+		pitch - deg_to_rad(recoil_degrees),
 		-1.35,
 		1.35
 	)
 	$Head.rotation.x = pitch
+
+	weapon_kick_offset = 0.10
+	_apply_weapon_kick()
 
 	muzzle_flash_until_ms = Time.get_ticks_msec() + 55
 	if muzzle_flash != null:
@@ -721,7 +792,7 @@ func _rebuild_first_person_weapon() -> void:
 		child.queue_free()
 
 	var is_pistol: bool = current_weapon_index == 1
-	weapon_view.position = Vector3(0.30, -0.27, -0.62) if is_pistol else Vector3(0.34, -0.28, -0.72)
+	weapon_view.position = _base_weapon_position()
 
 	var metal := StandardMaterial3D.new()
 	metal.albedo_color = Color(0.18, 0.19, 0.20)
@@ -817,8 +888,20 @@ func _update_hud() -> void:
 	if muzzle_flash != null and muzzle_flash.visible and now >= muzzle_flash_until_ms:
 		muzzle_flash.visible = false
 
+	if weapon_kick_offset > 0.001:
+		weapon_kick_offset = lerpf(
+			weapon_kick_offset,
+			0.0,
+			clampf(get_process_delta_time() * 18.0, 0.0, 1.0)
+		)
+		_apply_weapon_kick()
+	elif weapon_kick_offset != 0.0:
+		weapon_kick_offset = 0.0
+		_apply_weapon_kick()
+
 	var names := ["Soldier", "Medic", "Engineer", "Field Ops", "Scout"]
 	var main = get_parent(); var minutes := int(main.match_time_remaining) / 60; var seconds := int(main.match_time_remaining) % 60
+	var stance_text := "CROUCHED" if is_crouching else "STANDING"
 	var life_text := "DOWNED" if downed else (
 		"ALIVE" if alive else "RESPAWN IN %.1f · F cycles teammate" % main.spawn_wave_remaining
 	)
@@ -827,7 +910,7 @@ func _update_hud() -> void:
 	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
-		life_text,
+		"%s · %s" % [life_text, stance_text],
 		health,
 		ammo_in_mag,
 		reserve_ammo,

@@ -1,8 +1,10 @@
 # Changelog
 
-## 1.1.0
-- Added recoil
-- Added muzzle flash
-- Added directional damage feedback
-- Added damage amount display
-- Added grenade hit confirmation
+## 1.2.0
+
+- Fixed pistol model not rebuilding after networked switch
+- Increased visible recoil and added first-person weapon kick
+- Added physical crouch capsule, body, and camera changes
+- Added stance HUD status
+- Defaulted headless servers to eight bots
+- Added detailed bot startup logging

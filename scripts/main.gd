@@ -23,7 +23,7 @@ var spawn_points := {
 	1: [Vector3(12, 1, 0), Vector3(12, 1, 4), Vector3(12, 1, -4)]
 }
 var next_team := 0
-var desired_bot_count := 0
+var desired_bot_count := 8
 var next_bot_peer_id := BOT_PEER_ID_START
 var round_restart_remaining := 0.0
 var objective_health := 100
@@ -105,6 +105,7 @@ func _parse_command_line() -> void:
 	var is_server := "--server" in args or DisplayServer.get_name() == "headless"
 	var port := PORT_DEFAULT
 	var connect_address := ""
+	var bots_argument_seen := false
 
 	for i in args.size():
 		if args[i] == "--port" and i + 1 < args.size():
@@ -113,8 +114,11 @@ func _parse_command_line() -> void:
 			connect_address = args[i + 1]
 		elif args[i] == "--bots" and i + 1 < args.size():
 			desired_bot_count = clampi(int(args[i + 1]), 0, 16)
+			bots_argument_seen = true
 
 	if is_server:
+		if DisplayServer.get_name() != "headless" and not bots_argument_seen:
+			desired_bot_count = 0
 		start_server(port)
 	elif connect_address != "":
 		join_server(connect_address, port)
@@ -130,10 +134,17 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 		return
 	multiplayer.multiplayer_peer = peer
 	print("Frontline dedicated server listening on UDP %d" % port)
-	for index in desired_bot_count:
+	print("Requested bot count: %d" % desired_bot_count)
+
+	for index in range(desired_bot_count):
 		_spawn_bot(index)
-	if desired_bot_count > 0:
-		print("Spawned %d server bots" % desired_bot_count)
+
+	print(
+		"Server roster ready: %d total actors, %d bots" % [
+			players.size(),
+			desired_bot_count
+		]
+	)
 
 func join_server(address: String, port: int = PORT_DEFAULT) -> void:
 	var peer := ENetMultiplayerPeer.new()
@@ -573,12 +584,28 @@ func scoreboard_text() -> String:
 func _spawn_bot(index: int) -> void:
 	if not multiplayer.is_server():
 		return
-	var bot_id := next_bot_peer_id
+
+	var bot_id: int = next_bot_peer_id
 	next_bot_peer_id += 1
-	var team := index % 2
-	var class_id := index % 5
-	spawn_player.rpc(bot_id, team, "Bot%02d" % (index + 1), _get_spawn(team, bot_id))
-	call_deferred("_configure_bot", bot_id, class_id)
+	var bot_team: int = index % 2
+	var class_id: int = index % 5
+	var bot_name := "Bot%02d" % (index + 1)
+
+	spawn_player(
+		bot_id,
+		bot_team,
+		bot_name,
+		_get_spawn(bot_team, bot_id)
+	)
+	_configure_bot(bot_id, class_id)
+	print(
+		"Bot spawned: %s id=%d team=%d class=%d" % [
+			bot_name,
+			bot_id,
+			bot_team,
+			class_id
+		]
+	)
 
 func _configure_bot(bot_id: int, class_id: int) -> void:
 	if not players.has(bot_id):

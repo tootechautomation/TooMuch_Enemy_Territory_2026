@@ -1,17 +1,35 @@
 # Frontline: Objective
 
-Original Godot 4 multiplayer objective-shooter prototype.
+## Version 1.2: stance, weapon-view, recoil, and bot fixes
 
-## Version 1.1: combat feedback
+Fixed:
 
-Added weapon recoil, procedural rifle/pistol muzzle flash, directional incoming-damage feedback, damage amount display, and grenade hit confirmation.
+- Pistol slot now rebuilds the first-person model immediately.
+- Recoil is visibly stronger and includes weapon kick.
+- Crouching lowers the camera, collision capsule, and body.
+- HUD shows STANDING or CROUCHED.
+- Headless servers default to eight bots.
+- `--bots 0` explicitly disables bots.
+- Server logs list every spawned bot and final actor count.
 
-No Wolfenstein source code, maps, proprietary assets, characters, branding, audio, or artwork are included.
+## Start server
 
-## Run
+Eight bots by default:
 
 ```bash
-flatpak run org.godotengine.Godot --headless --path . --server --port 27960 --bots 8
+flatpak run org.godotengine.Godot --headless --path . --server --port 27960
+```
+
+Custom count:
+
+```bash
+flatpak run org.godotengine.Godot --headless --path . --server --port 27960 --bots 12
+```
+
+No bots:
+
+```bash
+flatpak run org.godotengine.Godot --headless --path . --server --port 27960 --bots 0
 ```
 
 ## Controls
