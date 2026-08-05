@@ -1,19 +1,24 @@
 # Frontline: Objective
 
-An original Godot 4 class-based objective shooter prototype. It contains no Wolfenstein code, game data, maps, branding, characters, audio, or artwork.
+An original Godot 4 class-based objective-shooter prototype. It contains no Wolfenstein game data, maps, branding, characters, sounds, or artwork.
 
-## Version 0.5 — Teamplay milestone
+## Version 0.6: campaign objectives and progression
 
-- Server-authoritative movement, shooting, damage, reloads, objectives, and respawns
-- Downed state with a 15-second bleedout window
-- Medic revive interaction
-- Deployable health and ammunition packs
-- Engineer-planted objective charge with an 8-second fuse
-- Scoreboard with team, kills, deaths, and player state
-- Five-entry event/kill feed
-- Procedural first-person service-rifle blockout
-- Four original procedural team uniform skins
-- Sprint, crouch, class abilities, spawn waves, match timer, and remote interpolation
+This milestone turns the single target into a small two-stage assault mission:
+
+1. Attacking Engineers construct a bridge by using **E** at the yellow build site.
+2. After construction, attackers cross the river and arm a charge at the bunker.
+3. Defending Engineers can defuse an armed charge by repeatedly using **E** near it.
+4. The attackers win when the bunker charge detonates; defenders win when time expires.
+
+Also included:
+
+- Objective XP and five ranks
+- XP awards for eliminations, revives, construction, arming, and defusing
+- Expanded scoreboard with XP and rank
+- Mission-stage HUD
+- Original procedural bridge, river, bunker, uniforms, supply packs, and weapon blockouts
+- Server-authoritative movement, combat, objectives, revives, and wave respawns
 
 ## Controls
 
@@ -24,27 +29,23 @@ An original Godot 4 class-based objective shooter prototype. It contains no Wolf
 - Mouse: aim
 - Left mouse: fire
 - R: reload
-- E: revive as Medic or arm the objective as attacking Engineer
-- Q: class ability / deploy support pack
-- 1–5: choose class
+- E: revive, build, arm, or defuse
+- Q: class ability / deploy supply pack
+- 1–5: select class
 - Tab: scoreboard
 - Escape: release mouse
 
-## Class abilities
-
-- Soldier: personal ammunition reserve
-- Medic: deploy health pack; revive downed teammates with E
-- Engineer: field repair; arm the objective charge with E
-- Field Ops: deploy ammunition pack
-- Scout: light personal recovery
-
-## Run a VPS server
+## Run the dedicated server
 
 ```bash
 flatpak run org.godotengine.Godot --headless --path . --server --port 27960
 ```
 
-Open UDP port 27960. The Windows client should run locally and connect to the VPS public IP.
+## Connect a Windows client
+
+Open `project.godot` in Godot 4.7, run the project, and enter the public IP address of the VPS.
+
+Open UDP port 27960 on the VPS and at the hosting provider firewall.
 
 ## Validate
 
@@ -54,4 +55,4 @@ Open UDP port 27960. The Windows client should run locally and connect to the VP
 
 ## Status
 
-This is a playable engineering prototype, not a production-ready public release. It still needs client prediction, lag compensation, proper animations, audio, menus, spawn selection, anti-cheat hardening, map content, and broader playtesting.
+This remains an alpha prototype. It needs client prediction/reconciliation, lag compensation, animations, audio, polished models, bots, map rotation, and security hardening before public hosting.

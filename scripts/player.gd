@@ -38,6 +38,7 @@ var next_interact_time := 0
 var next_ability_time := 0
 var kills := 0
 var deaths := 0
+var xp := 0
 var target_position := Vector3.ZERO
 var target_yaw := 0.0
 var target_pitch := 0.0
@@ -100,7 +101,7 @@ func _server_simulate(delta: float) -> void:
 	if downed and now >= bleedout_finish_ms: _finish_death(0)
 	if not alive or downed:
 		velocity = Vector3.ZERO
-		replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths)
+		replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp)
 		return
 	if not is_on_floor(): velocity.y -= gravity * delta
 	elif jump_requested and not crouch_requested: velocity.y = JUMP_SPEED
@@ -108,14 +109,14 @@ func _server_simulate(delta: float) -> void:
 	var move_speed := CROUCH_SPEED if crouch_requested else (SPRINT_SPEED if sprint_requested and input_vector.y < -0.2 else WALK_SPEED)
 	var direction := (transform.basis * Vector3(input_vector.x, 0, input_vector.y)).normalized()
 	velocity.x = direction.x * move_speed; velocity.z = direction.z * move_speed; move_and_slide()
-	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths)
+	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp)
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int) -> void:
+func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int) -> void:
 	if multiplayer.is_server(): return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
 	if _is_local_player(): global_position = pos
-	health = hp; ammo_in_mag = magazine; reserve_ammo = reserve; alive = is_alive; downed = is_downed; is_reloading = reloading; player_class = class_id; kills = kill_count; deaths = death_count
+	health = hp; ammo_in_mag = magazine; reserve_ammo = reserve; alive = is_alive; downed = is_downed; is_reloading = reloading; player_class = class_id; kills = kill_count; deaths = death_count; xp = experience
 	visible = alive
 	if weapon_view: weapon_view.visible = alive and not downed
 
@@ -161,9 +162,14 @@ func _finish_death(attacker_override: int) -> void:
 	alive = false; downed = false; health = 0; deaths += 1; visible = false; velocity = Vector3.ZERO
 	get_parent().register_elimination(peer_id, attacker_id)
 
-func server_revive() -> void:
-	if not multiplayer.is_server() or not alive or not downed: return
-	downed = false; health = maxi(45, int(_class_health(player_class) * 0.4)); bleedout_finish_ms = 0
+func server_revive(reviver_id: int = 0) -> void:
+	if not multiplayer.is_server() or not alive or not downed:
+		return
+	downed = false
+	health = maxi(45, int(_class_health(player_class) * 0.4))
+	bleedout_finish_ms = 0
+	if get_parent().players.has(reviver_id):
+		get_parent().players[reviver_id].add_xp(15, "revive")
 	get_parent().push_kill_feed.rpc("%s was revived" % player_name)
 
 func server_respawn(spawn_position: Vector3) -> void:
@@ -180,10 +186,9 @@ func request_interact() -> void:
 	if player_class == PlayerClass.MEDIC:
 		for candidate in get_parent().players.values():
 			if candidate != self and candidate.team == team and candidate.alive and candidate.downed and global_position.distance_to(candidate.global_position) <= REVIVE_RANGE:
-				candidate.server_revive(); return
-	if player_class == PlayerClass.ENGINEER and team == 0 and not downed:
-		var objective := get_parent().get_node_or_null("Objective")
-		if objective and global_position.distance_to(objective.global_position) <= 3.5: get_parent().arm_dynamite(peer_id)
+				candidate.server_revive(peer_id); return
+	if player_class == PlayerClass.ENGINEER and not downed:
+		get_parent().server_engineer_interact(self)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_class_ability() -> void:
@@ -202,6 +207,24 @@ func request_class_ability() -> void:
 func request_class(index: int) -> void:
 	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id: return
 	player_class = clampi(index, 0, 4); health = mini(health, _class_health(player_class))
+
+func add_xp(amount: int, reason: String = "") -> void:
+	if not multiplayer.is_server():
+		return
+	xp = maxi(0, xp + amount)
+	if reason != "":
+		print("%s gained %d XP: %s" % [player_name, amount, reason])
+
+func rank_name() -> String:
+	if xp >= 300:
+		return "Captain"
+	if xp >= 180:
+		return "Lieutenant"
+	if xp >= 100:
+		return "Sergeant"
+	if xp >= 40:
+		return "Corporal"
+	return "Recruit"
 
 func _class_health(class_id: int) -> int:
 	match class_id:
@@ -230,9 +253,9 @@ func _update_hud() -> void:
 	var names := ["Soldier", "Medic", "Engineer", "Field Ops", "Scout"]
 	var main = get_parent(); var minutes := int(main.match_time_remaining) / 60; var seconds := int(main.match_time_remaining) % 60
 	var life_text := "DOWNED" if downed else ("ALIVE" if alive else "RESPAWN IN %.1f" % main.spawn_wave_remaining)
-	var objective_text := "DYNAMITE %.1fs" % main.dynamite_remaining if main.dynamite_armed else "Objective %d%%" % main.objective_health
+	var objective_text: String = main.objective_status_text()
 	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
-	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s\n%s  Time %02d:%02d\nClass: %s  Q: %.1fs  E: interact" % [player_name, "Attackers" if team == 0 else "Defenders", life_text, health, ammo_in_mag, reserve_ammo, "RELOADING" if is_reloading else weapon.display_name, objective_text, minutes, seconds, names[player_class], cooldown]
+	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  E: interact" % [player_name, "Attackers" if team == 0 else "Defenders", life_text, health, ammo_in_mag, reserve_ammo, "RELOADING" if is_reloading else weapon.display_name, objective_text, minutes, seconds, names[player_class], xp, rank_name(), cooldown]
 	scoreboard.visible = Input.is_action_pressed("scoreboard")
 	if scoreboard.visible: scoreboard.text = main.scoreboard_text()
 	feed.text = "\n".join(main.kill_feed)

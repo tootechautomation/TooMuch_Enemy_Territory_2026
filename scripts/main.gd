@@ -19,6 +19,11 @@ var spawn_points := {
 }
 var next_team := 0
 var objective_health := 100
+var objective_stage := 0 # 0 build bridge, 1 destroy bunker
+var bridge_progress := 0
+var bridge_required := 10
+var defuse_progress := 0
+var defuse_required := 5
 var dynamite_armed := false
 var dynamite_remaining := 0.0
 var match_time_remaining := MATCH_LENGTH_SECONDS
@@ -47,8 +52,20 @@ func _process(delta: float) -> void:
 		dynamite_remaining = maxf(0.0, dynamite_remaining - delta)
 		if dynamite_remaining <= 0.0:
 			dynamite_armed = false
+			defuse_progress = 0
 			damage_objective(100, 0)
-	broadcast_match_state.rpc(match_time_remaining, spawn_wave_remaining, objective_health, dynamite_armed, dynamite_remaining)
+	broadcast_match_state.rpc(
+		match_time_remaining,
+		spawn_wave_remaining,
+		objective_health,
+		objective_stage,
+		bridge_progress,
+		bridge_required,
+		dynamite_armed,
+		dynamite_remaining,
+		defuse_progress,
+		defuse_required
+	)
 	if match_time_remaining <= 0.0:
 		_end_match("DEFENDERS WIN — time expired")
 
@@ -131,10 +148,58 @@ func _respawn_wave() -> void:
 		var player = players[peer_id]
 		if not player.alive: player.server_respawn(_get_spawn(player.team, peer_id))
 
+func server_engineer_interact(engineer: Node3D) -> bool:
+	if not multiplayer.is_server() or match_over:
+		return false
+
+	var engineer_team: int = int(engineer.get("team"))
+	var engineer_id: int = int(engineer.get("peer_id"))
+
+	if objective_stage == 0:
+		var build_site := get_node_or_null("BridgeBuildSite")
+		if engineer_team == 0 and build_site and engineer.global_position.distance_to(build_site.global_position) <= 3.5:
+			bridge_progress = mini(bridge_required, bridge_progress + 1)
+			engineer.add_xp(5, "construction")
+			if bridge_progress >= bridge_required:
+				objective_stage = 1
+				var bridge := get_node_or_null("ConstructedBridge")
+				if bridge:
+					bridge.visible = true
+					bridge.process_mode = Node.PROCESS_MODE_INHERIT
+				push_kill_feed.rpc("%s constructed the bridge" % player_names.get(engineer_id, "Engineer"))
+				engineer.add_xp(50, "bridge completed")
+			return true
+		return false
+
+	var objective := get_node_or_null("Objective")
+	if not objective or engineer.global_position.distance_to(objective.global_position) > 3.5:
+		return false
+
+	if engineer_team == 0:
+		return arm_dynamite(engineer_id)
+
+	if dynamite_armed:
+		defuse_progress = mini(defuse_required, defuse_progress + 1)
+		engineer.add_xp(5, "defusing")
+		if defuse_progress >= defuse_required:
+			dynamite_armed = false
+			dynamite_remaining = 0.0
+			defuse_progress = 0
+			push_kill_feed.rpc("%s defused the charge" % player_names.get(engineer_id, "Engineer"))
+			engineer.add_xp(40, "charge defused")
+		return true
+
+	return false
+
 func arm_dynamite(engineer_id: int) -> bool:
-	if not multiplayer.is_server() or match_over or dynamite_armed: return false
-	dynamite_armed = true; dynamite_remaining = DYNAMITE_FUSE_SECONDS
-	push_kill_feed.rpc("%s armed the objective" % player_names.get(engineer_id, "Engineer"))
+	if not multiplayer.is_server() or match_over or objective_stage != 1 or dynamite_armed:
+		return false
+	dynamite_armed = true
+	dynamite_remaining = DYNAMITE_FUSE_SECONDS
+	defuse_progress = 0
+	push_kill_feed.rpc("%s armed the bunker charge" % player_names.get(engineer_id, "Engineer"))
+	if players.has(engineer_id):
+		players[engineer_id].add_xp(25, "charge armed")
 	return true
 
 func damage_objective(amount: int, attacker_team: int) -> void:
@@ -143,7 +208,9 @@ func damage_objective(amount: int, attacker_team: int) -> void:
 	if objective_health <= 0: _end_match("ATTACKERS WIN — objective destroyed")
 
 func register_elimination(victim_id: int, attacker_id: int) -> void:
-	if players.has(attacker_id) and attacker_id != victim_id: players[attacker_id].kills += 1
+	if players.has(attacker_id) and attacker_id != victim_id:
+		players[attacker_id].kills += 1
+		players[attacker_id].add_xp(10, "elimination")
 	push_kill_feed.rpc("%s eliminated %s" % [player_names.get(attacker_id, "World"), player_names.get(victim_id, "Player")])
 
 func create_supply_pack(owner: Node3D, pack_type: int, amount: int) -> void:
@@ -199,8 +266,32 @@ func _end_match(message: String) -> void:
 	match_over = true; announce.rpc(message); print(message)
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func broadcast_match_state(time_remaining: float, wave_remaining: float, health_remaining: int, armed: bool, fuse_remaining: float) -> void:
-	match_time_remaining = time_remaining; spawn_wave_remaining = wave_remaining; objective_health = health_remaining; dynamite_armed = armed; dynamite_remaining = fuse_remaining
+func broadcast_match_state(
+	time_remaining: float,
+	wave_remaining: float,
+	health_remaining: int,
+	stage: int,
+	build_progress: int,
+	build_required: int,
+	armed: bool,
+	fuse_remaining: float,
+	current_defuse: int,
+	required_defuse: int
+) -> void:
+	match_time_remaining = time_remaining
+	spawn_wave_remaining = wave_remaining
+	objective_health = health_remaining
+	objective_stage = stage
+	bridge_progress = build_progress
+	bridge_required = build_required
+	dynamite_armed = armed
+	dynamite_remaining = fuse_remaining
+	defuse_progress = current_defuse
+	defuse_required = required_defuse
+
+	var bridge := get_node_or_null("ConstructedBridge")
+	if bridge:
+		bridge.visible = objective_stage >= 1
 
 @rpc("authority", "call_local", "reliable")
 func push_kill_feed(message: String) -> void:
@@ -215,22 +306,109 @@ func announce(message: String) -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
 	var label := Label.new(); label.text = message; label.position = Vector2(390, 50); label.add_theme_font_size_override("font_size", 28); layer.add_child(label)
 
+func objective_status_text() -> String:
+	if objective_stage == 0:
+		return "Stage 1: Build bridge %d/%d" % [bridge_progress, bridge_required]
+	if dynamite_armed:
+		return "Stage 2: Charge %.1fs | Defuse %d/%d" % [dynamite_remaining, defuse_progress, defuse_required]
+	return "Stage 2: Destroy bunker | Integrity %d%%" % objective_health
+
 func scoreboard_text() -> String:
-	var lines := ["SCOREBOARD", "Player          Team       K   D   State"]
+	var lines := ["SCOREBOARD", "Player          Team       K   D   XP   Rank       State"]
 	for player in players.values():
 		var state := "Down" if player.downed else ("Alive" if player.alive else "Dead")
-		lines.append("%-15s %-10s %2d  %2d  %s" % [player.player_name, "Attackers" if player.team == 0 else "Defenders", player.kills, player.deaths, state])
+		lines.append("%-15s %-10s %2d  %2d  %3d  %-10s %s" % [
+			player.player_name,
+			"Attackers" if player.team == 0 else "Defenders",
+			player.kills,
+			player.deaths,
+			player.xp,
+			player.rank_name(),
+			state
+		])
 	return "\n".join(lines)
 
 func _build_world() -> void:
-	var env := WorldEnvironment.new(); var environment := Environment.new(); environment.background_mode = Environment.BG_COLOR; environment.background_color = Color(0.12, 0.16, 0.19); environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; environment.ambient_light_color = Color(0.7, 0.75, 0.8); environment.ambient_light_energy = 0.75; env.environment = environment; add_child(env)
-	var light := DirectionalLight3D.new(); light.rotation_degrees = Vector3(-55, -35, 0); light.shadow_enabled = true; add_child(light)
-	_make_static_box("Ground", Vector3(0, -0.5, 0), Vector3(40, 1, 24), Color(0.22, 0.27, 0.22))
-	_make_static_box("WallNorth", Vector3(0, 2, -12), Vector3(40, 4, 1), Color(0.35, 0.35, 0.38)); _make_static_box("WallSouth", Vector3(0, 2, 12), Vector3(40, 4, 1), Color(0.35, 0.35, 0.38))
-	for z in [-7.0, 0.0, 7.0]: _make_static_box("Cover", Vector3(0, 1, z), Vector3(2, 2, 4), Color(0.32, 0.28, 0.22))
-	var objective := StaticBody3D.new(); objective.name = "Objective"; objective.position = Vector3(8, 1.5, 0)
-	var mesh_instance := MeshInstance3D.new(); var mesh := BoxMesh.new(); mesh.size = Vector3(3, 3, 3); mesh_instance.mesh = mesh; var mat := StandardMaterial3D.new(); mat.albedo_color = Color(0.55, 0.16, 0.12); mesh_instance.material_override = mat; objective.add_child(mesh_instance)
-	var collision := CollisionShape3D.new(); var shape := BoxShape3D.new(); shape.size = Vector3(3, 3, 3); collision.shape = shape; objective.add_child(collision); add_child(objective)
+	var env := WorldEnvironment.new()
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_COLOR
+	environment.background_color = Color(0.12, 0.16, 0.19)
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color(0.7, 0.75, 0.8)
+	environment.ambient_light_energy = 0.75
+	env.environment = environment
+	add_child(env)
+
+	var light := DirectionalLight3D.new()
+	light.rotation_degrees = Vector3(-55, -35, 0)
+	light.shadow_enabled = true
+	add_child(light)
+
+	_make_static_box("GroundWest", Vector3(-11, -0.5, 0), Vector3(18, 1, 24), Color(0.22, 0.27, 0.22))
+	_make_static_box("GroundEast", Vector3(11, -0.5, 0), Vector3(18, 1, 24), Color(0.22, 0.27, 0.22))
+	_make_static_box("River", Vector3(0, -1.0, 0), Vector3(4, 0.4, 24), Color(0.08, 0.24, 0.34))
+	_make_static_box("WallNorth", Vector3(0, 2, -12), Vector3(40, 4, 1), Color(0.35, 0.35, 0.38))
+	_make_static_box("WallSouth", Vector3(0, 2, 12), Vector3(40, 4, 1), Color(0.35, 0.35, 0.38))
+	_make_static_box("WestCover", Vector3(-7, 1, -5), Vector3(3, 2, 3), Color(0.32, 0.28, 0.22))
+	_make_static_box("EastCover", Vector3(6, 1, 5), Vector3(3, 2, 3), Color(0.32, 0.28, 0.22))
+
+	var build_site := Node3D.new()
+	build_site.name = "BridgeBuildSite"
+	build_site.position = Vector3(-1.2, 0.2, 0)
+	add_child(build_site)
+	_make_marker(build_site, Vector3(2.0, 0.25, 5.5), Color(0.85, 0.72, 0.18))
+
+	var bridge := StaticBody3D.new()
+	bridge.name = "ConstructedBridge"
+	bridge.position = Vector3(0, 0.05, 0)
+	bridge.visible = false
+	bridge.process_mode = Node.PROCESS_MODE_DISABLED
+	var bridge_mesh_instance := MeshInstance3D.new()
+	var bridge_mesh := BoxMesh.new()
+	bridge_mesh.size = Vector3(5, 0.35, 5.5)
+	bridge_mesh_instance.mesh = bridge_mesh
+	var bridge_material := StandardMaterial3D.new()
+	bridge_material.albedo_color = Color(0.30, 0.18, 0.08)
+	bridge_mesh_instance.material_override = bridge_material
+	bridge.add_child(bridge_mesh_instance)
+	var bridge_collision := CollisionShape3D.new()
+	var bridge_shape := BoxShape3D.new()
+	bridge_shape.size = Vector3(5, 0.35, 5.5)
+	bridge_collision.shape = bridge_shape
+	bridge.add_child(bridge_collision)
+	add_child(bridge)
+
+	var objective := StaticBody3D.new()
+	objective.name = "Objective"
+	objective.position = Vector3(13, 1.5, 0)
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(4, 3, 7)
+	mesh_instance.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.42, 0.16, 0.12)
+	mesh_instance.material_override = mat
+	objective.add_child(mesh_instance)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(4, 3, 7)
+	collision.shape = shape
+	objective.add_child(collision)
+	add_child(objective)
+
+func _make_marker(parent: Node3D, size: Vector3, color: Color) -> void:
+	var marker := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	marker.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color.a = 0.35
+	material.emission_enabled = true
+	material.emission = color * 0.2
+	marker.material_override = material
+	parent.add_child(marker)
 
 func _make_static_box(node_name: String, pos: Vector3, size: Vector3, color: Color) -> void:
 	var body := StaticBody3D.new(); body.name = node_name; body.position = pos
