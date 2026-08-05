@@ -40,3 +40,4 @@ throw_grenade={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":
 
 spawn_menu={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":77)]}
 aim={"deadzone":0.5,"events":[Object(InputEventMouseButton,"button_index":2)]}
+squad_ping={"deadzone":0.5,"events":[Object(InputEventMouseButton,"button_index":3)]}

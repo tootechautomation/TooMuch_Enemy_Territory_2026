@@ -1,17 +1,36 @@
 # Frontline: Objective
 
-## Version 2.4.1 gray-screen recovery
+## Version 2.5.0 squad and combat polish
 
-Fixed the v2.4.0 startup regression.
+### Stamina
+- Sprint drains server-authoritative stamina.
+- Stamina regenerates after a short delay.
+- Sprint automatically stops when stamina is depleted.
+- HUD includes a stamina bar and percentage.
 
-- Camera, HUD, and deployment menu initialize before radar/audio.
-- Local Camera3D is explicitly activated.
-- Radar/audio initialize later through a deferred optional path.
-- Missing or not-yet-imported WAV files cannot stop the player `_ready()` method.
-- Audio is loaded with runtime existence and type checks.
-- Radar validates network dictionaries and node methods before reading them.
-- Grenade and explosion audio are also failure-safe.
+### Suppression
+- Taking enemy damage applies a temporary suppression state.
+- Suppression increases weapon spread.
+- A red screen tint and SUPPRESSED HUD state show the effect.
 
-All v2.4 radar and audio features remain included.
+### Support packs
+- Medic Healing Burst also deploys a health pack.
+- Field Ops Ammo Pulse also deploys an ammunition pack.
+- Packs remain team-restricted and expire automatically.
 
-Expected status: `Connected: v2.4.1 protocol 241`
+### Weapon feedback
+- Local shots eject a procedural brass shell.
+- Existing muzzle flash, recoil, tracers, sounds, and hit feedback remain.
+
+### Squad pings
+- Middle mouse marks the aimed location for teammates.
+- Team-only world marker lasts five seconds.
+- Ping has a short anti-spam cooldown.
+
+Install the same package on Windows and Linux.
+
+Expected status:
+
+```text
+Connected: v2.5.0 protocol 250
+```

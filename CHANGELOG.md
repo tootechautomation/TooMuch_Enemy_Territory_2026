@@ -1,9 +1,10 @@
 # Changelog
 
-## 2.4.1
-- Fixed gray-screen startup regression
-- Prioritized camera/HUD/menu startup
-- Deferred optional radar and audio setup
-- Replaced WAV preloads with safe runtime loading
-- Added radar network-data guards
-- Bumped protocol to 241
+## 2.5.0
+- Added authoritative sprint stamina
+- Added suppression state and accuracy penalty
+- Added health and ammo pack deployment
+- Added procedural shell-ejection feedback
+- Added team-only middle-mouse squad pings
+- Added stamina and suppression HUD elements
+- Bumped protocol to 250

@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "2.4.1"
-const NETWORK_PROTOCOL := 241
+const BUILD_VERSION := "2.5.0"
+const NETWORK_PROTOCOL := 250
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -396,6 +396,84 @@ func submit_player_input(
 	receive_input_ack.rpc_id(sender_id, sequence)
 
 @rpc("any_peer", "call_remote", "reliable")
+func request_squad_ping(
+	requested_peer_id: int,
+	direction: Vector3
+) -> void:
+	var player: Node3D = _player_from_remote_sender()
+	if player == null:
+		return
+
+	var head: Node3D = player.get_node_or_null("Head") as Node3D
+	if head == null:
+		return
+
+	var normalized_direction: Vector3 = direction.normalized()
+	var start_position: Vector3 = head.global_position
+	var end_position: Vector3 = (
+		start_position + normalized_direction * 45.0
+	)
+
+	var viewport: Viewport = get_viewport()
+	if viewport != null and viewport.world_3d != null:
+		var query := PhysicsRayQueryParameters3D.create(
+			start_position,
+			end_position
+		)
+		query.exclude = [player]
+		var hit: Dictionary = (
+			viewport.world_3d.direct_space_state.intersect_ray(
+				query
+			)
+		)
+		if not hit.is_empty():
+			end_position = Vector3(
+				hit.get("position", end_position)
+			)
+
+	show_squad_ping.rpc(
+		int(player.get("team")),
+		end_position,
+		str(player.get("player_name"))
+	)
+
+@rpc("authority", "call_local", "reliable")
+func show_squad_ping(
+	ping_team: int,
+	ping_position: Vector3,
+	sender_name: String
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var local_id: int = multiplayer.get_unique_id()
+	if players.has(local_id):
+		var local_player: Node = players[local_id] as Node
+		if local_player != null:
+			if int(local_player.get("team")) != ping_team:
+				return
+
+	var marker := Label3D.new()
+	marker.name = "SquadPing"
+	marker.text = "▲  %s" % sender_name
+	marker.position = ping_position + Vector3.UP * 0.45
+	marker.font_size = 30
+	marker.outline_size = 10
+	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	marker.fixed_size = true
+	marker.modulate = Color(0.22, 0.88, 1.0)
+	add_child(marker)
+
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = 5.0
+	timer.timeout.connect(marker.queue_free)
+	marker.add_child(timer)
+	timer.start()
+
+	push_kill_feed.rpc("%s marked a squad target" % sender_name)
+
+@rpc("any_peer", "call_remote", "reliable")
 func request_player_fire(
 	requested_peer_id: int,
 	origin: Vector3,
@@ -553,7 +631,9 @@ func _broadcast_player_snapshots() -> void:
 			bool(player.get("is_crouching")),
 			int(player.call("spawn_protection_remaining_ms")),
 			int(player.call("ability_cooldown_remaining_ms")),
-			int(player.call("spotted_remaining_ms"))
+			int(player.call("spotted_remaining_ms")),
+			float(player.get("stamina")),
+			int(player.call("suppression_remaining_ms"))
 		)
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
@@ -578,7 +658,9 @@ func receive_player_snapshot(
 	crouching: bool,
 	spawn_protection_ms: int,
 	ability_cooldown_ms: int,
-	spotted_ms: int
+	spotted_ms: int,
+	stamina_value: float,
+	suppression_ms: int
 ) -> void:
 	if multiplayer.is_server():
 		return
@@ -613,7 +695,9 @@ func receive_player_snapshot(
 		crouching,
 		spawn_protection_ms,
 		ability_cooldown_ms,
-		spotted_ms
+		spotted_ms,
+		stamina_value,
+		suppression_ms
 	)
 
 @rpc("authority", "call_local", "reliable")

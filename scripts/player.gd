@@ -30,6 +30,11 @@ const ADS_MOVE_MULTIPLIER := 0.58
 const ASSIST_WINDOW_MS := 10000
 const FALL_DAMAGE_START_SPEED := 12.0
 const FALL_DAMAGE_MAX_SPEED := 24.0
+const MAX_STAMINA := 100.0
+const STAMINA_DRAIN_PER_SECOND := 24.0
+const STAMINA_REGEN_PER_SECOND := 18.0
+const STAMINA_REGEN_DELAY_MS := 900
+const SUPPRESSION_DURATION_MS := 1800
 const REVIVE_RANGE := 2.8
 const BLEEDOUT_MS := 15000
 const STANDING_HEAD_Y := 0.65
@@ -140,6 +145,14 @@ var radar_panel: Control
 var radar_objective: Label
 var radar_actor_markers: Dictionary = {}
 var radar_grenade_markers: Array[Label] = []
+var stamina := MAX_STAMINA
+var replicated_stamina := MAX_STAMINA
+var stamina_regen_blocked_until_ms := 0
+var suppressed_until_ms := 0
+var replicated_suppression_ms := 0
+var stamina_bar: ProgressBar
+var suppression_overlay: ColorRect
+var squad_ping_cooldown_until_ms := 0
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -283,6 +296,22 @@ func _collect_and_send_input() -> void:
 					-camera.global_transform.basis.z
 				)
 
+	if (
+		not downed
+		and Input.is_action_just_pressed("squad_ping")
+		and Time.get_ticks_msec() >= squad_ping_cooldown_until_ms
+	):
+		var ping_camera: Camera3D = $Head/Camera3D as Camera3D
+		if ping_camera != null and main_node != null:
+			squad_ping_cooldown_until_ms = (
+				Time.get_ticks_msec() + 1200
+			)
+			main_node.request_squad_ping.rpc_id(
+				1,
+				local_peer_id,
+				-ping_camera.global_transform.basis.z
+			)
+
 	if not downed and Input.is_action_just_pressed("reload"):
 		if (
 			reload_audio != null
@@ -368,12 +397,34 @@ func _server_simulate(delta: float) -> void:
 	jump_requested = false
 	_apply_server_crouch(crouch_requested)
 
+	var wants_active_sprint: bool = (
+		sprint_requested
+		and input_vector.y < -0.2
+		and not aim_requested
+		and not crouch_requested
+		and stamina > 1.0
+	)
+
+	if wants_active_sprint:
+		stamina = maxf(
+			0.0,
+			stamina - STAMINA_DRAIN_PER_SECOND * delta
+		)
+		stamina_regen_blocked_until_ms = (
+			now + STAMINA_REGEN_DELAY_MS
+		)
+	elif now >= stamina_regen_blocked_until_ms:
+		stamina = minf(
+			MAX_STAMINA,
+			stamina + STAMINA_REGEN_PER_SECOND * delta
+		)
+
 	var move_speed: float = (
 		CROUCH_SPEED
 		if crouch_requested
 		else (
 			SPRINT_SPEED
-			if sprint_requested and input_vector.y < -0.2 and not aim_requested
+			if wants_active_sprint
 			else WALK_SPEED
 		)
 	)
@@ -413,7 +464,7 @@ func _server_simulate(delta: float) -> void:
 		server_take_damage(fall_damage, 0)
 
 
-func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int) -> void:
+func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int, stamina_value: float, suppression_ms: int) -> void:
 	if multiplayer.is_server():
 		return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
@@ -441,6 +492,12 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 	replicated_spawn_protection_ms = maxi(0, spawn_protection_ms)
 	replicated_ability_cooldown_ms = maxi(0, ability_cooldown_ms)
 	replicated_spotted_ms = maxi(0, spotted_ms)
+	replicated_stamina = clampf(
+		stamina_value,
+		0.0,
+		MAX_STAMINA
+	)
+	replicated_suppression_ms = maxi(0, suppression_ms)
 	_update_spotted_marker()
 	_apply_crouch_visual(crouching)
 
@@ -510,6 +567,9 @@ func server_fire(direction: Vector3) -> void:
 			else 0.42
 		)
 		spread *= ads_multiplier
+
+	if suppression_remaining_ms() > 0:
+		spread *= 1.65
 	var shot_direction: Vector3 = _apply_spread(
 		direction.normalized(),
 		spread
@@ -974,6 +1034,22 @@ func combat_notice(message: String) -> void:
 	)
 	elimination_notice.visible = true
 
+func suppression_remaining_ms() -> int:
+	if not multiplayer.is_server():
+		return replicated_suppression_ms
+	return maxi(
+		0,
+		suppressed_until_ms - Time.get_ticks_msec()
+	)
+
+func _apply_suppression(duration_ms: int = SUPPRESSION_DURATION_MS) -> void:
+	if not multiplayer.is_server():
+		return
+	suppressed_until_ms = maxi(
+		suppressed_until_ms,
+		Time.get_ticks_msec() + duration_ms
+	)
+
 func server_take_damage(amount: int, attacker_id: int) -> void:
 	if not multiplayer.is_server() or not alive or downed:
 		return
@@ -981,6 +1057,8 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 		return
 
 	health = maxi(0, health - amount)
+	if attacker_id != peer_id and attacker_id != 0:
+		_apply_suppression()
 
 	if attacker_id != peer_id and attacker_id != 0:
 		var existing: Dictionary = recent_damage.get(
@@ -1114,6 +1192,8 @@ func server_respawn(spawn_position: Vector3) -> void:
 	global_position = spawn_position
 	target_position = spawn_position
 	health = _class_health(player_class)
+	stamina = MAX_STAMINA
+	suppressed_until_ms = 0
 	recent_damage.clear()
 	previous_vertical_velocity = 0.0
 	_reset_loadout_ammo()
@@ -1401,6 +1481,8 @@ func server_ability_request() -> void:
 
 			if healed_count > 0:
 				add_xp(healed_count * 4, "healing burst")
+			if main.has_method("create_supply_pack"):
+				main.call("create_supply_pack", self, 0, 45)
 
 		PlayerClass.ENGINEER:
 			health = mini(
@@ -1442,6 +1524,8 @@ func server_ability_request() -> void:
 
 			if supplied_count > 0:
 				add_xp(supplied_count * 3, "ammo pulse")
+			if main.has_method("create_supply_pack"):
+				main.call("create_supply_pack", self, 1, 80)
 
 		PlayerClass.SCOUT:
 			if main.has_method("server_scout_recon"):
@@ -1848,6 +1932,8 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 	alive = true
 	downed = false
 	health = _class_health(player_class)
+	stamina = MAX_STAMINA
+	suppressed_until_ms = 0
 	_reset_loadout_ammo()
 	grenades_remaining = 2
 	_apply_server_crouch(false)
@@ -2035,6 +2121,44 @@ func _local_fire_feedback() -> void:
 	muzzle_flash_until_ms = Time.get_ticks_msec() + 55
 	if muzzle_flash != null:
 		muzzle_flash.visible = true
+
+	_spawn_local_shell_effect()
+
+func _spawn_local_shell_effect() -> void:
+	if weapon_view == null or not _is_local_player():
+		return
+
+	var shell := MeshInstance3D.new()
+	shell.name = "ShellEffect"
+	var shell_mesh := CylinderMesh.new()
+	shell_mesh.top_radius = 0.012
+	shell_mesh.bottom_radius = 0.012
+	shell_mesh.height = 0.055
+	shell.mesh = shell_mesh
+	shell.position = Vector3(0.14, -0.02, -0.10)
+	shell.rotation_degrees = Vector3(0.0, 0.0, 90.0)
+
+	var shell_material := StandardMaterial3D.new()
+	shell_material.albedo_color = Color(0.78, 0.58, 0.18)
+	shell_material.metallic = 0.75
+	shell.material_override = shell_material
+	weapon_view.add_child(shell)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(
+		shell,
+		"position",
+		Vector3(0.42, 0.18, 0.16),
+		0.22
+	)
+	tween.tween_property(
+		shell,
+		"rotation_degrees",
+		Vector3(220.0, 160.0, 320.0),
+		0.22
+	)
+	tween.chain().tween_callback(shell.queue_free)
 
 func _build_spawn_menu() -> void:
 	var layer := CanvasLayer.new()
@@ -2543,6 +2667,24 @@ func _build_hud() -> void:
 	objective_progress_bar.show_percentage = true
 	layer.add_child(objective_progress_bar)
 
+	stamina_bar = ProgressBar.new()
+	stamina_bar.position = Vector2(18, 148)
+	stamina_bar.size = Vector2(230, 18)
+	stamina_bar.min_value = 0.0
+	stamina_bar.max_value = MAX_STAMINA
+	stamina_bar.value = MAX_STAMINA
+	stamina_bar.show_percentage = false
+	layer.add_child(stamina_bar)
+
+	suppression_overlay = ColorRect.new()
+	suppression_overlay.set_anchors_and_offsets_preset(
+		Control.PRESET_FULL_RECT
+	)
+	suppression_overlay.color = Color(0.55, 0.05, 0.02, 0.16)
+	suppression_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	suppression_overlay.visible = false
+	layer.add_child(suppression_overlay)
+
 	elimination_notice = Label.new()
 	elimination_notice.position = Vector2(540, 285)
 	elimination_notice.custom_minimum_size = Vector2(200, 45)
@@ -2753,6 +2895,11 @@ func _update_hud() -> void:
 
 	var now: int = Time.get_ticks_msec()
 
+	if stamina_bar != null:
+		stamina_bar.value = replicated_stamina
+	if suppression_overlay != null:
+		suppression_overlay.visible = replicated_suppression_ms > 0
+
 	if hit_marker != null and hit_marker.visible and now >= hit_marker_until_ms:
 		hit_marker.visible = false
 		hit_marker.text = "×"
@@ -2799,6 +2946,11 @@ func _update_hud() -> void:
 	var minutes := int(main.get("match_time_remaining")) / 60
 	var seconds := int(main.get("match_time_remaining")) % 60
 	var stance_text := "CROUCHED" if is_crouching else "STANDING"
+	var combat_state := (
+		"SUPPRESSED"
+		if replicated_suppression_ms > 0
+		else "READY"
+	)
 	var life_text := "DOWNED" if downed else (
 		"ALIVE"
 		if alive
@@ -2936,11 +3088,13 @@ func _update_hud() -> void:
 		if replicated_ability_cooldown_ms <= 0
 		else "%.1fs" % cooldown
 	)
-	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu\nBlue=Attackers  Red=Defenders  Accent=Class" % [
+	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  MMB: squad ping\nBlue=Attackers  Red=Defenders  Accent=Class" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],
 		protocol_status,
+		combat_state,
+		int(round(replicated_stamina)),
 		health,
 		ammo_in_mag,
 		reserve_ammo,
