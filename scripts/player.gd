@@ -189,21 +189,30 @@ func _server_sender_is_owner() -> bool:
 		return false
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
-	if sender_id != peer_id:
-		return false
-
-	var main: Node = get_parent()
-	if main != null and main.has_method("is_peer_protocol_verified"):
-		return bool(main.call("is_peer_protocol_verified", sender_id))
-
-	return true
+	return sender_id == peer_id
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func submit_input(move: Vector2, yaw: float, look_pitch: float, wants_jump: bool, wants_sprint: bool, wants_crouch: bool, sequence: int) -> void:
 	if not _server_sender_is_owner() or sequence <= last_received_sequence:
 		return
-	last_received_sequence = sequence; input_vector = move.limit_length(1.0); rotation.y = yaw; pitch = clampf(look_pitch, -1.35, 1.35); $Head.rotation.x = pitch
-	jump_requested = jump_requested or wants_jump; sprint_requested = wants_sprint; crouch_requested = wants_crouch
+
+	if not server_logged_first_input:
+		server_logged_first_input = true
+		print(
+			"Accepted gameplay input from peer %d (%s)" % [
+				peer_id,
+				player_name
+			]
+		)
+
+	last_received_sequence = sequence
+	input_vector = move.limit_length(1.0)
+	rotation.y = yaw
+	pitch = clampf(look_pitch, -1.35, 1.35)
+	$Head.rotation.x = pitch
+	jump_requested = jump_requested or wants_jump
+	sprint_requested = wants_sprint
+	crouch_requested = wants_crouch
 
 func _server_simulate(delta: float) -> void:
 	var now: int = Time.get_ticks_msec()
