@@ -3,24 +3,42 @@ extends Node
 const PlayerScene = preload("res://scenes/player.tscn")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
+const MATCH_LENGTH_SECONDS := 600.0
+const SPAWN_WAVE_SECONDS := 10.0
 
 var players: Dictionary = {}
+var player_teams: Dictionary = {}
+var player_names: Dictionary = {}
 var spawn_points := {
 	0: [Vector3(-12, 1, 0), Vector3(-12, 1, 4), Vector3(-12, 1, -4)],
 	1: [Vector3(12, 1, 0), Vector3(12, 1, 4), Vector3(12, 1, -4)]
 }
 var next_team := 0
 var objective_health := 100
+var match_time_remaining := MATCH_LENGTH_SECONDS
+var spawn_wave_remaining := SPAWN_WAVE_SECONDS
 var match_over := false
 var status_label: Label
 
 func _ready() -> void:
 	_build_world()
-	_parse_command_line()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
+	_parse_command_line()
+
+func _process(delta: float) -> void:
+	if not multiplayer.is_server() or match_over:
+		return
+	match_time_remaining = maxf(0.0, match_time_remaining - delta)
+	spawn_wave_remaining -= delta
+	if spawn_wave_remaining <= 0.0:
+		spawn_wave_remaining += SPAWN_WAVE_SECONDS
+		_respawn_wave()
+	broadcast_match_state.rpc(match_time_remaining, spawn_wave_remaining, objective_health)
+	if match_time_remaining <= 0.0:
+		_end_match("DEFENDERS WIN — time expired")
 
 func _parse_command_line() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -30,7 +48,7 @@ func _parse_command_line() -> void:
 	for i in args.size():
 		if args[i] == "--port" and i + 1 < args.size():
 			port = int(args[i + 1])
-		if args[i] == "--connect" and i + 1 < args.size():
+		elif args[i] == "--connect" and i + 1 < args.size():
 			connect_address = args[i + 1]
 	if is_server:
 		start_server(port)
@@ -43,16 +61,17 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, MAX_CLIENTS)
 	if err != OK:
-		push_error("Unable to start server: %s" % err)
+		push_error("Unable to start server: %s" % error_string(err))
+		get_tree().quit(1)
 		return
 	multiplayer.multiplayer_peer = peer
-	print("Dedicated server listening on UDP %d" % port)
+	print("Frontline dedicated server listening on UDP %d" % port)
 
 func join_server(address: String, port: int = PORT_DEFAULT) -> void:
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(address, port)
 	if err != OK:
-		push_error("Unable to connect: %s" % err)
+		push_error("Unable to connect: %s" % error_string(err))
 		return
 	multiplayer.multiplayer_peer = peer
 	if status_label:
@@ -63,7 +82,7 @@ func _show_connection_menu() -> void:
 	add_child(canvas)
 	var panel := PanelContainer.new()
 	panel.position = Vector2(30, 30)
-	panel.custom_minimum_size = Vector2(360, 180)
+	panel.custom_minimum_size = Vector2(390, 190)
 	canvas.add_child(panel)
 	var box := VBoxContainer.new()
 	panel.add_child(box)
@@ -72,7 +91,7 @@ func _show_connection_menu() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 	var address := LineEdit.new()
-	address.placeholder_text = "Server IP (example: 203.0.113.10)"
+	address.placeholder_text = "Server IP"
 	address.text = "127.0.0.1"
 	box.add_child(address)
 	var port := SpinBox.new()
@@ -84,7 +103,7 @@ func _show_connection_menu() -> void:
 	join.text = "Join Server"
 	box.add_child(join)
 	status_label = Label.new()
-	status_label.text = "WASD move · Mouse aim/fire · E objective · 1–5 class"
+	status_label.text = "WASD · Mouse · E objective · 1–5 class"
 	box.add_child(status_label)
 	join.pressed.connect(func():
 		join_server(address.text.strip_edges(), int(port.value))
@@ -92,7 +111,7 @@ func _show_connection_menu() -> void:
 	)
 
 func _on_connected_to_server() -> void:
-	print("Connected. Peer ID: ", multiplayer.get_unique_id())
+	print("Connected as peer %d" % multiplayer.get_unique_id())
 
 func _on_connection_failed() -> void:
 	if status_label:
@@ -104,31 +123,37 @@ func _on_peer_connected(id: int) -> void:
 		return
 	var team := next_team
 	next_team = 1 - next_team
+	player_teams[id] = team
+	player_names[id] = "Player%d" % id
 	for existing_id in players:
-		var p: Node = players[existing_id]
-		_spawn_player.rpc_id(id, existing_id, p.team, p.player_name)
-	_spawn_player.rpc(id, team, "Player%d" % id)
+		var existing = players[existing_id]
+		spawn_player.rpc_id(id, existing_id, existing.team, existing.player_name, existing.global_position)
+	spawn_player.rpc(id, team, player_names[id], _get_spawn(team, id))
+	print("Peer %d joined team %d" % [id, team])
 
 func _on_peer_disconnected(id: int) -> void:
 	if not multiplayer.is_server():
 		return
-	_remove_player.rpc(id)
+	remove_player.rpc(id)
+	player_teams.erase(id)
+	player_names.erase(id)
+	print("Peer %d disconnected" % id)
 
 @rpc("authority", "call_local", "reliable")
-func _spawn_player(peer_id: int, team: int, pname: String) -> void:
+func spawn_player(peer_id: int, team: int, pname: String, spawn_position: Vector3) -> void:
 	if players.has(peer_id):
 		return
-	var p := PlayerScene.instantiate()
-	p.name = str(peer_id)
-	p.peer_id = peer_id
-	p.team = team
-	p.player_name = pname
-	p.position = _get_spawn(team, peer_id)
-	add_child(p)
-	players[peer_id] = p
+	var player = PlayerScene.instantiate()
+	player.name = str(peer_id)
+	player.peer_id = peer_id
+	player.team = team
+	player.player_name = pname
+	player.position = spawn_position
+	add_child(player)
+	players[peer_id] = player
 
 @rpc("authority", "call_local", "reliable")
-func _remove_player(peer_id: int) -> void:
+func remove_player(peer_id: int) -> void:
 	if players.has(peer_id):
 		players[peer_id].queue_free()
 		players.erase(peer_id)
@@ -137,33 +162,42 @@ func _get_spawn(team: int, peer_id: int) -> Vector3:
 	var points: Array = spawn_points.get(team, spawn_points[0])
 	return points[peer_id % points.size()]
 
-@rpc("any_peer", "call_local", "reliable")
+func _respawn_wave() -> void:
+	for peer_id in players:
+		var player = players[peer_id]
+		if not player.alive:
+			player.server_respawn(_get_spawn(player.team, peer_id))
+
 func damage_objective(amount: int, attacker_team: int) -> void:
-	if not multiplayer.is_server() or match_over:
-		return
-	if attacker_team != 0:
+	if not multiplayer.is_server() or match_over or attacker_team != 0:
 		return
 	objective_health = maxi(0, objective_health - amount)
-	update_objective.rpc(objective_health)
 	if objective_health <= 0:
-		match_over = true
-		announce.rpc("ATTACKERS WIN — objective destroyed")
+		_end_match("ATTACKERS WIN — objective destroyed")
 
-@rpc("authority", "call_local", "reliable")
-func update_objective(value: int) -> void:
-	objective_health = value
-	var objective := get_node_or_null("Objective")
-	if objective:
-		objective.set_meta("health", value)
+func _end_match(message: String) -> void:
+	if match_over:
+		return
+	match_over = true
+	announce.rpc(message)
+	print(message)
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func broadcast_match_state(time_remaining: float, wave_remaining: float, health_remaining: int) -> void:
+	match_time_remaining = time_remaining
+	spawn_wave_remaining = wave_remaining
+	objective_health = health_remaining
 
 @rpc("authority", "call_local", "reliable")
 func announce(message: String) -> void:
 	print(message)
+	if DisplayServer.get_name() == "headless":
+		return
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	var label := Label.new()
 	label.text = message
-	label.position = Vector2(420, 50)
+	label.position = Vector2(390, 50)
 	label.add_theme_font_size_override("font_size", 28)
 	layer.add_child(label)
 
@@ -192,8 +226,6 @@ func _build_world() -> void:
 	var objective := StaticBody3D.new()
 	objective.name = "Objective"
 	objective.position = Vector3(8, 1.5, 0)
-	objective.set_meta("health", 100)
-	objective.set_meta("is_objective", true)
 	var mesh_instance := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(3, 3, 3)

@@ -89,3 +89,19 @@ This first prototype uses client-authoritative movement to keep the code easy to
 4. Constructible and dynamite objectives
 5. Match timer, campaign XP, scoreboard, and map rotation
 6. Original character, weapon, audio, UI, and map assets
+
+## Version 0.2 authoritative prototype
+
+The server now controls movement, hit detection, health, deaths, objective damage, and wave respawns. Clients submit input and render replicated state. This is a foundation for further prediction and lag compensation, not a finished anti-cheat implementation.
+
+Validate the project on a Linux machine with either a native or Flatpak Godot installation:
+
+```bash
+./tools/validate_project.sh
+```
+
+Run the VPS server:
+
+```bash
+flatpak run org.godotengine.Godot --headless --path . --server --port 27960
+```
