@@ -1,6 +1,5 @@
 extends StaticBody3D
 
-const TEX_CONCRETE: Texture2D = preload("res://assets/textures/concrete_damage.png")
 
 var cover_id := 0
 var health := 260
@@ -10,6 +9,20 @@ var body_mesh: MeshInstance3D
 var collision_shape: CollisionShape3D
 var health_label: Label3D
 var current_damage_state := -1
+
+func _load_optional_texture(path: String) -> Texture2D:
+	if DisplayServer.get_name() == "headless":
+		return null
+	if not ResourceLoader.exists(path):
+		push_warning("Optional texture not found: %s" % path)
+		return null
+
+	var resource: Resource = load(path)
+	if resource is Texture2D:
+		return resource as Texture2D
+
+	push_warning("Optional texture failed to load: %s" % path)
+	return null
 
 func configure(
 	new_id: int,
@@ -41,7 +54,11 @@ func _build_visuals() -> void:
 	body_mesh.mesh = box
 	body_mesh.position.y = original_size.y * 0.5
 	var material := StandardMaterial3D.new()
-	material.albedo_texture = TEX_CONCRETE
+	var optional_texture: Texture2D = _load_optional_texture(
+		"res://assets/textures/concrete_damage.png"
+	)
+	if optional_texture != null:
+		material.albedo_texture = optional_texture
 	material.albedo_color = Color(0.80, 0.76, 0.68)
 	material.roughness = 0.96
 	body_mesh.material_override = material

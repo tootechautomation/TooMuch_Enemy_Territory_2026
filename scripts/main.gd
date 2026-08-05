@@ -8,12 +8,9 @@ const SmokeCloudScript = preload("res://scripts/smoke_cloud.gd")
 const SensorBeaconScript = preload("res://scripts/sensor_beacon.gd")
 const FieldEmplacementScript = preload("res://scripts/field_emplacement.gd")
 const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
-const TEX_METAL: Texture2D = preload("res://assets/textures/metal_panel.png")
-const TEX_OBJECTIVE: Texture2D = preload("res://assets/textures/objective_hazard.png")
-const TEX_FOLIAGE: Texture2D = preload("res://assets/textures/foliage_sprite.png")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.4.3"
+const BUILD_VERSION := "3.4.4"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -32,6 +29,10 @@ const ARTILLERY_DAMAGE := 92
 const SENSOR_BEACON_DURATION := 18.0
 const SENSOR_BEACON_RADIUS := 24.0
 const FIELD_EMPLACEMENT_COUNT := 2
+
+var tex_metal: Texture2D
+var tex_objective: Texture2D
+var tex_foliage: Texture2D
 
 var players: Dictionary = {}
 var player_teams: Dictionary = {}
@@ -131,6 +132,17 @@ var forward_spawn_points := {
 }
 
 func _ready() -> void:
+	if DisplayServer.get_name() != "headless":
+		tex_metal = _load_optional_texture(
+			"res://assets/textures/metal_panel.png"
+		)
+		tex_objective = _load_optional_texture(
+			"res://assets/textures/objective_hazard.png"
+		)
+		tex_foliage = _load_optional_texture(
+			"res://assets/textures/foliage_sprite.png"
+		)
+
 	_build_world()
 	_build_round_results_ui()
 	_update_objective_visuals()
@@ -250,11 +262,28 @@ func _process(delta: float) -> void:
 		overtime_active
 	)
 
+func _load_optional_texture(path: String) -> Texture2D:
+	if DisplayServer.get_name() == "headless":
+		return null
+	if not ResourceLoader.exists(path):
+		push_warning("Optional texture not found: %s" % path)
+		return null
+
+	var resource: Resource = load(path)
+	if resource is Texture2D:
+		return resource as Texture2D
+
+	push_warning("Optional texture failed to load: %s" % path)
+	return null
+
 func _create_foliage_sprite(position: Vector3, scale_value: float) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	if tex_foliage == null:
+		return
+
 	var sprite := Sprite3D.new()
-	sprite.texture = TEX_FOLIAGE
+	sprite.texture = tex_foliage
 	sprite.position = position
 	sprite.pixel_size = 0.012
 	sprite.scale = Vector3.ONE * scale_value
@@ -634,7 +663,7 @@ func _on_connection_failed() -> void:
 		connection_join_button.disabled = false
 	if status_label != null:
 		status_label.text = (
-			"Connection failed. Check the VPS IP, port 27960, "+
+			"Connection failed. Check the VPS IP, port 27960, "
 			"firewall, and server process."
 	)
 
@@ -2936,7 +2965,7 @@ func _build_world() -> void:
 	radio_mesh.mesh = radio_box
 	radio_mesh.position = Vector3(0.0, 0.85, 0.0)
 	var radio_material := StandardMaterial3D.new()
-	radio_material.albedo_texture = TEX_METAL
+	radio_material.albedo_texture = tex_metal
 	radio_material.albedo_color = Color(0.58, 0.60, 0.54)
 	radio_material.metallic = 0.3
 	radio_mesh.material_override = radio_material
@@ -3147,7 +3176,7 @@ func _make_static_box(
 		or "Trench" in node_name
 		or "Platform" in node_name
 	):
-		material.albedo_texture = TEX_METAL
+		material.albedo_texture = tex_metal
 	mesh_instance.material_override = material
 	body.add_child(mesh_instance)
 

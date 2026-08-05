@@ -1,6 +1,5 @@
 extends StaticBody3D
 
-const TEX_WOOD: Texture2D = preload("res://assets/textures/wood_planks.png")
 
 var constructible_id := 0
 var owner_id := 0
@@ -9,6 +8,20 @@ var health := 180
 var maximum_health := 180
 var main_node: Node
 var health_label: Label3D
+
+func _load_optional_texture(path: String) -> Texture2D:
+	if DisplayServer.get_name() == "headless":
+		return null
+	if not ResourceLoader.exists(path):
+		push_warning("Optional texture not found: %s" % path)
+		return null
+
+	var resource: Resource = load(path)
+	if resource is Texture2D:
+		return resource as Texture2D
+
+	push_warning("Optional texture failed to load: %s" % path)
+	return null
 
 func configure(new_id: int, new_owner_id: int, new_team: int, spawn_position: Vector3, spawn_rotation_y: float, new_health: int) -> void:
 	constructible_id = new_id

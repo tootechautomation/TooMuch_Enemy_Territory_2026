@@ -1,21 +1,42 @@
 extends Node3D
 
-const ATTACKER_SKINS := [
-	preload("res://data/skins/attacker_ranger.tres"),
-	preload("res://data/skins/attacker_desert.tres")
-]
-const DEFENDER_SKINS := [
-	preload("res://data/skins/defender_steel.tres"),
-	preload("res://data/skins/defender_winter.tres")
-]
+var attacker_skins: Array[Resource] = []
+var defender_skins: Array[Resource] = []
 
 func _ready() -> void:
+	if DisplayServer.get_name() == "headless":
+		set_process(false)
+		return
+
+	attacker_skins = _load_skin_resources([
+		"res://data/skins/attacker_ranger.tres",
+		"res://data/skins/attacker_desert.tres"
+	])
+	defender_skins = _load_skin_resources([
+		"res://data/skins/defender_steel.tres",
+		"res://data/skins/defender_winter.tres"
+	])
 	call_deferred("_build_character")
+
+func _load_skin_resources(paths: Array[String]) -> Array[Resource]:
+	var result: Array[Resource] = []
+	for path in paths:
+		if not ResourceLoader.exists(path):
+			continue
+		var resource: Resource = load(path)
+		if resource != null:
+			result.append(resource)
+	return result
 
 func _build_character() -> void:
 	var player = get_parent()
-	var skins: Array = ATTACKER_SKINS if player.team == 0 else DEFENDER_SKINS
-	var skin: SkinDefinition = skins[player.peer_id % skins.size()]
+	var skins: Array[Resource] = (
+		attacker_skins if player.team == 0 else defender_skins
+	)
+	if skins.is_empty():
+		return
+
+	var skin: Resource = skins[posmod(player.peer_id, skins.size())]
 	var old_body := player.get_node_or_null("Body")
 	if old_body:
 		old_body.visible = false

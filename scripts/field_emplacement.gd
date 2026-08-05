@@ -1,6 +1,5 @@
 extends Node3D
 
-const TEX_METAL: Texture2D = preload("res://assets/textures/metal_panel.png")
 
 
 func _multiplayer_session_active() -> bool:
@@ -25,6 +24,20 @@ var pivot: Node3D
 var barrel_tip: Marker3D
 var status_label: Label3D
 var team_material: StandardMaterial3D
+
+func _load_optional_texture(path: String) -> Texture2D:
+	if DisplayServer.get_name() == "headless":
+		return null
+	if not ResourceLoader.exists(path):
+		push_warning("Optional texture not found: %s" % path)
+		return null
+
+	var resource: Resource = load(path)
+	if resource is Texture2D:
+		return resource as Texture2D
+
+	push_warning("Optional texture failed to load: %s" % path)
+	return null
 
 func configure(
 	new_id: int,
@@ -74,7 +87,11 @@ func _build_visuals() -> void:
 	receiver.mesh = receiver_box
 	receiver.position = Vector3(0.0, 0.0, -0.20)
 	team_material = StandardMaterial3D.new()
-	team_material.albedo_texture = TEX_METAL
+	var optional_texture: Texture2D = _load_optional_texture(
+		"res://assets/textures/metal_panel.png"
+	)
+	if optional_texture != null:
+		team_material.albedo_texture = optional_texture
 	team_material.albedo_color = Color(0.65, 0.65, 0.65)
 	team_material.metallic = 0.45
 	team_material.roughness = 0.42

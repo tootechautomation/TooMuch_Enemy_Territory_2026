@@ -1,33 +1,31 @@
 # Frontline: Objective
 
-## Version 3.4.3 connection recovery
+## Version 3.4.4 headless texture recovery
 
-This release fixes the gray-screen and failed-connection regression.
+This release fixes the Linux server startup failure caused by imported PNG
+textures being preloaded from missing `.godot/imported/*.ctex` files.
 
 ### Fixed
 
-- Restored the original networking lifecycle from v3.4.1.
-- Kept network protocol 341 for compatibility with an existing v3.4.1 server.
-- The connection menu is no longer hidden when Join is clicked.
-- The menu hides only after a successful connection.
-- Failed connections restore the menu and re-enable the Join button.
-- Server disconnects also restore the connection menu.
-- Failed peers are closed and cleared before retrying.
-- Offline guards are limited to autonomous world entities.
-- Main connection callbacks and protocol verification are no longer guarded out.
-- Emplacements, smoke and sensor beacons remain dormant in offline preview.
+- Removed every PNG `preload()` from GDScript.
+- Textures now load at runtime only when a graphical display is active.
+- Headless servers use the same gameplay scripts without loading visual assets.
+- Uniform, weapon, metal, wood, concrete and foliage textures remain enabled
+  on Windows and graphical clients.
+- `character_visual.gd` no longer requires the `SkinDefinition` global class
+  cache to parse.
+- Character skin resources load only on graphical clients.
+- Added `tools/prepare_headless_server.sh` to delete stale cross-platform
+  `.godot` caches and run one clean Linux import pass.
 
-Expected client build:
+Build:
 
 ```text
-v3.4.3
+v3.4.4
 ```
 
-Expected compatible protocol:
+Compatible network protocol:
 
 ```text
 341
 ```
-
-This client can connect to a server running v3.4.1 protocol 341, but updating
-both client and server with this package is recommended.

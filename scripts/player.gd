@@ -1,9 +1,5 @@
 extends CharacterBody3D
 
-const TEX_UNIFORM_ATTACKERS: Texture2D = preload("res://assets/textures/uniform_attackers.png")
-const TEX_UNIFORM_DEFENDERS: Texture2D = preload("res://assets/textures/uniform_defenders.png")
-const TEX_WEAPON_RIFLE: Texture2D = preload("res://assets/textures/weapon_rifle.png")
-const TEX_WEAPON_PISTOL: Texture2D = preload("res://assets/textures/weapon_pistol.png")
 
 enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
 
@@ -50,6 +46,11 @@ const STANDING_CAPSULE_HEIGHT := 1.8
 const CROUCH_CAPSULE_HEIGHT := 1.15
 const CROUCH_BODY_SCALE_Y := 0.64
 const SPAWN_PROTECTION_MS := 5000
+
+var tex_uniform_attackers: Texture2D
+var tex_uniform_defenders: Texture2D
+var tex_weapon_rifle: Texture2D
+var tex_weapon_pistol: Texture2D
 
 var health := 100
 var ammo_in_mag := 30
@@ -181,7 +182,35 @@ var weapon_kick_offset := 0.0
 
 var server_logged_first_input := false
 
+func _load_optional_texture(path: String) -> Texture2D:
+	if DisplayServer.get_name() == "headless":
+		return null
+	if not ResourceLoader.exists(path):
+		push_warning("Optional texture not found: %s" % path)
+		return null
+
+	var resource: Resource = load(path)
+	if resource is Texture2D:
+		return resource as Texture2D
+
+	push_warning("Optional texture failed to load: %s" % path)
+	return null
+
 func _ready() -> void:
+	if DisplayServer.get_name() != "headless":
+		tex_uniform_attackers = _load_optional_texture(
+			"res://assets/textures/uniform_attackers.png"
+		)
+		tex_uniform_defenders = _load_optional_texture(
+			"res://assets/textures/uniform_defenders.png"
+		)
+		tex_weapon_rifle = _load_optional_texture(
+			"res://assets/textures/weapon_rifle.png"
+		)
+		tex_weapon_pistol = _load_optional_texture(
+			"res://assets/textures/weapon_pistol.png"
+		)
+
 	_initialize_loadout()
 	if is_bot and not bot_role_initialized:
 		bot_squad_role = posmod(peer_id, 4)
@@ -1385,11 +1414,13 @@ func _refresh_identity_visuals(force: bool = false) -> void:
 	var accent_color: Color = _class_accent_color(player_class)
 
 	if body_material != null:
-		body_material.albedo_texture = (
-			TEX_UNIFORM_ATTACKERS
+		var uniform_texture: Texture2D = (
+			tex_uniform_attackers
 			if team == 0
-			else TEX_UNIFORM_DEFENDERS
+			else tex_uniform_defenders
 		)
+		if uniform_texture != null:
+			body_material.albedo_texture = uniform_texture
 		body_material.albedo_color = team_color.lightened(0.22)
 		body_material.roughness = 0.82
 		body_material.emission_enabled = true
@@ -2478,11 +2509,13 @@ func _rebuild_first_person_weapon() -> void:
 				receiver_width = 0.14
 
 	var metal := StandardMaterial3D.new()
-	metal.albedo_texture = (
-		TEX_WEAPON_PISTOL
+	var weapon_texture: Texture2D = (
+		tex_weapon_pistol
 		if is_pistol
-		else TEX_WEAPON_RIFLE
+		else tex_weapon_rifle
 	)
+	if weapon_texture != null:
+		metal.albedo_texture = weapon_texture
 	metal.albedo_color = Color(0.72, 0.74, 0.76)
 	metal.roughness = 0.48
 
