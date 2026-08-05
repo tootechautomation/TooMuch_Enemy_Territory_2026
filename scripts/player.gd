@@ -206,46 +206,77 @@ func submit_input(move: Vector2, yaw: float, look_pitch: float, wants_jump: bool
 	jump_requested = jump_requested or wants_jump; sprint_requested = wants_sprint; crouch_requested = wants_crouch
 
 func _server_simulate(delta: float) -> void:
-	var now := Time.get_ticks_msec()
-	if is_reloading and now >= reload_finish_ms: _finish_reload()
-	if downed and now >= bleedout_finish_ms: _finish_death(0)
+	var now: int = Time.get_ticks_msec()
+
+	if is_reloading and now >= reload_finish_ms:
+		_finish_reload()
+
+	if downed and now >= bleedout_finish_ms:
+		_finish_death(0)
+
 	if not alive or downed:
 		velocity = Vector3.ZERO
-		var main: Node = get_parent()
-	if main != null and main.has_method("receive_player_snapshot"):
-		main.receive_player_snapshot.rpc(
-			peer_id,
-			global_position,
-			rotation.y,
-			$Head.rotation.x,
-			health,
-			ammo_in_mag,
-			reserve_ammo,
-			alive,
-			downed,
-			is_reloading,
-			player_class,
-			kills,
-			deaths,
-			xp,
-			current_weapon_index,
-			grenades_remaining,
-			is_crouching
-		)
+		_send_snapshot()
 		return
-	if not is_on_floor(): velocity.y -= gravity * delta
-	elif jump_requested and not crouch_requested: velocity.y = JUMP_SPEED
+
+	if not is_on_floor():
+		velocity.y -= gravity * delta
+	elif jump_requested and not crouch_requested:
+		velocity.y = JUMP_SPEED
+
 	jump_requested = false
 	_apply_server_crouch(crouch_requested)
 
-	var move_speed := CROUCH_SPEED if crouch_requested else (
-		SPRINT_SPEED if sprint_requested and input_vector.y < -0.2 else WALK_SPEED
+	var move_speed: float = (
+		CROUCH_SPEED
+		if crouch_requested
+		else (
+			SPRINT_SPEED
+			if sprint_requested and input_vector.y < -0.2
+			else WALK_SPEED
+		)
 	)
-	var direction := (
-		transform.basis * Vector3(input_vector.x, 0, input_vector.y)
+
+	var direction: Vector3 = (
+		transform.basis
+		* Vector3(input_vector.x, 0.0, input_vector.y)
 	).normalized()
-	velocity.x = direction.x * move_speed; velocity.z = direction.z * move_speed; move_and_slide()
-	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index, grenades_remaining, is_crouching)
+
+	velocity.x = direction.x * move_speed
+	velocity.z = direction.z * move_speed
+	move_and_slide()
+
+	_send_snapshot()
+
+func _send_snapshot() -> void:
+	if not multiplayer.is_server():
+		return
+
+	var main_node: Node = get_parent()
+	if main_node == null:
+		return
+	if not main_node.has_method("receive_player_snapshot"):
+		return
+
+	main_node.receive_player_snapshot.rpc(
+		peer_id,
+		global_position,
+		rotation.y,
+		$Head.rotation.x,
+		health,
+		ammo_in_mag,
+		reserve_ammo,
+		alive,
+		downed,
+		is_reloading,
+		player_class,
+		kills,
+		deaths,
+		xp,
+		current_weapon_index,
+		grenades_remaining,
+		is_crouching
+	)
 
 func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool) -> void:
 	if multiplayer.is_server():
