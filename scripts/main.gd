@@ -5,6 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
+const BUILD_VERSION := "1.2.2"
+const NETWORK_PROTOCOL := 122
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -38,6 +40,9 @@ var match_time_remaining := MATCH_LENGTH_SECONDS
 var spawn_wave_remaining := SPAWN_WAVE_SECONDS
 var match_over := false
 var status_label: Label
+var protocol_verified := false
+var protocol_message := "Protocol pending"
+var verified_peers: Dictionary = {}
 var kill_feed: Array[String] = []
 
 func _ready() -> void:
@@ -133,7 +138,13 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 		get_tree().quit(1)
 		return
 	multiplayer.multiplayer_peer = peer
-	print("Frontline dedicated server listening on UDP %d" % port)
+	print(
+		"Frontline Objective v%s protocol %d listening on UDP %d" % [
+			BUILD_VERSION,
+			NETWORK_PROTOCOL,
+			port
+		]
+	)
 	print("Requested bot count: %d" % desired_bot_count)
 
 	for index in range(desired_bot_count):
@@ -172,8 +183,18 @@ func _on_connection_failed() -> void:
 	push_error("Connection failed")
 
 func _on_peer_connected(id: int) -> void:
-	if not multiplayer.is_server(): return
-	var team := next_team; next_team = 1 - next_team
+	if not multiplayer.is_server():
+		return
+
+	verified_peers[id] = false
+	receive_server_protocol.rpc_id(
+		id,
+		NETWORK_PROTOCOL,
+		BUILD_VERSION
+	)
+
+	var team := next_team
+	next_team = 1 - next_team
 	player_teams[id] = team; player_names[id] = "Player%d" % id
 	for existing_id_value in players:
 		var existing_id: int = int(existing_id_value)
@@ -218,7 +239,80 @@ func _on_peer_connected(id: int) -> void:
 
 func _on_peer_disconnected(id: int) -> void:
 	if not multiplayer.is_server(): return
-	remove_player.rpc(id); player_teams.erase(id); player_names.erase(id)
+	remove_player.rpc(id)
+	player_teams.erase(id)
+	player_names.erase(id)
+	verified_peers.erase(id)
+
+@rpc("authority", "call_remote", "reliable")
+func receive_server_protocol(
+	server_protocol: int,
+	server_version: String
+) -> void:
+	if multiplayer.is_server():
+		return
+
+	if server_protocol != NETWORK_PROTOCOL:
+		protocol_verified = false
+		protocol_message = (
+			"VERSION MISMATCH: client v%s protocol %d, server v%s protocol %d"
+			% [
+				BUILD_VERSION,
+				NETWORK_PROTOCOL,
+				server_version,
+				server_protocol
+			]
+		)
+		push_error(protocol_message)
+		if status_label != null:
+			status_label.text = protocol_message
+		return
+
+	protocol_verified = true
+	protocol_message = "Connected: v%s protocol %d" % [
+		server_version,
+		server_protocol
+	]
+	print(protocol_message)
+	client_protocol_ack.rpc_id(
+		1,
+		NETWORK_PROTOCOL,
+		BUILD_VERSION
+	)
+
+@rpc("any_peer", "call_remote", "reliable")
+func client_protocol_ack(
+	client_protocol: int,
+	client_version: String
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if client_protocol != NETWORK_PROTOCOL:
+		print(
+			"Disconnecting peer %d: client v%s protocol %d, server v%s protocol %d"
+			% [
+				sender_id,
+				client_version,
+				client_protocol,
+				BUILD_VERSION,
+				NETWORK_PROTOCOL
+			]
+		)
+		multiplayer.multiplayer_peer.disconnect_peer(sender_id)
+		return
+
+	verified_peers[sender_id] = true
+	print(
+		"Peer %d verified: client v%s protocol %d"
+		% [sender_id, client_version, client_protocol]
+	)
+
+func is_peer_protocol_verified(peer_id: int) -> bool:
+	if peer_id >= BOT_PEER_ID_START:
+		return true
+	return bool(verified_peers.get(peer_id, false))
 
 @rpc("authority", "call_local", "reliable")
 func spawn_player(peer_id: int, team: int, pname: String, spawn_position: Vector3) -> void:

@@ -1,10 +1,10 @@
 # Changelog
 
-## 1.2.0
+## 1.2.2
 
-- Fixed pistol model not rebuilding after networked switch
-- Increased visible recoil and added first-person weapon kick
-- Added physical crouch capsule, body, and camera changes
-- Added stance HUD status
-- Defaulted headless servers to eight bots
-- Added detailed bot startup logging
+- Added explicit network protocol and build versions
+- Added client/server protocol handshake
+- Added mismatch reporting in the HUD
+- Added server verification before accepting player RPC input
+- Centralized RPC ownership checks
+- Added verified-peer server logging

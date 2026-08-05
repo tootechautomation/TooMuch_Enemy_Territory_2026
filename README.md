@@ -1,37 +1,37 @@
 # Frontline: Objective
 
-## Version 1.2: stance, weapon-view, recoil, and bot fixes
+## Version 1.2.2 synchronized networking build
 
-Fixed:
+This build addresses the case where local visual effects work but all server-authoritative controls fail.
 
-- Pistol slot now rebuilds the first-person model immediately.
-- Recoil is visibly stronger and includes weapon kick.
-- Crouching lowers the camera, collision capsule, and body.
-- HUD shows STANDING or CROUCHED.
-- Headless servers default to eight bots.
-- `--bots 0` explicitly disables bots.
-- Server logs list every spawned bot and final actor count.
+Godot requires matching RPC declarations on the client and server. Install this exact package on:
 
-## Start server
+1. The Linux VPS server.
+2. The Windows development/client copy.
 
-Eight bots by default:
+The new protocol handshake displays:
+
+```text
+Connected: v1.2.2 protocol 122
+```
+
+in the HUD. A mismatched client/server pair displays an explicit version mismatch.
+
+## Required deployment order
+
+Stop and update the VPS first, then replace the Windows project with the same archive.
+
+## Server
 
 ```bash
 flatpak run org.godotengine.Godot --headless --path . --server --port 27960
 ```
 
-Custom count:
+## Expected server log
 
-```bash
-flatpak run org.godotengine.Godot --headless --path . --server --port 27960 --bots 12
+```text
+Frontline Objective v1.2.2 protocol 122 listening on UDP 27960
+Peer <id> verified: client v1.2.2 protocol 122
 ```
 
-No bots:
-
-```bash
-flatpak run org.godotengine.Godot --headless --path . --server --port 27960 --bots 0
-```
-
-## Controls
-
-WASD move, Shift sprint, C crouch, Space jump, left mouse fire, R reload, X switch weapon, G grenade, hold E interact, Q ability, 1–5 class, Tab scoreboard, F spectate.
+Only after the peer is verified will the server accept movement, firing, jumping, grenades, reloads, classes, abilities, and interactions.

@@ -97,9 +97,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("spectator_next") and not alive:
 		_cycle_spectator_target()
 
-	if event.is_action_pressed("weapon_switch") and alive and not downed:
-		request_weapon_switch.rpc_id(1)
-
 	if event.is_action_pressed("ui_cancel"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -131,7 +128,10 @@ func _collect_and_send_input() -> void:
 	)
 
 	var local_crouch: bool = Input.is_action_pressed("crouch") and not downed
-	_apply_crouch_state(local_crouch)
+	_apply_crouch_visual(local_crouch)
+
+	if not downed and Input.is_action_just_pressed("weapon_switch"):
+		_local_request_weapon_switch()
 
 	submit_input.rpc_id(
 		1,
@@ -184,9 +184,24 @@ func _collect_and_send_input() -> void:
 		if Input.is_action_just_pressed("class_%d" % (index + 1)):
 			request_class.rpc_id(1, index)
 
+func _server_sender_is_owner() -> bool:
+	if not multiplayer.is_server():
+		return false
+
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != peer_id:
+		return false
+
+	var main: Node = get_parent()
+	if main != null and main.has_method("is_peer_protocol_verified"):
+		return bool(main.call("is_peer_protocol_verified", sender_id))
+
+	return true
+
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func submit_input(move: Vector2, yaw: float, look_pitch: float, wants_jump: bool, wants_sprint: bool, wants_crouch: bool, sequence: int) -> void:
-	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id or sequence <= last_received_sequence: return
+	if not _server_sender_is_owner() or sequence <= last_received_sequence:
+		return
 	last_received_sequence = sequence; input_vector = move.limit_length(1.0); rotation.y = yaw; pitch = clampf(look_pitch, -1.35, 1.35); $Head.rotation.x = pitch
 	jump_requested = jump_requested or wants_jump; sprint_requested = wants_sprint; crouch_requested = wants_crouch
 
@@ -201,7 +216,7 @@ func _server_simulate(delta: float) -> void:
 	if not is_on_floor(): velocity.y -= gravity * delta
 	elif jump_requested and not crouch_requested: velocity.y = JUMP_SPEED
 	jump_requested = false
-	_apply_crouch_state(crouch_requested)
+	_apply_server_crouch(crouch_requested)
 
 	var move_speed := CROUCH_SPEED if crouch_requested else (
 		SPRINT_SPEED if sprint_requested and input_vector.y < -0.2 else WALK_SPEED
@@ -226,7 +241,7 @@ func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magaz
 	deaths = death_count
 	xp = experience
 	grenades_remaining = grenade_count
-	_apply_crouch_state(crouching)
+	_apply_crouch_visual(crouching)
 
 	if weapon_index != current_weapon_index:
 		_apply_weapon_index(weapon_index, true)
@@ -243,7 +258,8 @@ func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magaz
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_fire(origin: Vector3, direction: Vector3) -> void:
-	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id or not alive or downed or is_reloading: return
+	if not _server_sender_is_owner() or not alive or downed or is_reloading:
+		return
 	var now := Time.get_ticks_msec()
 	if now < next_fire_time or ammo_in_mag <= 0 or origin.distance_to($Head.global_position) > 2.0: return
 	next_fire_time = now + weapon.fire_interval_ms()
@@ -272,7 +288,7 @@ func request_throw_grenade(
 ) -> void:
 	if not multiplayer.is_server():
 		return
-	if multiplayer.get_remote_sender_id() != peer_id:
+	if not _server_sender_is_owner():
 		return
 	if not alive or downed:
 		return
@@ -303,7 +319,7 @@ func request_throw_grenade(
 func request_reload() -> void:
 	if not multiplayer.is_server():
 		return
-	if multiplayer.get_remote_sender_id() != peer_id:
+	if not _server_sender_is_owner():
 		return
 	if not alive or downed:
 		return
@@ -379,27 +395,40 @@ func _apply_weapon_index(index: int, rebuild_view: bool = true) -> void:
 	if rebuild_view and _is_local_player() and DisplayServer.get_name() != "headless":
 		_rebuild_first_person_weapon()
 
-@rpc("any_peer", "call_remote", "reliable")
-func request_weapon_switch() -> void:
-	if not multiplayer.is_server():
-		return
-	if multiplayer.get_remote_sender_id() != peer_id:
-		return
-	if not alive or downed:
+func _local_request_weapon_switch() -> void:
+	if weapon_slots.is_empty():
 		return
 
-	var next_index: int = posmod(
+	var desired_index: int = posmod(
 		current_weapon_index + 1,
 		weapon_slots.size()
 	)
-	_apply_weapon_index(next_index, false)
-	apply_weapon_switch.rpc_id(peer_id, next_index)
+
+	# Change the local model immediately; the server remains authoritative
+	# and will confirm or correct the slot in the next snapshot.
+	_apply_weapon_index(desired_index, true)
+	request_weapon_switch.rpc_id(1, desired_index)
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_weapon_switch(desired_index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	if not _server_sender_is_owner():
+		return
+	if not alive or downed:
+		return
+	if desired_index < 0 or desired_index >= weapon_slots.size():
+		return
+
+	_apply_weapon_index(desired_index, false)
+	confirm_weapon_switch.rpc_id(peer_id, desired_index)
 
 @rpc("authority", "call_remote", "reliable")
-func apply_weapon_switch(weapon_index: int) -> void:
+func confirm_weapon_switch(weapon_index: int) -> void:
 	if not _is_local_player():
 		return
-	_apply_weapon_index(weapon_index, true)
+	if weapon_index != current_weapon_index:
+		_apply_weapon_index(weapon_index, true)
 
 @rpc("authority", "call_remote", "reliable")
 func confirm_hit() -> void:
@@ -500,6 +529,7 @@ func server_respawn(spawn_position: Vector3) -> void:
 	health = _class_health(player_class)
 	_reset_loadout_ammo()
 	grenades_remaining = 2
+	_apply_server_crouch(false)
 	alive = true
 	downed = false
 	is_reloading = false
@@ -509,7 +539,8 @@ func server_respawn(spawn_position: Vector3) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_interact() -> void:
-	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id or not alive: return
+	if not _server_sender_is_owner() or not alive:
+		return
 	var now := Time.get_ticks_msec()
 	if now < next_interact_time: return
 	next_interact_time = now + 500
@@ -522,7 +553,8 @@ func request_interact() -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_class_ability() -> void:
-	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id or not alive or downed: return
+	if not _server_sender_is_owner() or not alive or downed:
+		return
 	var now := Time.get_ticks_msec()
 	if now < next_ability_time: return
 	next_ability_time = now + ABILITY_COOLDOWN_MS
@@ -535,7 +567,8 @@ func request_class_ability() -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_class(index: int) -> void:
-	if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != peer_id: return
+	if not _server_sender_is_owner():
+		return
 	player_class = clampi(index, 0, 4); health = mini(health, _class_health(player_class))
 
 
@@ -639,6 +672,7 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 	health = _class_health(player_class)
 	_reset_loadout_ammo()
 	grenades_remaining = 2
+	_apply_server_crouch(false)
 	bleedout_finish_ms = 0
 	show()
 
@@ -721,19 +755,8 @@ func _update_spectator_camera() -> void:
 	if target_head != null:
 		camera.global_transform = target_head.global_transform
 
-func _apply_crouch_state(crouching: bool) -> void:
+func _apply_crouch_visual(crouching: bool) -> void:
 	is_crouching = crouching
-
-	var collision: CollisionShape3D = $CollisionShape3D as CollisionShape3D
-	if collision != null:
-		var capsule: CapsuleShape3D = collision.shape as CapsuleShape3D
-		if capsule != null:
-			capsule.height = (
-				CROUCH_CAPSULE_HEIGHT
-				if crouching
-				else STANDING_CAPSULE_HEIGHT
-			)
-		collision.position.y = -0.30 if crouching else 0.0
 
 	var body: MeshInstance3D = $Body as MeshInstance3D
 	if body != null:
@@ -741,6 +764,28 @@ func _apply_crouch_state(crouching: bool) -> void:
 		body.position.y = -0.30 if crouching else 0.0
 
 	$Head.position.y = CROUCH_HEAD_Y if crouching else STANDING_HEAD_Y
+
+func _apply_server_crouch(crouching: bool) -> void:
+	is_crouching = crouching
+
+	var collision: CollisionShape3D = $CollisionShape3D as CollisionShape3D
+	if collision == null:
+		return
+
+	var capsule: CapsuleShape3D = collision.shape as CapsuleShape3D
+	if capsule == null:
+		return
+
+	capsule.height = (
+		CROUCH_CAPSULE_HEIGHT
+		if crouching
+		else STANDING_CAPSULE_HEIGHT
+	)
+
+	# Preserve approximately the same capsule bottom while changing height.
+	collision.position.y = -0.325 if crouching else 0.0
+
+	_apply_crouch_visual(crouching)
 
 func _base_weapon_position() -> Vector3:
 	return (
@@ -900,21 +945,40 @@ func _update_hud() -> void:
 		_apply_weapon_kick()
 
 	var names := ["Soldier", "Medic", "Engineer", "Field Ops", "Scout"]
-	var main = get_parent(); var minutes := int(main.match_time_remaining) / 60; var seconds := int(main.match_time_remaining) % 60
+	var main: Node = get_parent()
+
+	var protocol_status := "Protocol pending"
+	if main != null:
+		protocol_status = str(main.get("protocol_message"))
+
+	var minutes := int(main.get("match_time_remaining")) / 60
+	var seconds := int(main.get("match_time_remaining")) % 60
 	var stance_text := "CROUCHED" if is_crouching else "STANDING"
 	var life_text := "DOWNED" if downed else (
-		"ALIVE" if alive else "RESPAWN IN %.1f · F cycles teammate" % main.spawn_wave_remaining
+		"ALIVE"
+		if alive
+		else "RESPAWN IN %.1f · F cycles teammate" % float(
+			main.get("spawn_wave_remaining")
+		)
 	)
-	var objective_text: String = main.objective_status_text()
+	var objective_text: String = str(main.call("objective_status_text"))
 	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
-	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact" % [
+	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],
+		protocol_status,
 		health,
 		ammo_in_mag,
 		reserve_ammo,
-		"RELOADING" if is_reloading else weapon.display_name,
+		(
+			"RELOADING"
+			if is_reloading
+			else "%s%s" % [
+				weapon.display_name,
+				" (PISTOL)" if current_weapon_index == 1 else " (RIFLE)"
+			]
+		),
 		current_weapon_index + 1,
 		weapon_slots.size(),
 		grenades_remaining,
@@ -927,5 +991,6 @@ func _update_hud() -> void:
 		cooldown
 	]
 	scoreboard.visible = Input.is_action_pressed("scoreboard")
-	if scoreboard.visible: scoreboard.text = main.scoreboard_text()
+	if scoreboard.visible:
+		scoreboard.text = str(main.call("scoreboard_text"))
 	feed.text = "\n".join(main.kill_feed)
