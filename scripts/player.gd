@@ -211,7 +211,27 @@ func _server_simulate(delta: float) -> void:
 	if downed and now >= bleedout_finish_ms: _finish_death(0)
 	if not alive or downed:
 		velocity = Vector3.ZERO
-		replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index, grenades_remaining, is_crouching)
+		var main: Node = get_parent()
+	if main != null and main.has_method("receive_player_snapshot"):
+		main.receive_player_snapshot.rpc(
+			peer_id,
+			global_position,
+			rotation.y,
+			$Head.rotation.x,
+			health,
+			ammo_in_mag,
+			reserve_ammo,
+			alive,
+			downed,
+			is_reloading,
+			player_class,
+			kills,
+			deaths,
+			xp,
+			current_weapon_index,
+			grenades_remaining,
+			is_crouching
+		)
 		return
 	if not is_on_floor(): velocity.y -= gravity * delta
 	elif jump_requested and not crouch_requested: velocity.y = JUMP_SPEED
@@ -227,9 +247,9 @@ func _server_simulate(delta: float) -> void:
 	velocity.x = direction.x * move_speed; velocity.z = direction.z * move_speed; move_and_slide()
 	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index, grenades_remaining, is_crouching)
 
-@rpc("authority", "call_remote", "unreliable_ordered")
-func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool) -> void:
-	if multiplayer.is_server(): return
+func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool) -> void:
+	if multiplayer.is_server():
+		return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
 	if _is_local_player(): global_position = pos
 	health = hp

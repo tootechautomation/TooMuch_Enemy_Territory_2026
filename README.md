@@ -1,37 +1,20 @@
 # Frontline: Objective
 
-## Version 1.2.2 synchronized networking build
+## Version 1.2.4 snapshot-routing fix
 
-This build addresses the case where local visual effects work but all server-authoritative controls fail.
-
-Godot requires matching RPC declarations on the client and server. Install this exact package on:
-
-1. The Linux VPS server.
-2. The Windows development/client copy.
-
-The new protocol handshake displays:
+This build fixes repeated errors such as:
 
 ```text
-Connected: v1.2.2 protocol 122
+Node not found: Main/<player-id>
+Invalid packet received. Requested node was not found.
 ```
 
-in the HUD. A mismatched client/server pair displays an explicit version mismatch.
+High-frequency player snapshots no longer originate from temporary player-node RPC paths. They now travel through the permanent `/Main` node. If a snapshot arrives before its reliable spawn packet, it is safely discarded and the next snapshot is applied.
 
-## Required deployment order
+Install this exact package on both the Linux server and Windows client.
 
-Stop and update the VPS first, then replace the Windows project with the same archive.
-
-## Server
-
-```bash
-flatpak run org.godotengine.Godot --headless --path . --server --port 27960
-```
-
-## Expected server log
+Expected HUD:
 
 ```text
-Frontline Objective v1.2.2 protocol 122 listening on UDP 27960
-Peer <id> verified: client v1.2.2 protocol 122
+Connected: v1.2.4 protocol 124
 ```
-
-Only after the peer is verified will the server accept movement, firing, jumping, grenades, reloads, classes, abilities, and interactions.

@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.2.2"
-const NETWORK_PROTOCOL := 122
+const BUILD_VERSION := "1.2.4"
+const NETWORK_PROTOCOL := 124
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -313,6 +313,58 @@ func is_peer_protocol_verified(peer_id: int) -> bool:
 	if peer_id >= BOT_PEER_ID_START:
 		return true
 	return bool(verified_peers.get(peer_id, false))
+
+@rpc("authority", "call_remote", "unreliable_ordered", 1)
+func receive_player_snapshot(
+	peer_id: int,
+	pos: Vector3,
+	yaw: float,
+	head_pitch: float,
+	hp: int,
+	magazine: int,
+	reserve: int,
+	is_alive: bool,
+	is_downed: bool,
+	reloading: bool,
+	class_id: int,
+	kill_count: int,
+	death_count: int,
+	experience: int,
+	weapon_index: int,
+	grenade_count: int,
+	crouching: bool
+) -> void:
+	if multiplayer.is_server():
+		return
+
+	if not players.has(peer_id):
+		# The reliable spawn packet has not arrived yet. Dropping this
+		# unreliable snapshot is safe; a newer snapshot will follow.
+		return
+
+	var player: Node = players[peer_id] as Node
+	if player == null:
+		return
+
+	player.call(
+		"apply_player_snapshot",
+		pos,
+		yaw,
+		head_pitch,
+		hp,
+		magazine,
+		reserve,
+		is_alive,
+		is_downed,
+		reloading,
+		class_id,
+		kill_count,
+		death_count,
+		experience,
+		weapon_index,
+		grenade_count,
+		crouching
+	)
 
 @rpc("authority", "call_local", "reliable")
 func spawn_player(peer_id: int, team: int, pname: String, spawn_position: Vector3) -> void:
