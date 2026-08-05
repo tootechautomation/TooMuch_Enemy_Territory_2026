@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="SkinDefinition" load_steps=2 format=3]
-[ext_resource path="res://scripts/skin_definition.gd" type="Script" id="1"]
-[resource]
-script = ExtResource("1")
-display_name = "Steel Guard"
-primary_color = Color(0.24, 0.29, 0.34, 1)
-secondary_color = Color(0.10, 0.12, 0.15, 1)
-accent_color = Color(0.49, 0.55, 0.58, 1)
-helmet_color = Color(0.16, 0.19, 0.23, 1)

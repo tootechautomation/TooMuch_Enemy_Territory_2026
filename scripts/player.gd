@@ -6,10 +6,10 @@ enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
 @export var team := 0
 @export var player_name := "Player"
 @export var player_class: PlayerClass = PlayerClass.SOLDIER
-const SERVICE_RIFLE: WeaponDefinition = preload("res://data/weapons/service_rifle.tres")
-const SERVICE_PISTOL: WeaponDefinition = preload("res://data/weapons/service_pistol.tres")
+const SERVICE_RIFLE: Resource = preload("res://data/weapons/service_rifle.tres")
+const SERVICE_PISTOL: Resource = preload("res://data/weapons/service_pistol.tres")
 
-@export var weapon: WeaponDefinition = SERVICE_RIFLE
+@export var weapon: Resource = SERVICE_RIFLE
 
 const WALK_SPEED := 7.0
 const SPRINT_SPEED := 10.0
@@ -60,7 +60,7 @@ var feed: Label
 var weapon_view: Node3D
 var spectator_target_id := 0
 var spectator_index := -1
-var weapon_slots: Array[WeaponDefinition] = []
+var weapon_slots: Array[Resource] = []
 var weapon_magazines: Array[int] = []
 var weapon_reserves: Array[int] = []
 var current_weapon_index := 0
