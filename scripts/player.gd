@@ -68,6 +68,7 @@ var bot_ability_accumulator := 0.0
 var bot_stuck_accumulator := 0.0
 var bot_last_position := Vector3.ZERO
 var bot_strafe_direction := 1.0
+var bot_grenade_accumulator := 2.0
 var target_position := Vector3.ZERO
 var target_yaw := 0.0
 var target_pitch := 0.0
@@ -109,6 +110,11 @@ var accent_material: StandardMaterial3D
 var class_accent_mesh: MeshInstance3D
 var last_visual_team := -1
 var last_visual_class := -1
+var revive_marker: Label3D
+var objective_progress_bar: ProgressBar
+var objective_progress_text: Label
+var elimination_notice: Label
+var elimination_notice_until_ms := 0
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -381,11 +387,29 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 		weapon_magazines[current_weapon_index] = ammo_in_mag
 		weapon_reserves[current_weapon_index] = reserve_ammo
 
-	visible = alive and not downed
+	visible = alive
 	if class_accent_mesh != null:
-		class_accent_mesh.visible = alive and not downed
+		class_accent_mesh.visible = alive
 	if weapon_view:
 		weapon_view.visible = alive and not downed
+
+	if revive_marker != null:
+		var local_team := team
+		var main_node: Node = get_parent()
+		var local_id: int = multiplayer.get_unique_id()
+		if main_node != null:
+			var player_map: Dictionary = main_node.get("players")
+			if player_map.has(local_id):
+				var local_player: Node = player_map[local_id] as Node
+				if local_player != null:
+					local_team = int(local_player.get("team"))
+
+		revive_marker.visible = (
+			alive
+			and downed
+			and local_team == team
+			and not _is_local_player()
+		)
 
 	if _is_local_player():
 		if not has_deployed and not spawn_menu_open:
@@ -431,14 +455,60 @@ func server_fire(direction: Vector3) -> void:
 		)
 	)
 	query.exclude = [self]
-	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
-	if not hit.is_empty() and hit.get("collider") is CharacterBody3D:
-		var target: CharacterBody3D = hit.get("collider") as CharacterBody3D
-		if target != null and target.has_method("server_take_damage"):
+	var hit: Dictionary = (
+		get_world_3d().direct_space_state.intersect_ray(query)
+	)
+	var effect_end: Vector3 = (
+		origin + shot_direction * _weapon_range_meters()
+	)
+	var hit_player := false
+	var was_headshot := false
+
+	if not hit.is_empty():
+		effect_end = Vector3(hit.get("position", effect_end))
+
+	if (
+		not hit.is_empty()
+		and hit.get("collider") is CharacterBody3D
+	):
+		var target: CharacterBody3D = (
+			hit.get("collider") as CharacterBody3D
+		)
+		if target != null and target.has_method(
+			"server_take_damage"
+		):
 			var target_team: int = int(target.get("team"))
 			if target_team != team:
-				target.call("server_take_damage", _weapon_damage(), peer_id)
-				confirm_hit.rpc_id(peer_id)
+				hit_player = true
+				var local_hit_height: float = (
+					effect_end.y - target.global_position.y
+				)
+				was_headshot = local_hit_height >= 0.62
+				var damage_amount: int = _weapon_damage()
+				if was_headshot:
+					damage_amount = int(round(
+						float(damage_amount) * 1.75
+					))
+				target.call(
+					"server_take_damage",
+					damage_amount,
+					peer_id
+				)
+				if was_headshot:
+					confirm_headshot.rpc_id(peer_id)
+				else:
+					confirm_hit.rpc_id(peer_id)
+
+	var main_node: Node = get_parent()
+	if main_node != null and main_node.has_method(
+		"show_shot_effect"
+	):
+		main_node.show_shot_effect.rpc(
+			origin,
+			effect_end,
+			hit_player,
+			was_headshot
+		)
 
 func _apply_spread(direction: Vector3, degrees: float) -> Vector3:
 	var spread_radians: float = deg_to_rad(degrees)
@@ -715,7 +785,25 @@ func confirm_hit() -> void:
 		return
 	hit_marker_until_ms = Time.get_ticks_msec() + 140
 	if hit_marker != null:
+		hit_marker.text = "×"
+		hit_marker.position = Vector2(634, 344)
 		hit_marker.visible = true
+
+@rpc("authority", "call_remote", "reliable")
+func confirm_headshot() -> void:
+	if not _is_local_player():
+		return
+
+	hit_marker_until_ms = Time.get_ticks_msec() + 260
+	if hit_marker != null:
+		hit_marker.text = "HEADSHOT"
+		hit_marker.position = Vector2(580, 332)
+		hit_marker.visible = true
+
+	elimination_notice_until_ms = Time.get_ticks_msec() + 650
+	if elimination_notice != null:
+		elimination_notice.text = "HEADSHOT"
+		elimination_notice.visible = true
 
 func server_confirm_hit() -> void:
 	if not multiplayer.is_server():
@@ -970,6 +1058,18 @@ func _build_identity_visuals() -> void:
 	world_class_label.visible = false
 	add_child(world_class_label)
 
+	revive_marker = Label3D.new()
+	revive_marker.name = "ReviveMarker"
+	revive_marker.text = "REVIVE"
+	revive_marker.position = Vector3(0.0, 1.30, 0.0)
+	revive_marker.font_size = 32
+	revive_marker.outline_size = 10
+	revive_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	revive_marker.fixed_size = true
+	revive_marker.modulate = Color(0.25, 1.0, 0.38)
+	revive_marker.visible = false
+	add_child(revive_marker)
+
 func _refresh_identity_visuals(force: bool = false) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -1214,6 +1314,10 @@ func _server_bot_tick(delta: float) -> void:
 		0.0,
 		bot_ability_accumulator - delta
 	)
+	bot_grenade_accumulator = maxf(
+		0.0,
+		bot_grenade_accumulator - delta
+	)
 
 	var target_player: Node3D = null
 	var movement_goal := Vector3.ZERO
@@ -1269,6 +1373,23 @@ func _server_bot_tick(delta: float) -> void:
 			and _bot_has_line_of_sight(target_player)
 		):
 			_bot_face_position(target_player.global_position)
+
+			if (
+				bot_grenade_accumulator <= 0.0
+				and grenades_remaining > 0
+				and enemy_distance >= 8.0
+				and enemy_distance <= 22.0
+				and randf() <= 0.18
+			):
+				bot_grenade_accumulator = 7.0
+				var grenade_direction: Vector3 = (
+					target_player.global_position
+					+ Vector3.UP * 0.8
+					- $Head.global_position
+				).normalized()
+				server_throw_grenade_request(
+					grenade_direction
+				)
 
 			var desired_spacing: float = (
 				18.0
@@ -1508,13 +1629,37 @@ func _server_bot_fire(target: Node3D) -> void:
 		if aim_requested
 		else 0.70
 	)
-	if randf() <= accuracy_scale and target.has_method(
-		"server_take_damage"
-	):
+	var shot_origin: Vector3 = $Head.global_position
+	var shot_end: Vector3 = target.global_position + Vector3.UP * 0.75
+	var hit_target: bool = randf() <= accuracy_scale
+	var bot_headshot: bool = (
+		hit_target
+		and randf() <= (
+			0.18
+			if player_class == PlayerClass.SCOUT
+			else 0.07
+		)
+	)
+
+	if hit_target and target.has_method("server_take_damage"):
+		var bot_damage: int = _weapon_damage()
+		if bot_headshot:
+			bot_damage = int(round(float(bot_damage) * 1.75))
 		target.call(
 			"server_take_damage",
-			_weapon_damage(),
+			bot_damage,
 			peer_id
+		)
+
+	var main_node: Node = get_parent()
+	if main_node != null and main_node.has_method(
+		"show_shot_effect"
+	):
+		main_node.show_shot_effect.rpc(
+			shot_origin,
+			shot_end,
+			hit_target,
+			bot_headshot
 		)
 
 func server_force_respawn(spawn_position: Vector3) -> void:
@@ -2094,7 +2239,45 @@ func _build_hud() -> void:
 	damage_indicator.visible = false
 	layer.add_child(damage_indicator)
 
-	scoreboard = Label.new(); scoreboard.position = Vector2(390, 150); scoreboard.add_theme_font_size_override("font_size", 18); scoreboard.visible = false; layer.add_child(scoreboard)
+	objective_progress_text = Label.new()
+	objective_progress_text.position = Vector2(430, 625)
+	objective_progress_text.custom_minimum_size = Vector2(420, 28)
+	objective_progress_text.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	objective_progress_text.add_theme_font_size_override(
+		"font_size",
+		18
+	)
+	layer.add_child(objective_progress_text)
+
+	objective_progress_bar = ProgressBar.new()
+	objective_progress_bar.position = Vector2(430, 655)
+	objective_progress_bar.size = Vector2(420, 24)
+	objective_progress_bar.min_value = 0.0
+	objective_progress_bar.max_value = 100.0
+	objective_progress_bar.show_percentage = true
+	layer.add_child(objective_progress_bar)
+
+	elimination_notice = Label.new()
+	elimination_notice.position = Vector2(540, 285)
+	elimination_notice.custom_minimum_size = Vector2(200, 45)
+	elimination_notice.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	elimination_notice.add_theme_font_size_override(
+		"font_size",
+		28
+	)
+	elimination_notice.visible = false
+	layer.add_child(elimination_notice)
+
+	scoreboard = Label.new()
+	scoreboard.position = Vector2(210, 100)
+	scoreboard.custom_minimum_size = Vector2(860, 520)
+	scoreboard.add_theme_font_size_override("font_size", 17)
+	scoreboard.visible = false
+	layer.add_child(scoreboard)
 	feed = Label.new(); feed.position = Vector2(930, 24); feed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; feed.custom_minimum_size = Vector2(320, 150); layer.add_child(feed)
 
 func _update_hud() -> void:
@@ -2105,6 +2288,15 @@ func _update_hud() -> void:
 
 	if hit_marker != null and hit_marker.visible and now >= hit_marker_until_ms:
 		hit_marker.visible = false
+		hit_marker.text = "×"
+		hit_marker.position = Vector2(634, 344)
+
+	if (
+		elimination_notice != null
+		and elimination_notice.visible
+		and now >= elimination_notice_until_ms
+	):
+		elimination_notice.visible = false
 
 	if damage_indicator != null and damage_indicator.visible and now >= damage_indicator_until_ms:
 		damage_indicator.visible = false
@@ -2127,16 +2319,8 @@ func _update_hud() -> void:
 	var main: Node = get_parent()
 
 	var protocol_status := "Protocol pending"
-	var input_ack: int = -1
 	if main != null:
 		protocol_status = str(main.get("protocol_message"))
-		input_ack = int(main.get("last_server_input_ack"))
-	protocol_status += " · input ack %d" % input_ack
-	protocol_status += " · pos %.1f,%.1f · ammo %d" % [
-		global_position.x,
-		global_position.z,
-		ammo_in_mag
-	]
 
 	var minutes := int(main.get("match_time_remaining")) / 60
 	var seconds := int(main.get("match_time_remaining")) % 60
@@ -2149,6 +2333,39 @@ func _update_hud() -> void:
 		)
 	)
 	var objective_text: String = str(main.call("objective_status_text"))
+
+	var progress_value := 0.0
+	var progress_title := "OBJECTIVE"
+	var current_stage: int = int(main.get("objective_stage"))
+	if current_stage == 0:
+		progress_title = "BRIDGE CONSTRUCTION"
+		progress_value = (
+			100.0
+			* float(main.get("bridge_progress"))
+			/ float(maxi(1, int(main.get("bridge_required"))))
+		)
+	elif bool(main.get("dynamite_armed")):
+		progress_title = "DEFUSE PROGRESS"
+		progress_value = (
+			100.0
+			* float(main.get("defuse_progress"))
+			/ float(maxi(1, int(main.get("defuse_required"))))
+		)
+	else:
+		progress_title = "BUNKER DAMAGE"
+		progress_value = 100.0 - float(
+			main.get("objective_health")
+		)
+
+	if objective_progress_bar != null:
+		objective_progress_bar.value = clampf(
+			progress_value,
+			0.0,
+			100.0
+		)
+	if objective_progress_text != null:
+		objective_progress_text.text = progress_title
+
 	var interaction_prompt: String = str(
 		main.call("interaction_prompt_for", self)
 	)

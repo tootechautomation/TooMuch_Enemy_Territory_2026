@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "2.1.0"
-const NETWORK_PROTOCOL := 210
+const BUILD_VERSION := "2.2.0"
+const NETWORK_PROTOCOL := 220
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -63,9 +63,13 @@ var objective_marker: Label3D
 var objective_progress_label: Label3D
 var dynamite_model: MeshInstance3D
 var dynamite_light: OmniLight3D
+var round_results_layer: CanvasLayer
+var round_results_panel: PanelContainer
+var round_results_label: Label
 
 func _ready() -> void:
 	_build_world()
+	_build_round_results_ui()
 	_update_objective_visuals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
@@ -1079,9 +1083,15 @@ func remove_supply_pack(pack_id: int) -> void:
 func _end_match(message: String) -> void:
 	if match_over:
 		return
+
 	match_over = true
 	round_restart_remaining = ROUND_RESTART_SECONDS
 	announce.rpc(message)
+	show_round_results.rpc(
+		message,
+		scoreboard_text(),
+		ROUND_RESTART_SECONDS
+	)
 	print(message)
 
 @rpc("authority", "call_remote", "unreliable_ordered")
@@ -1119,11 +1129,129 @@ func broadcast_match_state(
 
 	_update_objective_visuals()
 
+@rpc("authority", "call_local", "unreliable")
+func show_shot_effect(
+	start_position: Vector3,
+	end_position: Vector3,
+	hit_player: bool,
+	headshot: bool
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var effect_root := Node3D.new()
+	effect_root.name = "ShotEffect"
+	add_child(effect_root)
+
+	var tracer := MeshInstance3D.new()
+	var line_mesh := ImmediateMesh.new()
+	line_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	line_mesh.surface_set_color(
+		Color(1.0, 0.82, 0.32, 0.95)
+	)
+	line_mesh.surface_add_vertex(start_position)
+	line_mesh.surface_set_color(
+		Color(1.0, 0.42, 0.08, 0.30)
+	)
+	line_mesh.surface_add_vertex(end_position)
+	line_mesh.surface_end()
+	tracer.mesh = line_mesh
+
+	var tracer_material := StandardMaterial3D.new()
+	tracer_material.shading_mode = (
+		BaseMaterial3D.SHADING_MODE_UNSHADED
+	)
+	tracer_material.vertex_color_use_as_albedo = true
+	tracer_material.transparency = (
+		BaseMaterial3D.TRANSPARENCY_ALPHA
+	)
+	tracer.material_override = tracer_material
+	effect_root.add_child(tracer)
+
+	var impact := MeshInstance3D.new()
+	var impact_mesh := SphereMesh.new()
+	impact_mesh.radius = 0.07 if not headshot else 0.11
+	impact_mesh.height = 0.14 if not headshot else 0.22
+	impact.mesh = impact_mesh
+	impact.position = end_position
+
+	var impact_material := StandardMaterial3D.new()
+	impact_material.shading_mode = (
+		BaseMaterial3D.SHADING_MODE_UNSHADED
+	)
+	impact_material.emission_enabled = true
+	impact_material.albedo_color = (
+		Color(1.0, 0.12, 0.05)
+		if hit_player
+		else Color(0.95, 0.72, 0.28)
+	)
+	impact_material.emission = impact_material.albedo_color
+	impact.material_override = impact_material
+	effect_root.add_child(impact)
+
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = 0.10
+	timer.timeout.connect(effect_root.queue_free)
+	effect_root.add_child(timer)
+	timer.start()
+
 @rpc("authority", "call_local", "reliable")
 func push_kill_feed(message: String) -> void:
 	kill_feed.push_front(message)
 	if kill_feed.size() > 5: kill_feed.resize(5)
 	print(message)
+
+func _build_round_results_ui() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	round_results_layer = CanvasLayer.new()
+	round_results_layer.layer = 40
+	add_child(round_results_layer)
+
+	round_results_panel = PanelContainer.new()
+	round_results_panel.position = Vector2(300, 95)
+	round_results_panel.custom_minimum_size = Vector2(680, 530)
+	round_results_panel.visible = false
+	round_results_layer.add_child(round_results_panel)
+
+	round_results_label = Label.new()
+	round_results_label.add_theme_font_size_override(
+		"font_size",
+		20
+	)
+	round_results_label.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	round_results_panel.add_child(round_results_label)
+
+@rpc("authority", "call_local", "reliable")
+func show_round_results(
+	result_message: String,
+	final_scoreboard: String,
+	restart_seconds: float
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if round_results_panel == null or round_results_label == null:
+		return
+
+	round_results_panel.visible = true
+	round_results_label.text = (
+		"%s\n\n%s\n\nNext round in %.0f seconds"
+		% [
+			result_message,
+			final_scoreboard,
+			restart_seconds
+		]
+	)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+@rpc("authority", "call_local", "reliable")
+func hide_round_results() -> void:
+	if round_results_panel != null:
+		round_results_panel.visible = false
 
 @rpc("authority", "call_local", "reliable")
 func announce(message: String) -> void:
@@ -1245,31 +1373,67 @@ func objective_status_text() -> String:
 	return "Stage 2: Destroy bunker | Integrity %d%%" % objective_health
 
 func scoreboard_text() -> String:
+	var class_names: Array[String] = [
+		"Soldier",
+		"Medic",
+		"Engineer",
+		"FieldOps",
+		"Scout"
+	]
 	var lines: Array[String] = [
 		"SCOREBOARD",
-		"Player          Team       K   D   XP   Rank       State"
+		"Player          Team  Class      K   D   XP   Rank       Type   State"
 	]
 
-	for player_value in players.values():
+	var sorted_players: Array = players.values()
+	sorted_players.sort_custom(
+		func(a: Node3D, b: Node3D) -> bool:
+			if int(a.get("team")) != int(b.get("team")):
+				return int(a.get("team")) < int(b.get("team"))
+			if int(a.get("kills")) != int(b.get("kills")):
+				return int(a.get("kills")) > int(b.get("kills"))
+			return int(a.get("xp")) > int(b.get("xp"))
+	)
+
+	for player_value in sorted_players:
 		var player: Node3D = player_value as Node3D
 		if player == null:
 			continue
 
 		var is_alive: bool = bool(player.get("alive"))
 		var is_downed: bool = bool(player.get("downed"))
-		var state: String = "Down" if is_downed else ("Alive" if is_alive else "Dead")
+		var state: String = (
+			"Down"
+			if is_downed
+			else ("Alive" if is_alive else "Dead")
+		)
 		var player_team: int = int(player.get("team"))
+		var class_id: int = clampi(
+			int(player.get("player_class")),
+			0,
+			class_names.size() - 1
+		)
 		var rank: String = str(player.call("rank_name"))
+		var actor_type := (
+			"BOT"
+			if bool(player.get("is_bot"))
+			else "HUMAN"
+		)
 
-		lines.append("%-15s %-10s %2d  %2d  %3d  %-10s %s" % [
-			str(player.get("player_name")),
-			"Attackers" if player_team == 0 else "Defenders",
-			int(player.get("kills")),
-			int(player.get("deaths")),
-			int(player.get("xp")),
-			rank,
-			state
-		])
+		lines.append(
+			"%-15s %-5s %-10s %2d  %2d  %3d  %-10s %-6s %s"
+			% [
+				str(player.get("player_name")),
+				"ATK" if player_team == 0 else "DEF",
+				class_names[class_id],
+				int(player.get("kills")),
+				int(player.get("deaths")),
+				int(player.get("xp")),
+				rank,
+				actor_type,
+				state
+			]
+		)
 
 	return "\n".join(lines)
 
@@ -1411,6 +1575,7 @@ func nearest_downed_teammate(from_player: Node3D) -> Node3D:
 	return best
 
 func _reset_round() -> void:
+	hide_round_results.rpc()
 	match_over = false
 	match_time_remaining = MATCH_LENGTH_SECONDS
 	spawn_wave_remaining = SPAWN_WAVE_SECONDS
@@ -1472,6 +1637,56 @@ func _build_world() -> void:
 	_make_static_box("WallSouth", Vector3(0, 2, 12), Vector3(40, 4, 1), Color(0.35, 0.35, 0.38))
 	_make_static_box("WestCover", Vector3(-7, 1, -5), Vector3(3, 2, 3), Color(0.32, 0.28, 0.22))
 	_make_static_box("EastCover", Vector3(6, 1, 5), Vector3(3, 2, 3), Color(0.32, 0.28, 0.22))
+
+	# Expanded side routes and elevation.
+	_make_static_box(
+		"WestLaneCoverA",
+		Vector3(-12.0, 0.75, 7.2),
+		Vector3(2.5, 1.5, 3.0),
+		Color(0.30, 0.27, 0.21)
+	)
+	_make_static_box(
+		"WestLaneCoverB",
+		Vector3(-7.0, 0.65, 8.3),
+		Vector3(3.0, 1.3, 2.0),
+		Color(0.28, 0.25, 0.20)
+	)
+	_make_static_box(
+		"EastLaneCoverA",
+		Vector3(12.0, 0.75, -7.2),
+		Vector3(2.5, 1.5, 3.0),
+		Color(0.30, 0.27, 0.21)
+	)
+	_make_static_box(
+		"EastLaneCoverB",
+		Vector3(7.0, 0.65, -8.3),
+		Vector3(3.0, 1.3, 2.0),
+		Color(0.28, 0.25, 0.20)
+	)
+	_make_static_box(
+		"WestRaisedPlatform",
+		Vector3(-9.5, 1.0, 2.8),
+		Vector3(5.0, 2.0, 3.0),
+		Color(0.24, 0.23, 0.20)
+	)
+	_make_static_box(
+		"EastRaisedPlatform",
+		Vector3(9.5, 1.0, -2.8),
+		Vector3(5.0, 2.0, 3.0),
+		Color(0.24, 0.23, 0.20)
+	)
+	_make_static_box(
+		"CenterNorthCover",
+		Vector3(-2.8, 0.75, -7.0),
+		Vector3(2.0, 1.5, 4.0),
+		Color(0.34, 0.31, 0.25)
+	)
+	_make_static_box(
+		"CenterSouthCover",
+		Vector3(2.8, 0.75, 7.0),
+		Vector3(2.0, 1.5, 4.0),
+		Color(0.34, 0.31, 0.25)
+	)
 
 	_make_spawn_zone(
 		"AttackersSpawnZone",
