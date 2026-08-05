@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Added downed and bleedout states.
+- Added Medic reviving.
+- Added deployable health and ammunition packs.
+- Added Engineer objective charge and fuse timer.
+- Added replicated kill/event feed.
+- Added live scoreboard.
+- Added procedural first-person rifle blockout.
+- Replicated kills, deaths, and downed state.
+
 ## 0.3.0 — Movement and weapon framework
 
 - Added modular `WeaponDefinition` resources.

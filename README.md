@@ -1,48 +1,50 @@
 # Frontline: Objective
 
-An original Godot 4 multiplayer objective-shooter prototype inspired by classic class-based games. It contains no Wolfenstein code, maps, branding, models, textures, sounds, or other proprietary game data.
+An original Godot 4 class-based objective shooter prototype. It contains no Wolfenstein code, game data, maps, branding, characters, audio, or artwork.
 
-## Version 0.4
+## Version 0.5 — Teamplay milestone
 
-- ENet dedicated server for up to 32 players
-- Server-authoritative movement, combat, reloads, class actions, and objective damage
-- Sprinting, crouching, jumping, hitscan rifle, spread, magazines, and reserve ammunition
-- Five classes: Soldier, Medic, Engineer, Field Ops, and Scout
-- Ten-second team respawn waves and ten-minute objective matches
-- Four original procedural uniform skins, selected deterministically per player
-- Headless Linux VPS operation
+- Server-authoritative movement, shooting, damage, reloads, objectives, and respawns
+- Downed state with a 15-second bleedout window
+- Medic revive interaction
+- Deployable health and ammunition packs
+- Engineer-planted objective charge with an 8-second fuse
+- Scoreboard with team, kills, deaths, and player state
+- Five-entry event/kill feed
+- Procedural first-person service-rifle blockout
+- Four original procedural team uniform skins
+- Sprint, crouch, class abilities, spawn waves, match timer, and remote interpolation
 
 ## Controls
 
 - WASD: move
-- Mouse: look
-- Left mouse: fire
-- R: reload
 - Shift: sprint
 - C: crouch
 - Space: jump
-- E: engineer objective action
-- Q: class ability
+- Mouse: aim
+- Left mouse: fire
+- R: reload
+- E: revive as Medic or arm the objective as attacking Engineer
+- Q: class ability / deploy support pack
 - 1–5: choose class
+- Tab: scoreboard
 - Escape: release mouse
 
 ## Class abilities
 
-- Soldier: personal ammunition resupply
-- Medic: heals nearby living teammates
-- Engineer: repairs personal armor/health and performs objective work
-- Field Ops: resupplies ammunition for nearby teammates
-- Scout: light field recovery
+- Soldier: personal ammunition reserve
+- Medic: deploy health pack; revive downed teammates with E
+- Engineer: field repair; arm the objective charge with E
+- Field Ops: deploy ammunition pack
+- Scout: light personal recovery
 
-## Run a server
+## Run a VPS server
 
 ```bash
 flatpak run org.godotengine.Godot --headless --path . --server --port 27960
 ```
 
-## Run a Windows client from source
-
-Install Godot 4.7, clone this repository, open `project.godot`, and press F6/F5. Enter the VPS public IP in the connection menu.
+Open UDP port 27960. The Windows client should run locally and connect to the VPS public IP.
 
 ## Validate
 
@@ -50,6 +52,6 @@ Install Godot 4.7, clone this repository, open `project.godot`, and press F6/F5.
 ./tools/validate_project.sh
 ```
 
-## Current limitations
+## Status
 
-This is an early playable prototype. The character skins are original procedural blockout uniforms, not final animated production models. It does not yet include reviving downed players, planted dynamite, constructible objectives, audio, bots, client prediction, lag compensation, or a full server browser.
+This is a playable engineering prototype, not a production-ready public release. It still needs client prediction, lag compensation, proper animations, audio, menus, spawn selection, anti-cheat hardening, map content, and broader playtesting.
