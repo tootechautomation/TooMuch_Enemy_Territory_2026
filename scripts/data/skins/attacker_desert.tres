@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="SkinDefinition" load_steps=2 format=3]
+[ext_resource path="res://scripts/skin_definition.gd" type="Script" id="1"]
+[resource]
+script = ExtResource("1")
+display_name = "Desert Pathfinder"
+primary_color = Color(0.53, 0.43, 0.28, 1)
+secondary_color = Color(0.25, 0.20, 0.13, 1)
+accent_color = Color(0.76, 0.66, 0.43, 1)
+helmet_color = Color(0.42, 0.34, 0.22, 1)
