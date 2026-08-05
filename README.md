@@ -2,20 +2,23 @@
 
 Original Godot 4 multiplayer objective-shooter prototype.
 
-## Version 0.9: weapon loadouts and hit confirmation
+## Version 1.0: grenades and explosion damage
 
 Added:
 
-- Service Rifle primary weapon
-- Service Pistol sidearm
-- Separate magazine and reserve ammunition for each weapon
-- Server-authoritative weapon switching
-- Press **X** to switch between primary and sidearm
-- Weapon-dependent first-person blockout models
-- Brief hit-confirmation marker when a shot damages an enemy
-- Updated HUD showing the active weapon slot
+- Server-authoritative fragmentation grenades
+- Two grenades per life
+- Press **G** to throw
+- Three-second fuse
+- Ballistic movement and simple world bouncing
+- Distance-scaled explosion damage
+- Friendly-fire protection for grenade damage
+- Replicated grenade movement for clients
+- Brief procedural explosion flash
+- Automatic grenade cleanup when a round resets
+- Active grenade inventory in the HUD
 
-No Wolfenstein code, assets, branding, maps, characters, or audio are included.
+No Wolfenstein source code, proprietary game data, maps, characters, branding, audio, or artwork are included.
 
 ## Dedicated server
 
@@ -38,6 +41,7 @@ flatpak run org.godotengine.Godot \
 - Left mouse: fire
 - R: reload
 - X: switch rifle/pistol
+- G: throw grenade
 - Hold E: revive, construct, arm, or defuse
 - Q: class ability
 - 1–5: select class

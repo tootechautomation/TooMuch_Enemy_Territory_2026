@@ -35,3 +35,5 @@ scoreboard={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":419
 spectator_next={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":70)]}
 
 weapon_switch={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":88)]}
+
+throw_grenade={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":71)]}

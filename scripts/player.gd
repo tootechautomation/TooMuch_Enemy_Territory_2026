@@ -61,6 +61,8 @@ var weapon_reserves: Array[int] = []
 var current_weapon_index := 0
 var hit_marker: Label
 var hit_marker_until_ms := 0
+var grenades_remaining := 2
+var next_grenade_time := 0
 
 func _ready() -> void:
 	_initialize_loadout()
@@ -134,6 +136,15 @@ func _collect_and_send_input() -> void:
 	if not downed and Input.is_action_just_pressed("reload"):
 		request_reload.rpc_id(1)
 
+	if not downed and Input.is_action_just_pressed("throw_grenade"):
+		var grenade_camera: Camera3D = $Head/Camera3D as Camera3D
+		if grenade_camera != null:
+			request_throw_grenade.rpc_id(
+				1,
+				grenade_camera.global_position,
+				-grenade_camera.global_transform.basis.z
+			)
+
 	if Input.is_action_pressed("interact"):
 		interact_accumulator += get_physics_process_delta_time()
 		if interact_accumulator >= 0.25:
@@ -161,7 +172,7 @@ func _server_simulate(delta: float) -> void:
 	if downed and now >= bleedout_finish_ms: _finish_death(0)
 	if not alive or downed:
 		velocity = Vector3.ZERO
-		replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index)
+		replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index, grenades_remaining)
 		return
 	if not is_on_floor(): velocity.y -= gravity * delta
 	elif jump_requested and not crouch_requested: velocity.y = JUMP_SPEED
@@ -169,10 +180,10 @@ func _server_simulate(delta: float) -> void:
 	var move_speed := CROUCH_SPEED if crouch_requested else (SPRINT_SPEED if sprint_requested and input_vector.y < -0.2 else WALK_SPEED)
 	var direction := (transform.basis * Vector3(input_vector.x, 0, input_vector.y)).normalized()
 	velocity.x = direction.x * move_speed; velocity.z = direction.z * move_speed; move_and_slide()
-	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index)
+	replicate_state.rpc(global_position, rotation.y, $Head.rotation.x, health, ammo_in_mag, reserve_ammo, alive, downed, is_reloading, player_class, kills, deaths, xp, current_weapon_index, grenades_remaining)
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int, weapon_index: int) -> void:
+func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int) -> void:
 	if multiplayer.is_server(): return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
 	if _is_local_player(): global_position = pos
@@ -184,6 +195,7 @@ func replicate_state(pos: Vector3, yaw: float, head_pitch: float, hp: int, magaz
 	kills = kill_count
 	deaths = death_count
 	xp = experience
+	grenades_remaining = grenade_count
 
 	if weapon_index != current_weapon_index:
 		_apply_weapon_index(weapon_index, false)
@@ -221,6 +233,40 @@ func request_fire(origin: Vector3, direction: Vector3) -> void:
 func _apply_spread(direction: Vector3, degrees: float) -> Vector3:
 	var spread_radians := deg_to_rad(degrees)
 	return direction.rotated(Vector3.UP, randf_range(-spread_radians, spread_radians)).rotated(global_transform.basis.x, randf_range(-spread_radians, spread_radians)).normalized()
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_throw_grenade(
+	origin: Vector3,
+	direction: Vector3
+) -> void:
+	if not multiplayer.is_server():
+		return
+	if multiplayer.get_remote_sender_id() != peer_id:
+		return
+	if not alive or downed:
+		return
+	if grenades_remaining <= 0:
+		return
+
+	var now: int = Time.get_ticks_msec()
+	if now < next_grenade_time:
+		return
+	if origin.distance_to($Head.global_position) > 2.0:
+		return
+
+	next_grenade_time = now + 900
+	var main: Node = get_parent()
+	if main != null and main.has_method("server_throw_grenade"):
+		var thrown: bool = bool(
+			main.call(
+				"server_throw_grenade",
+				self,
+				origin + direction.normalized() * 0.55,
+				direction
+			)
+		)
+		if thrown:
+			grenades_remaining -= 1
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_reload() -> void:
@@ -351,6 +397,7 @@ func server_respawn(spawn_position: Vector3) -> void:
 	target_position = spawn_position
 	health = _class_health(player_class)
 	_reset_loadout_ammo()
+	grenades_remaining = 2
 	alive = true
 	downed = false
 	is_reloading = false
@@ -489,6 +536,7 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 	downed = false
 	health = _class_health(player_class)
 	_reset_loadout_ammo()
+	grenades_remaining = 2
 	bleedout_finish_ms = 0
 	show()
 
@@ -653,7 +701,7 @@ func _update_hud() -> void:
 	)
 	var objective_text: String = main.objective_status_text()
 	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
-	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s [%d/%d]\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  X: switch  E: interact" % [
+	hud.text = "%s | %s | %s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		life_text,
@@ -663,6 +711,7 @@ func _update_hud() -> void:
 		"RELOADING" if is_reloading else weapon.display_name,
 		current_weapon_index + 1,
 		weapon_slots.size(),
+		grenades_remaining,
 		objective_text,
 		minutes,
 		seconds,

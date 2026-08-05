@@ -1,6 +1,7 @@
 extends Node
 
 const PlayerScene = preload("res://scenes/player.tscn")
+const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
@@ -14,6 +15,8 @@ var players: Dictionary = {}
 var player_teams: Dictionary = {}
 var player_names: Dictionary = {}
 var supply_packs: Dictionary = {}
+var grenades: Dictionary = {}
+var next_grenade_id := 1
 var next_supply_pack_id := 1
 var spawn_points := {
 	0: [Vector3(-12, 1, 0), Vector3(-12, 1, 4), Vector3(-12, 1, -4)],
@@ -186,6 +189,20 @@ func _on_peer_connected(id: int) -> void:
 			int(pack.get("amount")),
 			pack.global_position
 		)
+
+	for grenade_value in grenades.values():
+		var grenade: Node3D = grenade_value as Node3D
+		if grenade == null:
+			continue
+		spawn_grenade.rpc_id(
+			id,
+			int(grenade.get("grenade_id")),
+			int(grenade.get("owner_id")),
+			int(grenade.get("owner_team")),
+			grenade.global_position,
+			Vector3(grenade.get("velocity")),
+			float(grenade.get("fuse_remaining"))
+		)
 	spawn_player.rpc(id, team, player_names[id], _get_spawn(team, id))
 
 func _on_peer_disconnected(id: int) -> void:
@@ -281,6 +298,136 @@ func register_elimination(victim_id: int, attacker_id: int) -> void:
 		players[attacker_id].kills += 1
 		players[attacker_id].add_xp(10, "elimination")
 	push_kill_feed.rpc("%s eliminated %s" % [player_names.get(attacker_id, "World"), player_names.get(victim_id, "Player")])
+
+func server_throw_grenade(
+	owner: Node3D,
+	origin: Vector3,
+	direction: Vector3
+) -> bool:
+	if not multiplayer.is_server() or match_over:
+		return false
+	if owner == null:
+		return false
+
+	var owner_id: int = int(owner.get("peer_id"))
+	var owner_team: int = int(owner.get("team"))
+	var grenade_id: int = next_grenade_id
+	next_grenade_id += 1
+
+	var safe_direction: Vector3 = direction.normalized()
+	var initial_velocity: Vector3 = safe_direction * 13.0 + Vector3.UP * 4.5
+
+	spawn_grenade.rpc(
+		grenade_id,
+		owner_id,
+		owner_team,
+		origin,
+		initial_velocity,
+		3.0
+	)
+	return true
+
+@rpc("authority", "call_local", "reliable")
+func spawn_grenade(
+	grenade_id: int,
+	owner_id: int,
+	owner_team: int,
+	spawn_position: Vector3,
+	initial_velocity: Vector3,
+	fuse_seconds: float
+) -> void:
+	if grenades.has(grenade_id):
+		return
+
+	var grenade: Node3D = GrenadeScene.instantiate() as Node3D
+	if grenade == null:
+		return
+
+	grenade.name = "Grenade_%d" % grenade_id
+	add_child(grenade)
+	grenade.call(
+		"configure",
+		grenade_id,
+		owner_id,
+		owner_team,
+		spawn_position,
+		initial_velocity,
+		fuse_seconds
+	)
+	grenades[grenade_id] = grenade
+
+func server_explode_grenade(
+	grenade_id: int,
+	explosion_position: Vector3,
+	owner_id: int,
+	owner_team: int,
+	radius: float,
+	maximum_damage: int
+) -> void:
+	if not multiplayer.is_server():
+		return
+	if not grenades.has(grenade_id):
+		return
+
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+		if not bool(player.get("alive")):
+			continue
+
+		var player_team: int = int(player.get("team"))
+		if player_team == owner_team:
+			continue
+
+		var distance: float = explosion_position.distance_to(
+			player.global_position
+		)
+		if distance > radius:
+			continue
+
+		var damage_scale: float = 1.0 - clampf(distance / radius, 0.0, 1.0)
+		var damage: int = maxi(1, int(round(maximum_damage * damage_scale)))
+		player.call("server_take_damage", damage, owner_id)
+
+	explode_grenade.rpc(grenade_id, explosion_position)
+
+@rpc("authority", "call_local", "reliable")
+func explode_grenade(
+	grenade_id: int,
+	explosion_position: Vector3
+) -> void:
+	if grenades.has(grenade_id):
+		var grenade: Node = grenades[grenade_id] as Node
+		if grenade != null:
+			grenade.queue_free()
+		grenades.erase(grenade_id)
+
+	var flash := MeshInstance3D.new()
+	var flash_mesh := SphereMesh.new()
+	flash_mesh.radius = 0.35
+	flash_mesh.height = 0.7
+	flash.mesh = flash_mesh
+	flash.global_position = explosion_position
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(1.0, 0.42, 0.08, 0.8)
+	material.emission_enabled = true
+	material.emission = Color(1.0, 0.25, 0.02)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	flash.material_override = material
+	add_child(flash)
+
+	var tween: Tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash, "scale", Vector3.ONE * 6.0, 0.22)
+	tween.tween_property(
+		material,
+		"albedo_color",
+		Color(1.0, 0.42, 0.08, 0.0),
+		0.22
+	)
+	tween.chain().tween_callback(flash.queue_free)
 
 func create_supply_pack(owner: Node3D, pack_type: int, amount: int) -> void:
 	if not multiplayer.is_server():
@@ -499,6 +646,12 @@ func _reset_round() -> void:
 	dynamite_armed = false
 	dynamite_remaining = 0.0
 	round_restart_remaining = 0.0
+
+	for grenade_value in grenades.values():
+		var grenade: Node = grenade_value as Node
+		if grenade != null:
+			grenade.queue_free()
+	grenades.clear()
 
 	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
