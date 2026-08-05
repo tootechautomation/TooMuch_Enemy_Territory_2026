@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.3.0"
-const NETWORK_PROTOCOL := 130
+const BUILD_VERSION := "1.4.0"
+const NETWORK_PROTOCOL := 140
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -397,6 +397,30 @@ func request_player_ability(requested_peer_id: int) -> void:
 	var player: Node3D = _validated_player_for_sender(requested_peer_id)
 	if player != null:
 		player.call("server_ability_request")
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_player_team_and_class(
+	requested_peer_id: int,
+	requested_team: int,
+	requested_class: int
+) -> void:
+	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	if player == null:
+		return
+
+	var safe_team: int = clampi(requested_team, 0, 1)
+	var safe_class: int = clampi(requested_class, 0, 4)
+
+	player_teams[requested_peer_id] = safe_team
+	player.call("server_set_team_and_class", safe_team, safe_class)
+
+	print(
+		"Peer %d selected team=%d class=%d" % [
+			requested_peer_id,
+			safe_team,
+			safe_class
+		]
+	)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_class(

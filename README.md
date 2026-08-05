@@ -1,32 +1,22 @@
 # Frontline: Objective
 
-## Version 1.3.0 permanent command routing
+## Version 1.4.0 team/class deployment menu
 
-All client gameplay commands now travel through the permanent `/Main` node:
+Added:
 
-- Movement and jumping
-- Firing
-- Reloading
-- Grenades
-- Weapon switching
-- Interactions
-- Class abilities
-- Class selection
+- Full-screen team and class selection menu
+- Attackers/Defenders selection
+- Soldier, Medic, Engineer, Field Ops, and Scout selection
+- Server-validated team/class requests
+- Immediate redeploy to the selected team spawn
+- Press M to reopen the deployment menu
+- Gameplay input pauses while the menu is open
+- Mouse capture is released for menu use and restored after deploy
 
-The server validates that the RPC sender ID matches the requested player ID, then dispatches the command locally to that player object.
-
-This removes dependence on temporary `/Main/<player-id>` RPC paths.
-
-Install this exact package on both the Linux VPS and Windows client.
+Install the same package on Windows and Linux.
 
 Expected HUD:
 
 ```text
-Connected: v1.3.0 protocol 130
-```
-
-Expected VPS log after input begins:
-
-```text
-Accepted gameplay input from peer <id> (Player<id>)
+Connected: v1.4.0 protocol 140
 ```

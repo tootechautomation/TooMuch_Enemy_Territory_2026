@@ -70,6 +70,10 @@ var muzzle_flash: MeshInstance3D
 var muzzle_flash_until_ms := 0
 var damage_indicator: Label
 var damage_indicator_until_ms := 0
+var spawn_menu: Control
+var selected_team := 0
+var selected_class := 0
+var spawn_menu_open := false
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
 var next_grenade_time := 0
@@ -86,6 +90,8 @@ func _ready() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_build_first_person_weapon()
 		_build_hud()
+		_build_spawn_menu()
+		_show_spawn_menu()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _is_local_player():
@@ -98,6 +104,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event.is_action_pressed("spectator_next") and not alive:
 		_cycle_spectator_target()
+
+	if event.is_action_pressed("spawn_menu"):
+		if spawn_menu_open:
+			_hide_spawn_menu()
+		else:
+			_show_spawn_menu()
 
 	if event.is_action_pressed("ui_cancel"):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -118,6 +130,8 @@ func _physics_process(delta: float) -> void:
 	if multiplayer.is_server(): _server_simulate(delta)
 
 func _collect_and_send_input() -> void:
+	if spawn_menu_open:
+		return
 	if not alive:
 		return
 
@@ -320,6 +334,12 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 	visible = alive
 	if weapon_view:
 		weapon_view.visible = alive and not downed
+
+	if _is_local_player():
+		if not alive and not spawn_menu_open:
+			_show_spawn_menu()
+		elif alive and spawn_menu_open and spawn_menu != null:
+			_hide_spawn_menu()
 
 func server_fire(origin: Vector3, direction: Vector3) -> void:
 	if not multiplayer.is_server() or not alive or downed or is_reloading:
@@ -819,6 +839,27 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 	bleedout_finish_ms = 0
 	show()
 
+func server_set_team_and_class(
+	new_team: int,
+	new_class: int
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	team = clampi(new_team, 0, 1)
+	player_class = clampi(new_class, 0, 4)
+	server_apply_class(player_class)
+
+	var main: Node = get_parent()
+	if main != null and main.has_method("_get_spawn"):
+		server_force_respawn(
+			main.call(
+				"_get_spawn",
+				team,
+				peer_id
+			)
+		)
+
 func server_apply_class(class_id: int) -> void:
 	if not multiplayer.is_server():
 		return
@@ -966,6 +1007,120 @@ func _local_fire_feedback() -> void:
 	if muzzle_flash != null:
 		muzzle_flash.visible = true
 
+func _build_spawn_menu() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "SpawnMenuLayer"
+	add_child(layer)
+
+	spawn_menu = PanelContainer.new()
+	spawn_menu.name = "SpawnMenu"
+	spawn_menu.position = Vector2(390, 135)
+	spawn_menu.custom_minimum_size = Vector2(500, 450)
+	layer.add_child(spawn_menu)
+
+	var root_box := VBoxContainer.new()
+	root_box.add_theme_constant_override("separation", 12)
+	spawn_menu.add_child(root_box)
+
+	var title := Label.new()
+	title.text = "FRONTLINE: OBJECTIVE"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 28)
+	root_box.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = "Choose team and class, then deploy"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root_box.add_child(subtitle)
+
+	var team_label := Label.new()
+	team_label.text = "TEAM"
+	team_label.add_theme_font_size_override("font_size", 20)
+	root_box.add_child(team_label)
+
+	var team_row := HBoxContainer.new()
+	root_box.add_child(team_row)
+
+	var attackers_button := Button.new()
+	attackers_button.text = "Attackers"
+	attackers_button.custom_minimum_size = Vector2(220, 45)
+	attackers_button.pressed.connect(func():
+		selected_team = 0
+	)
+	team_row.add_child(attackers_button)
+
+	var defenders_button := Button.new()
+	defenders_button.text = "Defenders"
+	defenders_button.custom_minimum_size = Vector2(220, 45)
+	defenders_button.pressed.connect(func():
+		selected_team = 1
+	)
+	team_row.add_child(defenders_button)
+
+	var class_label := Label.new()
+	class_label.text = "CLASS"
+	class_label.add_theme_font_size_override("font_size", 20)
+	root_box.add_child(class_label)
+
+	var class_names := [
+		"Soldier",
+		"Medic",
+		"Engineer",
+		"Field Ops",
+		"Scout"
+	]
+
+	for class_index in class_names.size():
+		var class_button := Button.new()
+		class_button.text = class_names[class_index]
+		class_button.custom_minimum_size = Vector2(450, 40)
+		class_button.pressed.connect(func(index := class_index):
+			selected_class = index
+		)
+		root_box.add_child(class_button)
+
+	var deploy_button := Button.new()
+	deploy_button.text = "DEPLOY"
+	deploy_button.custom_minimum_size = Vector2(450, 52)
+	deploy_button.add_theme_font_size_override("font_size", 22)
+	deploy_button.pressed.connect(_submit_spawn_selection)
+	root_box.add_child(deploy_button)
+
+	var hint := Label.new()
+	hint.text = "Press M anytime to reopen this menu"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root_box.add_child(hint)
+
+func _show_spawn_menu() -> void:
+	if spawn_menu == null:
+		return
+	spawn_menu_open = true
+	spawn_menu.visible = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _hide_spawn_menu() -> void:
+	if spawn_menu == null:
+		return
+	spawn_menu_open = false
+	spawn_menu.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+func _submit_spawn_selection() -> void:
+	var main_node: Node = get_parent()
+	if main_node == null:
+		return
+
+	main_node.request_player_team_and_class.rpc_id(
+		1,
+		peer_id,
+		selected_team,
+		selected_class
+	)
+
+	player_class = selected_class
+	team = selected_team
+	_hide_spawn_menu()
+
 func _build_first_person_weapon() -> void:
 	weapon_view = Node3D.new()
 	weapon_view.name = "FirstPersonWeapon"
@@ -1106,7 +1261,7 @@ func _update_hud() -> void:
 	)
 	var objective_text: String = str(main.call("objective_status_text"))
 	var cooldown := maxf(0.0, float(next_ability_time - Time.get_ticks_msec()) / 1000.0)
-	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact" % [
+	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %.1fs  G: grenade  X: switch  E: interact  M: spawn menu" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],

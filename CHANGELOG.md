@@ -1,9 +1,10 @@
 # Changelog
 
-## 1.3.0
+## 1.4.0
 
-- Routed every client gameplay command through permanent Main node RPCs
-- Added sender-ID validation in Main
-- Converted player request RPC handlers into local server methods
-- Removed temporary player-node RPC dependency for controls
-- Bumped protocol to 130
+- Added team/class spawn menu
+- Added server-validated deploy selection
+- Added M-key menu toggle
+- Added automatic mouse capture handling
+- Added selected-team respawn
+- Bumped protocol to 140
