@@ -154,7 +154,7 @@ func _collect_and_send_input() -> void:
 		if camera != null:
 			var now: int = Time.get_ticks_msec()
 			if now >= local_next_fire_feedback_ms and ammo_in_mag > 0 and not is_reloading:
-				local_next_fire_feedback_ms = now + weapon.fire_interval_ms()
+				local_next_fire_feedback_ms = now + _weapon_fire_interval_ms()
 				_local_fire_feedback()
 			if main_node != null:
 				main_node.request_player_fire.rpc_id(
@@ -326,23 +326,36 @@ func server_fire(origin: Vector3, direction: Vector3) -> void:
 		return
 	var now := Time.get_ticks_msec()
 	if now < next_fire_time or ammo_in_mag <= 0 or origin.distance_to($Head.global_position) > 2.0: return
-	next_fire_time = now + weapon.fire_interval_ms()
+	next_fire_time = now + _weapon_fire_interval_ms()
 	ammo_in_mag -= 1
 	_store_current_weapon_ammo()
-	var spread := weapon.moving_spread_degrees if input_vector.length() > 0.15 else weapon.hip_spread_degrees
-	var shot_direction := _apply_spread(direction.normalized(), spread)
-	var query := PhysicsRayQueryParameters3D.create(origin, origin + shot_direction * weapon.range_meters); query.exclude = [self]
+	var spread: float = (
+		_weapon_moving_spread()
+		if input_vector.length() > 0.15
+		else _weapon_hip_spread()
+	)
+	var shot_direction: Vector3 = _apply_spread(
+		direction.normalized(),
+		spread
+	)
+	var query: PhysicsRayQueryParameters3D = (
+		PhysicsRayQueryParameters3D.create(
+			origin,
+			origin + shot_direction * _weapon_range_meters()
+		)
+	)
+	query.exclude = [self]
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty() and hit.get("collider") is CharacterBody3D:
 		var target: CharacterBody3D = hit.get("collider") as CharacterBody3D
 		if target != null and target.has_method("server_take_damage"):
 			var target_team: int = int(target.get("team"))
 			if target_team != team:
-				target.call("server_take_damage", weapon.damage, peer_id)
+				target.call("server_take_damage", _weapon_damage(), peer_id)
 				confirm_hit.rpc_id(peer_id)
 
 func _apply_spread(direction: Vector3, degrees: float) -> Vector3:
-	var spread_radians := deg_to_rad(degrees)
+	var spread_radians: float = deg_to_rad(degrees)
 	return direction.rotated(Vector3.UP, randf_range(-spread_radians, spread_radians)).rotated(global_transform.basis.x, randf_range(-spread_radians, spread_radians)).normalized()
 
 func server_throw_grenade_request(
@@ -388,7 +401,7 @@ func _server_start_reload() -> void:
 		return
 	if is_reloading:
 		return
-	if ammo_in_mag >= weapon.magazine_size:
+	if ammo_in_mag >= _weapon_magazine_size():
 		return
 	if reserve_ammo <= 0:
 		return
@@ -396,16 +409,83 @@ func _server_start_reload() -> void:
 	is_reloading = true
 	reload_finish_ms = (
 		Time.get_ticks_msec()
-		+ int(weapon.reload_seconds * 1000.0)
+		+ int(_weapon_reload_seconds() * 1000.0)
 	)
 
 func _finish_reload() -> void:
-	var needed := weapon.magazine_size - ammo_in_mag
+	var needed := _weapon_magazine_size() - ammo_in_mag
 	var transferred := mini(needed, reserve_ammo)
 	ammo_in_mag += transferred
 	reserve_ammo -= transferred
 	is_reloading = false
 	_store_current_weapon_ammo()
+
+func _resource_int(
+	resource: Resource,
+	property_name: StringName,
+	default_value: int
+) -> int:
+	if resource == null:
+		return default_value
+	var value: Variant = resource.get(property_name)
+	return int(value) if value != null else default_value
+
+func _resource_float(
+	resource: Resource,
+	property_name: StringName,
+	default_value: float
+) -> float:
+	if resource == null:
+		return default_value
+	var value: Variant = resource.get(property_name)
+	return float(value) if value != null else default_value
+
+func _resource_string(
+	resource: Resource,
+	property_name: StringName,
+	default_value: String
+) -> String:
+	if resource == null:
+		return default_value
+	var value: Variant = resource.get(property_name)
+	return str(value) if value != null else default_value
+
+func _weapon_magazine_size() -> int:
+	return _resource_int(weapon, "magazine_size", 30)
+
+func _weapon_reserve_ammo() -> int:
+	return _resource_int(weapon, "reserve_ammo", 120)
+
+func _weapon_damage() -> int:
+	return _resource_int(weapon, "damage", 20)
+
+func _weapon_reload_seconds() -> float:
+	return _resource_float(weapon, "reload_seconds", 2.0)
+
+func _weapon_range_meters() -> float:
+	return _resource_float(weapon, "range_meters", 100.0)
+
+func _weapon_moving_spread() -> float:
+	return _resource_float(weapon, "moving_spread_degrees", 1.5)
+
+func _weapon_hip_spread() -> float:
+	return _resource_float(weapon, "hip_spread_degrees", 0.75)
+
+func _weapon_recoil_degrees() -> float:
+	return _resource_float(weapon, "recoil_degrees", 0.5)
+
+func _weapon_display_name() -> String:
+	return _resource_string(weapon, "display_name", "Weapon")
+
+func _weapon_fire_interval_ms() -> int:
+	var rounds_per_minute: float = _resource_float(
+		weapon,
+		"rounds_per_minute",
+		500.0
+	)
+	if rounds_per_minute <= 0.0:
+		return 120
+	return maxi(1, int(round(60000.0 / rounds_per_minute)))
 
 func _initialize_loadout() -> void:
 	weapon_slots = [SERVICE_RIFLE, SERVICE_PISTOL]
@@ -413,8 +493,8 @@ func _initialize_loadout() -> void:
 	weapon_reserves.clear()
 
 	for slot_weapon in weapon_slots:
-		weapon_magazines.append(slot_weapon.magazine_size)
-		weapon_reserves.append(slot_weapon.reserve_ammo)
+		weapon_magazines.append(slot__weapon_magazine_size())
+		weapon_reserves.append(slot__weapon_reserve_ammo())
 
 	current_weapon_index = 0
 	_apply_weapon_index(0, false)
@@ -425,8 +505,8 @@ func _reset_loadout_ammo() -> void:
 		return
 
 	for index in weapon_slots.size():
-		weapon_magazines[index] = weapon_slots[index].magazine_size
-		weapon_reserves[index] = weapon_slots[index].reserve_ammo
+		weapon_magazines[index] = _resource_int(weapon_slots[index], "magazine_size", 30)
+		weapon_reserves[index] = _resource_int(weapon_slots[index], "reserve_ammo", 120)
 
 	_apply_weapon_index(0, true)
 
@@ -618,7 +698,7 @@ func server_ability_request() -> void:
 	if now < next_ability_time: return
 	next_ability_time = now + ABILITY_COOLDOWN_MS
 	match player_class:
-		PlayerClass.SOLDIER: reserve_ammo = mini(reserve_ammo + 45, weapon.reserve_ammo + 90)
+		PlayerClass.SOLDIER: reserve_ammo = mini(reserve_ammo + 45, _weapon_reserve_ammo() + 90)
 		PlayerClass.MEDIC: get_parent().create_supply_pack(self, 0, 45)
 		PlayerClass.ENGINEER: health = mini(_class_health(player_class), health + 25)
 		PlayerClass.FIELD_OPS: get_parent().create_supply_pack(self, 1, 70)
@@ -678,14 +758,14 @@ func _server_bot_tick(delta: float) -> void:
 		look_at(global_position + flat_direction, Vector3.UP)
 
 	var target_is_player: bool = get_parent().players.values().has(target)
-	if target_is_player and distance <= weapon.range_meters:
+	if target_is_player and distance <= _weapon_range_meters():
 		velocity.x = 0.0
 		velocity.z = 0.0
 
 		if bot_fire_accumulator <= 0.0 and _bot_has_line_of_sight(target):
 			bot_fire_accumulator = maxf(
 				0.12,
-				float(weapon.fire_interval_ms()) / 1000.0
+				float(_weapon_fire_interval_ms()) / 1000.0
 			)
 			_server_bot_fire(target)
 	else:
@@ -718,7 +798,7 @@ func _server_bot_fire(target: Node3D) -> void:
 	_store_current_weapon_ammo()
 
 	if target.has_method("server_take_damage"):
-		target.server_take_damage(weapon.damage, peer_id)
+		target.server_take_damage(_weapon_damage(), peer_id)
 
 func server_force_respawn(spawn_position: Vector3) -> void:
 	if not multiplayer.is_server():
@@ -863,12 +943,12 @@ func _local_fire_feedback() -> void:
 	if not _is_local_player():
 		return
 
-	var recoil_degrees: float = maxf(
+	var recoil_amount: float = maxf(
 		1.35,
-		weapon.recoil_degrees * 3.0
+		_weapon_recoil_degrees() * 3.0
 	)
 	pitch = clampf(
-		pitch - deg_to_rad(recoil_degrees),
+		pitch - deg_to_rad(recoil_amount),
 		-1.35,
 		1.35
 	)
@@ -1033,7 +1113,7 @@ func _update_hud() -> void:
 			"RELOADING"
 			if is_reloading
 			else "%s%s" % [
-				weapon.display_name,
+				_weapon_display_name(),
 				" (PISTOL)" if current_weapon_index == 1 else " (RIFLE)"
 			]
 		),
