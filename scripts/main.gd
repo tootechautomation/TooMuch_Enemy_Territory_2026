@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.4.5"
-const NETWORK_PROTOCOL := 145
+const BUILD_VERSION := "1.4.6"
+const NETWORK_PROTOCOL := 146
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -637,7 +637,14 @@ func _validate_spawn_candidate(
 			"position": base_candidate
 		}
 
-	var world: World3D = get_world_3d()
+	var viewport: Viewport = get_viewport()
+	if viewport == null:
+		return {
+			"valid": false,
+			"position": base_candidate
+		}
+
+	var world: World3D = viewport.world_3d
 	if world == null:
 		return {
 			"valid": false,
