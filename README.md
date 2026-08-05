@@ -1,21 +1,21 @@
 # Frontline: Objective
 
-## Version 1.4.1 deployment-menu correction
+## Version 1.4.3 remote-sender command fix
 
-Fixed:
+The server no longer trusts or depends on a player ID supplied by the client.
 
-- The deployment menu no longer disappears on the first live snapshot.
-- The menu cannot close until the first Deploy action.
-- M is polled directly every frame and reliably reopens the menu.
-- The M input action is stored inside Godot's `[input]` section.
-- Team is now included in replicated player snapshots.
-- Client HUD receives the authoritative team and class from the server.
-- The menu displays the currently selected team and class before deployment.
+For every gameplay RPC, the server now:
 
-Install the exact same package on both Windows and Linux.
+1. Reads `multiplayer.get_remote_sender_id()`.
+2. Finds the player belonging to that connection.
+3. Dispatches movement, firing, reload, grenade, menu, class, and interaction commands to that player.
 
-Expected HUD:
+The client also uses `multiplayer.get_unique_id()` when constructing requests.
+
+The HUD includes an input acknowledgement counter:
 
 ```text
-Connected: v1.4.1 protocol 141
+Connected: v1.4.3 protocol 143 · input ack 1234
 ```
+
+The number should increase continuously after deployment. Install the same package on Windows and Linux.

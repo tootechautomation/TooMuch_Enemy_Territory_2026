@@ -1,11 +1,10 @@
 # Changelog
 
-## 1.4.1
+## 1.4.3
 
-- Prevented the initial player snapshot from hiding the spawn menu
-- Prevented closing the menu before first deployment
-- Added frame-polled M menu toggle
-- Added visible team/class selection status
-- Replicated authoritative player team in snapshots
-- Corrected spawn_menu InputMap placement
-- Bumped protocol to 141
+- Authorized gameplay commands using Godot remote sender ID
+- Stopped depending on client-supplied player IDs
+- Used multiplayer unique ID for outgoing client requests
+- Added server input acknowledgement counter to HUD
+- Applied the same authorization to deployment and all gameplay actions
+- Bumped protocol to 143

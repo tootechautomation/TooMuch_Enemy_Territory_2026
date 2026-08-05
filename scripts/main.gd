@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.4.1"
-const NETWORK_PROTOCOL := 141
+const BUILD_VERSION := "1.4.3"
+const NETWORK_PROTOCOL := 143
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -42,6 +42,7 @@ var match_over := false
 var status_label: Label
 var protocol_verified := false
 var protocol_message := "Protocol pending"
+var last_server_input_ack := -1
 var verified_peers: Dictionary = {}
 var kill_feed: Array[String] = []
 
@@ -314,17 +315,21 @@ func is_peer_protocol_verified(peer_id: int) -> bool:
 		return true
 	return bool(verified_peers.get(peer_id, false))
 
-func _validated_player_for_sender(requested_peer_id: int) -> Node3D:
+func _player_from_remote_sender() -> Node3D:
 	if not multiplayer.is_server():
 		return null
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
-	if sender_id != requested_peer_id:
+	if sender_id <= 0:
 		return null
-	if not players.has(requested_peer_id):
+	if not players.has(sender_id):
+		print(
+			"Rejected gameplay RPC: sender %d has no player node"
+			% sender_id
+		)
 		return null
 
-	return players[requested_peer_id] as Node3D
+	return players[sender_id] as Node3D
 
 @rpc("any_peer", "call_remote", "unreliable_ordered", 2)
 func submit_player_input(
@@ -337,7 +342,7 @@ func submit_player_input(
 	wants_crouch: bool,
 	sequence: int
 ) -> void:
-	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	var player: Node3D = _player_from_remote_sender()
 	if player == null:
 		return
 	player.call(
@@ -350,6 +355,8 @@ func submit_player_input(
 		wants_crouch,
 		sequence
 	)
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	receive_input_ack.rpc_id(sender_id, sequence)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_fire(
@@ -357,7 +364,7 @@ func request_player_fire(
 	origin: Vector3,
 	direction: Vector3
 ) -> void:
-	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	var player: Node3D = _player_from_remote_sender()
 	if player != null:
 		player.call("server_fire", origin, direction)
 
@@ -367,13 +374,13 @@ func request_player_grenade(
 	origin: Vector3,
 	direction: Vector3
 ) -> void:
-	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	var player: Node3D = _player_from_remote_sender()
 	if player != null:
 		player.call("server_throw_grenade_request", origin, direction)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_reload(requested_peer_id: int) -> void:
-	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	var player: Node3D = _player_from_remote_sender()
 	if player != null:
 		player.call("server_reload_request")
 
@@ -382,19 +389,19 @@ func request_player_weapon(
 	requested_peer_id: int,
 	desired_index: int
 ) -> void:
-	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	var player: Node3D = _player_from_remote_sender()
 	if player != null:
 		player.call("server_weapon_switch_request", desired_index)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_interact(requested_peer_id: int) -> void:
-	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	var player: Node3D = _player_from_remote_sender()
 	if player != null:
 		player.call("server_interact_request")
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_ability(requested_peer_id: int) -> void:
-	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	var player: Node3D = _player_from_remote_sender()
 	if player != null:
 		player.call("server_ability_request")
 
@@ -404,19 +411,20 @@ func request_player_team_and_class(
 	requested_team: int,
 	requested_class: int
 ) -> void:
-	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	var player: Node3D = _player_from_remote_sender()
 	if player == null:
 		return
 
 	var safe_team: int = clampi(requested_team, 0, 1)
 	var safe_class: int = clampi(requested_class, 0, 4)
 
-	player_teams[requested_peer_id] = safe_team
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	player_teams[sender_id] = safe_team
 	player.call("server_set_team_and_class", safe_team, safe_class)
 
 	print(
 		"Peer %d selected team=%d class=%d" % [
-			requested_peer_id,
+			sender_id,
 			safe_team,
 			safe_class
 		]
@@ -427,9 +435,15 @@ func request_player_class(
 	requested_peer_id: int,
 	class_index: int
 ) -> void:
-	var player: Node3D = _validated_player_for_sender(requested_peer_id)
+	var player: Node3D = _player_from_remote_sender()
 	if player != null:
 		player.call("server_class_request", class_index)
+
+@rpc("authority", "call_remote", "unreliable_ordered", 3)
+func receive_input_ack(sequence: int) -> void:
+	if multiplayer.is_server():
+		return
+	last_server_input_ack = sequence
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
 func receive_player_snapshot(

@@ -161,10 +161,11 @@ func _collect_and_send_input() -> void:
 		_local_request_weapon_switch()
 
 	var main_node: Node = get_parent()
+	var local_peer_id: int = multiplayer.get_unique_id()
 	if main_node != null:
 		main_node.submit_player_input.rpc_id(
 			1,
-			peer_id,
+			local_peer_id,
 			move,
 			rotation.y,
 			pitch,
@@ -184,14 +185,14 @@ func _collect_and_send_input() -> void:
 			if main_node != null:
 				main_node.request_player_fire.rpc_id(
 					1,
-					peer_id,
+					local_peer_id,
 					camera.global_position,
 					-camera.global_transform.basis.z
 				)
 
 	if not downed and Input.is_action_just_pressed("reload"):
 		if main_node != null:
-			main_node.request_player_reload.rpc_id(1, peer_id)
+			main_node.request_player_reload.rpc_id(1, local_peer_id)
 
 	if not downed and Input.is_action_just_pressed("throw_grenade"):
 		var grenade_camera: Camera3D = $Head/Camera3D as Camera3D
@@ -199,7 +200,7 @@ func _collect_and_send_input() -> void:
 			if main_node != null:
 				main_node.request_player_grenade.rpc_id(
 					1,
-					peer_id,
+					local_peer_id,
 					grenade_camera.global_position,
 					-grenade_camera.global_transform.basis.z
 				)
@@ -209,18 +210,18 @@ func _collect_and_send_input() -> void:
 		if interact_accumulator >= 0.25:
 			interact_accumulator = 0.0
 			if main_node != null:
-				main_node.request_player_interact.rpc_id(1, peer_id)
+				main_node.request_player_interact.rpc_id(1, local_peer_id)
 	else:
 		interact_accumulator = 0.0
 
 	if not downed and Input.is_action_just_pressed("ability"):
 		if main_node != null:
-			main_node.request_player_ability.rpc_id(1, peer_id)
+			main_node.request_player_ability.rpc_id(1, local_peer_id)
 
 	for index in 5:
 		if Input.is_action_just_pressed("class_%d" % (index + 1)):
 			if main_node != null:
-				main_node.request_player_class.rpc_id(1, peer_id, index)
+				main_node.request_player_class.rpc_id(1, local_peer_id, index)
 
 func server_receive_input(move: Vector2, yaw: float, look_pitch: float, wants_jump: bool, wants_sprint: bool, wants_crouch: bool, sequence: int) -> void:
 	if not multiplayer.is_server() or sequence <= last_received_sequence:
@@ -583,10 +584,11 @@ func _local_request_weapon_switch() -> void:
 	# and will confirm or correct the slot in the next snapshot.
 	_apply_weapon_index(desired_index, true)
 	var main_node: Node = get_parent()
+	var local_peer_id: int = multiplayer.get_unique_id()
 	if main_node != null:
 		main_node.request_player_weapon.rpc_id(
 			1,
-			peer_id,
+			local_peer_id,
 			desired_index
 		)
 
@@ -1153,9 +1155,11 @@ func _submit_spawn_selection() -> void:
 	if main_node == null:
 		return
 
+	var local_peer_id: int = multiplayer.get_unique_id()
+
 	main_node.request_player_team_and_class.rpc_id(
 		1,
-		peer_id,
+		local_peer_id,
 		selected_team,
 		selected_class
 	)
@@ -1290,8 +1294,11 @@ func _update_hud() -> void:
 	var main: Node = get_parent()
 
 	var protocol_status := "Protocol pending"
+	var input_ack: int = -1
 	if main != null:
 		protocol_status = str(main.get("protocol_message"))
+		input_ack = int(main.get("last_server_input_ack"))
+	protocol_status += " · input ack %d" % input_ack
 
 	var minutes := int(main.get("match_time_remaining")) / 60
 	var seconds := int(main.get("match_time_remaining")) % 60
