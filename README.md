@@ -1,30 +1,33 @@
 # Frontline: Objective
 
-## Version 3.4.2 inactive multiplayer guard
+## Version 3.4.3 connection recovery
 
-This release fixes the debugger flood seen when running the project in the
-Godot editor before hosting or connecting.
+This release fixes the gray-screen and failed-connection regression.
 
 ### Fixed
 
-- Server logic now checks for an active multiplayer peer before calling
-  `multiplayer.is_server()`.
-- Automatic emplacements remain dormant during offline editor preview.
-- Main round processing remains dormant until hosting or connecting.
-- Smoke, grenades, sensor beacons, supply packs, constructibles and
-  destructible cover use the same safe multiplayer guard.
-- Offline preview displays a clear connection status instead of producing
-  thousands of debugger errors.
-- All v3.4 skins, textures, sprites and gameplay features remain included.
+- Restored the original networking lifecycle from v3.4.1.
+- Kept network protocol 341 for compatibility with an existing v3.4.1 server.
+- The connection menu is no longer hidden when Join is clicked.
+- The menu hides only after a successful connection.
+- Failed connections restore the menu and re-enable the Join button.
+- Server disconnects also restore the connection menu.
+- Failed peers are closed and cleared before retrying.
+- Offline guards are limited to autonomous world entities.
+- Main connection callbacks and protocol verification are no longer guarded out.
+- Emplacements, smoke and sensor beacons remain dormant in offline preview.
 
-Expected online status:
-
-```text
-Connected: v3.4.2 protocol 342
-```
-
-Expected before connecting:
+Expected client build:
 
 ```text
-Offline preview — host or connect to begin
+v3.4.3
 ```
+
+Expected compatible protocol:
+
+```text
+341
+```
+
+This client can connect to a server running v3.4.1 protocol 341, but updating
+both client and server with this package is recommended.

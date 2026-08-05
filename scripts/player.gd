@@ -1,19 +1,5 @@
 extends CharacterBody3D
 
-
-func _has_active_multiplayer_peer() -> bool:
-	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
-	if peer == null:
-		return false
-	return (
-		peer.get_connection_status()
-		!= MultiplayerPeer.CONNECTION_DISCONNECTED
-	)
-
-func _is_active_server() -> bool:
-	if not _has_active_multiplayer_peer():
-		return false
-	return multiplayer.is_server()
 const TEX_UNIFORM_ATTACKERS: Texture2D = preload("res://assets/textures/uniform_attackers.png")
 const TEX_UNIFORM_DEFENDERS: Texture2D = preload("res://assets/textures/uniform_defenders.png")
 const TEX_WEAPON_RIFLE: Texture2D = preload("res://assets/textures/weapon_rifle.png")
@@ -234,7 +220,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _physics_process(delta: float) -> void:
-	if _is_active_server() and is_bot:
+	if multiplayer.is_server() and is_bot:
 		_server_bot_tick(delta)
 		return
 
@@ -246,12 +232,12 @@ func _physics_process(delta: float) -> void:
 		_update_identity_visibility()
 		_update_footstep_audio(delta)
 		_update_radar()
-	elif not _is_active_server():
+	elif not multiplayer.is_server():
 		global_position = global_position.lerp(target_position, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
 		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
 		$Head.rotation.x = lerp_angle($Head.rotation.x, target_pitch, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
 		_update_identity_visibility()
-	if _is_active_server(): _server_simulate(delta)
+	if multiplayer.is_server(): _server_simulate(delta)
 
 func _poll_spawn_menu_toggle() -> void:
 	var pressed: bool = Input.is_action_pressed("spawn_menu")
@@ -399,7 +385,7 @@ func _collect_and_send_input() -> void:
 				main_node.request_player_class.rpc_id(1, local_peer_id, index)
 
 func server_receive_input(move: Vector2, yaw: float, look_pitch: float, wants_jump: bool, wants_sprint: bool, wants_crouch: bool, wants_aim: bool, sequence: int) -> void:
-	if not _is_active_server() or sequence <= last_received_sequence:
+	if not multiplayer.is_server() or sequence <= last_received_sequence:
 		return
 
 	if not server_logged_first_input:
@@ -512,7 +498,7 @@ func _server_simulate(delta: float) -> void:
 
 
 func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int, stamina_value: float, suppression_ms: int, smoke_count: int, heavy_fire_ms: int) -> void:
-	if _is_active_server():
+	if multiplayer.is_server():
 		return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
 	if _is_local_player(): global_position = pos
@@ -590,7 +576,7 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 			_show_spawn_menu()
 
 func server_fire(direction: Vector3) -> void:
-	if not _is_active_server() or not alive or downed or is_reloading:
+	if not multiplayer.is_server() or not alive or downed or is_reloading:
 		return
 
 	_cancel_spawn_protection()
@@ -697,7 +683,7 @@ func _apply_spread(direction: Vector3, degrees: float) -> Vector3:
 func server_throw_grenade_request(
 	direction: Vector3
 ) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 
 	_cancel_spawn_protection()
@@ -726,14 +712,14 @@ func server_throw_grenade_request(
 			grenades_remaining -= 1
 
 func server_reload_request() -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	if not alive or downed:
 		return
 	_server_start_reload()
 
 func _server_start_reload() -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	if is_reloading:
 		return
@@ -948,7 +934,7 @@ func _local_request_weapon_switch() -> void:
 		)
 
 func server_weapon_switch_request(desired_index: int) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	if not alive or downed:
 		return
@@ -994,12 +980,12 @@ func confirm_headshot() -> void:
 		elimination_notice.visible = true
 
 func server_confirm_hit() -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	confirm_hit.rpc_id(peer_id)
 
 func spawn_protection_remaining_ms() -> int:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return replicated_spawn_protection_ms
 	return maxi(
 		0,
@@ -1007,14 +993,14 @@ func spawn_protection_remaining_ms() -> int:
 	)
 
 func _activate_spawn_protection() -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	spawn_protection_until_ms = (
 		Time.get_ticks_msec() + SPAWN_PROTECTION_MS
 	)
 
 func _cancel_spawn_protection() -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	spawn_protection_until_ms = 0
 
@@ -1022,7 +1008,7 @@ func _has_spawn_protection() -> bool:
 	return spawn_protection_remaining_ms() > 0
 
 func recent_damage_contributors() -> Dictionary:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return {}
 
 	var now: int = Time.get_ticks_msec()
@@ -1047,7 +1033,7 @@ func recent_damage_contributors() -> Dictionary:
 	return result
 
 func server_register_elimination() -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 
 	current_kill_streak += 1
@@ -1060,7 +1046,7 @@ func server_register_elimination() -> void:
 	combat_notice.rpc_id(peer_id, message)
 
 func server_confirm_assist() -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	combat_notice.rpc_id(peer_id, "ASSIST +5 XP")
 
@@ -1095,12 +1081,12 @@ func combat_notice(message: String) -> void:
 	elimination_notice.visible = true
 
 func heavy_fire_remaining_ms() -> int:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return replicated_heavy_fire_ms
 	return maxi(0, heavy_fire_until_ms - Time.get_ticks_msec())
 
 func suppression_remaining_ms() -> int:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return replicated_suppression_ms
 	return maxi(
 		0,
@@ -1108,7 +1094,7 @@ func suppression_remaining_ms() -> int:
 	)
 
 func _apply_suppression(duration_ms: int = SUPPRESSION_DURATION_MS) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	suppressed_until_ms = maxi(
 		suppressed_until_ms,
@@ -1116,7 +1102,7 @@ func _apply_suppression(duration_ms: int = SUPPRESSION_DURATION_MS) -> void:
 	)
 
 func server_take_damage(amount: int, attacker_id: int) -> void:
-	if not _is_active_server() or not alive or downed:
+	if not multiplayer.is_server() or not alive or downed:
 		return
 	if _has_spawn_protection():
 		return
@@ -1177,7 +1163,7 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 		)
 
 func _finish_death(attacker_override: int) -> void:
-	if not _is_active_server() or not alive:
+	if not multiplayer.is_server() or not alive:
 		return
 
 	var attacker_id: int = (
@@ -1242,7 +1228,7 @@ func damage_feedback(attacker_position: Vector3, amount: int) -> void:
 	damage_indicator.visible = true
 
 func server_revive(reviver_id: int = 0) -> void:
-	if not _is_active_server() or not alive or not downed:
+	if not multiplayer.is_server() or not alive or not downed:
 		return
 	downed = false
 	health = maxi(45, int(_class_health(player_class) * 0.4))
@@ -1252,7 +1238,7 @@ func server_revive(reviver_id: int = 0) -> void:
 	get_parent().push_kill_feed.rpc("%s was revived" % player_name)
 
 func server_respawn(spawn_position: Vector3) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	global_position = spawn_position
 	target_position = spawn_position
@@ -1282,7 +1268,7 @@ func server_respawn(spawn_position: Vector3) -> void:
 	input_vector = Vector2.ZERO
 
 func server_interact_request() -> void:
-	if not _is_active_server() or not alive:
+	if not multiplayer.is_server() or not alive:
 		return
 	var now := Time.get_ticks_msec()
 	if now < next_interact_time: return
@@ -1295,17 +1281,17 @@ func server_interact_request() -> void:
 		get_parent().server_engineer_interact(self)
 
 func ability_cooldown_remaining_ms() -> int:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return replicated_ability_cooldown_ms
 	return maxi(0, next_ability_time - Time.get_ticks_msec())
 
 func spotted_remaining_ms() -> int:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return replicated_spotted_ms
 	return maxi(0, spotted_until_ms - Time.get_ticks_msec())
 
 func server_apply_spotted(duration_ms: int) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	spotted_until_ms = maxi(
 		spotted_until_ms,
@@ -1507,7 +1493,7 @@ func _ability_name() -> String:
 			return "Ability"
 
 func server_ability_request() -> void:
-	if not _is_active_server() or not alive or downed:
+	if not multiplayer.is_server() or not alive or downed:
 		return
 	var now: int = Time.get_ticks_msec()
 	if now < next_ability_time:
@@ -1583,7 +1569,7 @@ func server_ability_request() -> void:
 			main.push_kill_feed.rpc("%s deployed a sensor beacon" % player_name)
 
 func server_class_request(index: int) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	player_class = clampi(index, 0, 4); health = mini(health, _class_health(player_class))
 
@@ -1990,7 +1976,7 @@ func _server_bot_fire(target: Node3D) -> void:
 		)
 
 func server_force_respawn(spawn_position: Vector3) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	global_position = spawn_position
 	velocity = Vector3.ZERO
@@ -2019,7 +2005,7 @@ func server_set_team_and_class(
 	new_team: int,
 	new_class: int
 ) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 
 	team = clampi(new_team, 0, 1)
@@ -2037,7 +2023,7 @@ func server_set_team_and_class(
 		)
 
 func server_apply_class(class_id: int) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 
 	player_class = clampi(class_id, 0, 4)
@@ -2049,7 +2035,7 @@ func server_apply_class(class_id: int) -> void:
 	_configure_class_loadout(true, false)
 
 func add_xp(amount: int, reason: String = "") -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	xp = maxi(0, xp + amount)
 	if reason != "":

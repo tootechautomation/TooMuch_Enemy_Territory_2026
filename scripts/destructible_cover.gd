@@ -1,19 +1,5 @@
 extends StaticBody3D
 
-
-func _has_active_multiplayer_peer() -> bool:
-	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
-	if peer == null:
-		return false
-	return (
-		peer.get_connection_status()
-		!= MultiplayerPeer.CONNECTION_DISCONNECTED
-	)
-
-func _is_active_server() -> bool:
-	if not _has_active_multiplayer_peer():
-		return false
-	return multiplayer.is_server()
 const TEX_CONCRETE: Texture2D = preload("res://assets/textures/concrete_damage.png")
 
 var cover_id := 0
@@ -70,7 +56,7 @@ func _build_visuals() -> void:
 	add_child(health_label)
 
 func server_take_damage(amount: int, attacker_id: int) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	if amount <= 0 or health <= 0:
 		return

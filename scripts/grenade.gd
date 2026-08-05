@@ -1,19 +1,5 @@
 extends CharacterBody3D
 
-
-func _has_active_multiplayer_peer() -> bool:
-	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
-	if peer == null:
-		return false
-	return (
-		peer.get_connection_status()
-		!= MultiplayerPeer.CONNECTION_DISCONNECTED
-	)
-
-func _is_active_server() -> bool:
-	if not _has_active_multiplayer_peer():
-		return false
-	return multiplayer.is_server()
 const GRAVITY := 18.0
 const BOUNCE_FACTOR := 0.42
 const POSITION_SYNC_INTERVAL := 0.05
@@ -67,7 +53,7 @@ func _physics_process(delta: float) -> void:
 			next_beep_time = beep_interval
 			beep_audio.play()
 
-	if _is_active_server():
+	if multiplayer.is_server():
 		_server_simulate(delta)
 	else:
 		global_position = global_position.lerp(
@@ -112,7 +98,7 @@ func sync_state(
 	server_velocity: Vector3,
 	server_fuse: float
 ) -> void:
-	if _is_active_server():
+	if multiplayer.is_server():
 		return
 	target_position = server_position
 	target_velocity = server_velocity

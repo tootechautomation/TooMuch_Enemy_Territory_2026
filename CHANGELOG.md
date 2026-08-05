@@ -1,10 +1,10 @@
 # Changelog
 
-## 3.4.2
+## 3.4.3
 
-- Fixed `The multiplayer instance isn't currently active` debugger flood
-- Added active-peer guards to all server-authoritative scripts
-- Disabled emplacement simulation during offline editor preview
-- Disabled round/server simulation until multiplayer is active
-- Added explicit offline-preview status
-- Bumped protocol to 342
+- Fixed gray screen after failed connection
+- Restored connection menu after failure/disconnect
+- Removed broad networking guards
+- Preserved protocol 341 compatibility
+- Added clean peer reset before reconnect
+- Limited inactive-peer guards to autonomous entities

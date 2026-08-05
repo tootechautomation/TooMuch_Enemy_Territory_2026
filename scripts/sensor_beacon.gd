@@ -1,7 +1,7 @@
 extends Node3D
 
 
-func _has_active_multiplayer_peer() -> bool:
+func _multiplayer_session_active() -> bool:
 	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
 	if peer == null:
 		return false
@@ -10,10 +10,6 @@ func _has_active_multiplayer_peer() -> bool:
 		!= MultiplayerPeer.CONNECTION_DISCONNECTED
 	)
 
-func _is_active_server() -> bool:
-	if not _has_active_multiplayer_peer():
-		return false
-	return multiplayer.is_server()
 var beacon_id := 0
 var owner_id := 0
 var team := 0
@@ -68,11 +64,13 @@ func _build_visuals() -> void:
 	add_child(beacon_light)
 
 func _process(delta: float) -> void:
+	if not _multiplayer_session_active():
+		return
 	lifetime_remaining = maxf(0.0, lifetime_remaining - delta)
 	pulse_accumulator += delta
 	if beacon_light != null:
 		beacon_light.light_energy = 1.4 + sin(Time.get_ticks_msec() * 0.012) * 0.7
-	if _is_active_server():
+	if multiplayer.is_server():
 		if pulse_accumulator >= 1.25:
 			pulse_accumulator = 0.0
 			if main_node != null:

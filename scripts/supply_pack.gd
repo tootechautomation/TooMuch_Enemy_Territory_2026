@@ -1,19 +1,5 @@
 extends Node3D
 
-
-func _has_active_multiplayer_peer() -> bool:
-	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
-	if peer == null:
-		return false
-	return (
-		peer.get_connection_status()
-		!= MultiplayerPeer.CONNECTION_DISCONNECTED
-	)
-
-func _is_active_server() -> bool:
-	if not _has_active_multiplayer_peer():
-		return false
-	return multiplayer.is_server()
 @export var pack_id := 0
 @export var team := 0
 @export var pack_type := 0 # 0 health, 1 ammo
@@ -29,7 +15,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	age += delta
 	rotate_y(delta * 1.5)
-	if _is_active_server() and not consumed:
+	if multiplayer.is_server() and not consumed:
 		for player in get_parent().players.values():
 			if player.team == team and player.alive and not player.downed and global_position.distance_to(player.global_position) <= 1.5:
 				if pack_type == 0 and player.health < player._class_health(player.player_class):

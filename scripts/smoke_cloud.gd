@@ -1,7 +1,7 @@
 extends Node3D
 
 
-func _has_active_multiplayer_peer() -> bool:
+func _multiplayer_session_active() -> bool:
 	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
 	if peer == null:
 		return false
@@ -10,10 +10,6 @@ func _has_active_multiplayer_peer() -> bool:
 		!= MultiplayerPeer.CONNECTION_DISCONNECTED
 	)
 
-func _is_active_server() -> bool:
-	if not _has_active_multiplayer_peer():
-		return false
-	return multiplayer.is_server()
 var smoke_id := 0
 var team := 0
 var lifetime_remaining := 12.0
@@ -46,6 +42,8 @@ func _build_visuals() -> void:
 	add_child(cloud_mesh)
 
 func _process(delta: float) -> void:
+	if not _multiplayer_session_active():
+		return
 	lifetime_remaining = maxf(0.0, lifetime_remaining - delta)
 	if cloud_mesh != null:
 		cloud_mesh.rotation.y += delta * 0.18
@@ -54,7 +52,7 @@ func _process(delta: float) -> void:
 	if lifetime_remaining <= 0.0:
 		set_process(false)
 
-		if _is_active_server():
+		if multiplayer.is_server():
 			var main_node: Node = get_parent()
 			if main_node != null:
 				main_node.call("server_remove_smoke", smoke_id)

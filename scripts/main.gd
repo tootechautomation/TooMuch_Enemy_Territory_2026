@@ -1,19 +1,5 @@
 extends Node
 
-
-func _has_active_multiplayer_peer() -> bool:
-	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
-	if peer == null:
-		return false
-	return (
-		peer.get_connection_status()
-		!= MultiplayerPeer.CONNECTION_DISCONNECTED
-	)
-
-func _is_active_server() -> bool:
-	if not _has_active_multiplayer_peer():
-		return false
-	return multiplayer.is_server()
 const PlayerScene = preload("res://scenes/player.tscn")
 const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
@@ -27,8 +13,8 @@ const TEX_OBJECTIVE: Texture2D = preload("res://assets/textures/objective_hazard
 const TEX_FOLIAGE: Texture2D = preload("res://assets/textures/foliage_sprite.png")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.4.2"
-const NETWORK_PROTOCOL := 342
+const BUILD_VERSION := "3.4.3"
+const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -101,6 +87,10 @@ var match_time_remaining := MATCH_LENGTH_SECONDS
 var spawn_wave_remaining := SPAWN_WAVE_SECONDS
 var match_over := false
 var status_label: Label
+var connection_panel: PanelContainer
+var connection_address: LineEdit
+var connection_port: SpinBox
+var connection_join_button: Button
 var protocol_verified := false
 var protocol_message := "Protocol pending"
 var last_server_input_ack := -1
@@ -144,7 +134,6 @@ func _ready() -> void:
 	_build_world()
 	_build_round_results_ui()
 	_update_objective_visuals()
-	protocol_message = "Offline preview — host or connect to begin"
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -157,7 +146,15 @@ func _process(delta: float) -> void:
 	_update_command_post_visuals()
 	_update_battlefield_atmosphere()
 
-	if not _is_active_server():
+	var active_peer: MultiplayerPeer = multiplayer.multiplayer_peer
+	if active_peer == null:
+		return
+	if (
+		active_peer.get_connection_status()
+		== MultiplayerPeer.CONNECTION_DISCONNECTED
+	):
+		return
+	if not multiplayer.is_server():
 		return
 
 	_update_pending_artillery(delta)
@@ -328,7 +325,7 @@ func _command_post_node() -> Node3D:
 	return get_node_or_null("CommandPost") as Node3D
 
 func _update_command_post_capture(delta: float) -> void:
-	if not _is_active_server() or match_over:
+	if not multiplayer.is_server() or match_over:
 		return
 	if objective_stage == 0:
 		command_post_contested = false
@@ -558,23 +555,91 @@ func join_server(address: String, port: int = PORT_DEFAULT) -> void:
 	if status_label: status_label.text = "Connecting to %s:%d..." % [address, port]
 
 func _show_connection_menu() -> void:
-	var canvas := CanvasLayer.new(); add_child(canvas)
-	var panel := PanelContainer.new(); panel.position = Vector2(30, 30); panel.custom_minimum_size = Vector2(420, 210); canvas.add_child(panel)
-	var box := VBoxContainer.new(); panel.add_child(box)
-	var title := Label.new(); title.text = "FRONTLINE: OBJECTIVE"; title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; box.add_child(title)
-	var address := LineEdit.new(); address.placeholder_text = "Server IP"; address.text = "127.0.0.1"; box.add_child(address)
-	var port := SpinBox.new(); port.min_value = 1; port.max_value = 65535; port.value = PORT_DEFAULT; box.add_child(port)
-	var join := Button.new(); join.text = "Join Server"; box.add_child(join)
-	status_label = Label.new(); status_label.text = "WASD · Mouse · E interact · Q ability · Tab scoreboard"; box.add_child(status_label)
-	join.pressed.connect(func(): join_server(address.text.strip_edges(), int(port.value)); panel.hide())
+	if connection_panel != null and is_instance_valid(connection_panel):
+		connection_panel.visible = true
+		if status_label != null:
+			status_label.text = "Enter server address and connect."
+		return
 
-func _on_connected_to_server() -> void: print("Connected as peer %d" % multiplayer.get_unique_id())
+	var canvas := CanvasLayer.new()
+	canvas.name = "ConnectionCanvas"
+	add_child(canvas)
+
+	connection_panel = PanelContainer.new()
+	connection_panel.name = "ConnectionPanel"
+	connection_panel.position = Vector2(70, 30)
+	connection_panel.custom_minimum_size = Vector2(460, 250)
+	canvas.add_child(connection_panel)
+
+	var box := VBoxContainer.new()
+	connection_panel.add_child(box)
+
+	var title := Label.new()
+	title.text = "FRONTLINE: OBJECTIVE"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	box.add_child(title)
+
+	connection_address = LineEdit.new()
+	connection_address.placeholder_text = "Server IP"
+	connection_address.text = "127.0.0.1"
+	box.add_child(connection_address)
+
+	connection_port = SpinBox.new()
+	connection_port.min_value = 1
+	connection_port.max_value = 65535
+	connection_port.value = PORT_DEFAULT
+	box.add_child(connection_port)
+
+	connection_join_button = Button.new()
+	connection_join_button.text = "Join Server"
+	connection_join_button.pressed.connect(
+		func() -> void:
+			if connection_join_button != null:
+				connection_join_button.disabled = true
+			if status_label != null:
+				status_label.text = "Connecting…"
+
+			join_server(
+				connection_address.text.strip_edges(),
+				int(connection_port.value)
+			)
+	)
+	box.add_child(connection_join_button)
+
+	status_label = Label.new()
+	status_label.text = "WASD · Mouse · E interact · Q ability · Tab scoreboard"
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(status_label)
+
+func _on_connected_to_server() -> void:
+	print("Connected as peer %d" % multiplayer.get_unique_id())
+	if status_label != null:
+		status_label.text = "Connected. Verifying protocol…"
+	if connection_panel != null:
+		connection_panel.visible = false
+	if connection_join_button != null:
+		connection_join_button.disabled = false
+
 func _on_connection_failed() -> void:
-	if status_label: status_label.text = "Connection failed."
 	push_error("Connection failed")
 
+	if multiplayer.multiplayer_peer != null:
+		multiplayer.multiplayer_peer.close()
+		multiplayer.multiplayer_peer = null
+
+	if connection_panel != null:
+		connection_panel.visible = true
+	if connection_join_button != null:
+		connection_join_button.disabled = false
+	if status_label != null:
+		status_label.text = (
+			"Connection failed. Check the VPS IP, port 27960, "
+			"firewall, and server process."
+	)
+
 func _on_peer_connected(id: int) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 
 	verified_peers[id] = false
@@ -629,7 +694,7 @@ func _on_peer_connected(id: int) -> void:
 	spawn_player.rpc(id, team, player_names[id], _get_spawn(team, id))
 
 func _on_peer_disconnected(id: int) -> void:
-	if not _is_active_server(): return
+	if not multiplayer.is_server(): return
 	remove_player.rpc(id)
 	player_teams.erase(id)
 	player_names.erase(id)
@@ -640,7 +705,7 @@ func receive_server_protocol(
 	server_protocol: int,
 	server_version: String
 ) -> void:
-	if _is_active_server():
+	if multiplayer.is_server():
 		return
 
 	if server_protocol != NETWORK_PROTOCOL:
@@ -676,7 +741,7 @@ func client_protocol_ack(
 	client_protocol: int,
 	client_version: String
 ) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
@@ -706,7 +771,7 @@ func is_peer_protocol_verified(peer_id: int) -> bool:
 	return bool(verified_peers.get(peer_id, false))
 
 func _player_from_remote_sender() -> Node3D:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return null
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
@@ -829,7 +894,7 @@ func show_squad_ping(
 	push_kill_feed.rpc("%s marked a squad target" % sender_name)
 
 func server_call_artillery(caller: Node3D, target_position: Vector3) -> void:
-	if not _is_active_server() or caller == null:
+	if not multiplayer.is_server() or caller == null:
 		return
 	target_position.y = 0.15
 	pending_artillery.append({
@@ -842,7 +907,7 @@ func server_call_artillery(caller: Node3D, target_position: Vector3) -> void:
 	push_kill_feed.rpc("%s called artillery" % str(caller.get("player_name")))
 
 func _update_pending_artillery(delta: float) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	var completed: Array[int] = []
 	for index in pending_artillery.size():
@@ -932,7 +997,7 @@ func show_artillery_impact(target_position: Vector3) -> void:
 	timer.start()
 
 func create_sensor_beacon(owner: Node3D) -> void:
-	if not _is_active_server() or owner == null:
+	if not multiplayer.is_server() or owner == null:
 		return
 	var owner_id: int = int(owner.get("peer_id"))
 	var old_ids: Array[int] = []
@@ -961,7 +1026,7 @@ func spawn_sensor_beacon(beacon_id: int, owner_id: int, team: int, position: Vec
 	sensor_beacons[beacon_id] = beacon
 
 func server_sensor_beacon_pulse(beacon: Node3D) -> void:
-	if not _is_active_server() or beacon == null:
+	if not multiplayer.is_server() or beacon == null:
 		return
 	var beacon_team: int = int(beacon.get("team"))
 	var radius: float = float(beacon.get("radius"))
@@ -975,7 +1040,7 @@ func server_sensor_beacon_pulse(beacon: Node3D) -> void:
 			target.call("server_set_spotted", 2600)
 
 func server_remove_sensor_beacon(beacon_id: int) -> void:
-	if _is_active_server():
+	if multiplayer.is_server():
 		remove_sensor_beacon.rpc(beacon_id)
 
 @rpc("authority", "call_local", "reliable")
@@ -996,7 +1061,7 @@ func remove_sensor_beacon(beacon_id: int) -> void:
 		beacon.queue_free()
 
 func repair_nearby_barricades(engineer: Node3D, amount: int) -> int:
-	if not _is_active_server() or engineer == null:
+	if not multiplayer.is_server() or engineer == null:
 		return 0
 	var repaired := 0
 	for constructible_value in constructibles.values():
@@ -1055,7 +1120,7 @@ func spawn_constructible(constructible_id: int, owner_id: int, team: int, spawn_
 	constructibles[constructible_id] = barricade
 
 func server_destroy_constructible(constructible_id: int, attacker_id: int) -> void:
-	if not _is_active_server() or not constructibles.has(constructible_id):
+	if not multiplayer.is_server() or not constructibles.has(constructible_id):
 		return
 	var barricade: Node = constructibles[constructible_id] as Node
 	var owner_id := 0
@@ -1165,7 +1230,7 @@ func server_scout_recon(
 	radius: float = 36.0,
 	duration_ms: int = 8000
 ) -> int:
-	if not _is_active_server() or scout == null:
+	if not multiplayer.is_server() or scout == null:
 		return 0
 
 	var scout_team: int = int(scout.get("team"))
@@ -1207,12 +1272,12 @@ func request_player_class(
 
 @rpc("authority", "call_remote", "unreliable_ordered", 3)
 func receive_input_ack(sequence: int) -> void:
-	if _is_active_server():
+	if multiplayer.is_server():
 		return
 	last_server_input_ack = sequence
 
 func _broadcast_player_snapshots() -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 
 	for player_value in players.values():
@@ -1281,7 +1346,7 @@ func receive_player_snapshot(
 	smoke_count: int,
 	heavy_fire_ms: int
 ) -> void:
-	if _is_active_server():
+	if multiplayer.is_server():
 		return
 
 	if not players.has(peer_id):
@@ -1333,7 +1398,7 @@ func spawn_player(peer_id: int, team: int, pname: String, spawn_position: Vector
 	add_child(player)
 	players[peer_id] = player
 
-	if _is_active_server():
+	if multiplayer.is_server():
 		print(
 			"Spawned %s peer=%d team=%d at %s" % [
 				pname,
@@ -1408,7 +1473,7 @@ func _validate_spawn_candidate(
 	base_candidate: Vector3,
 	peer_id: int
 ) -> Dictionary:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return {
 			"valid": true,
 			"position": base_candidate
@@ -1550,7 +1615,7 @@ func _respawn_wave() -> void:
 			)
 
 func server_engineer_interact(engineer: Node3D) -> bool:
-	if not _is_active_server() or match_over:
+	if not multiplayer.is_server() or match_over:
 		return false
 
 	var engineer_team: int = int(engineer.get("team"))
@@ -1596,7 +1661,7 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 	return false
 
 func arm_dynamite(engineer_id: int) -> bool:
-	if not _is_active_server() or match_over or objective_stage != 1 or dynamite_armed:
+	if not multiplayer.is_server() or match_over or objective_stage != 1 or dynamite_armed:
 		return false
 	dynamite_armed = true
 	dynamite_remaining = DYNAMITE_FUSE_SECONDS
@@ -1608,7 +1673,7 @@ func arm_dynamite(engineer_id: int) -> bool:
 	return true
 
 func damage_objective(amount: int, attacker_team: int) -> void:
-	if not _is_active_server() or match_over or attacker_team != 0: return
+	if not multiplayer.is_server() or match_over or attacker_team != 0: return
 	objective_health = maxi(0, objective_health - amount)
 	if objective_health <= 0: _end_match("ATTACKERS WIN — objective destroyed")
 
@@ -1691,7 +1756,7 @@ func spawn_smoke(smoke_id: int, team: int, spawn_position: Vector3, duration: fl
 	smoke_clouds[smoke_id] = cloud
 
 func server_remove_smoke(smoke_id: int) -> void:
-	if _is_active_server():
+	if multiplayer.is_server():
 		remove_smoke.rpc(smoke_id)
 
 @rpc("authority", "call_local", "reliable")
@@ -1760,7 +1825,7 @@ func server_throw_grenade(
 	origin: Vector3,
 	direction: Vector3
 ) -> bool:
-	if not _is_active_server() or match_over:
+	if not multiplayer.is_server() or match_over:
 		return false
 	if owner == null:
 		return false
@@ -1820,7 +1885,7 @@ func server_explode_grenade(
 	radius: float,
 	maximum_damage: int
 ) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	if not grenades.has(grenade_id):
 		return
@@ -1912,7 +1977,7 @@ func explode_grenade(
 	tween.chain().tween_callback(flash.queue_free)
 
 func create_supply_pack(owner: Node3D, pack_type: int, amount: int) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 
 	var id: int = next_supply_pack_id
@@ -2152,7 +2217,7 @@ func announce(message: String) -> void:
 	var label := Label.new(); label.text = message; label.position = Vector2(390, 50); label.add_theme_font_size_override("font_size", 28); layer.add_child(label)
 
 func _update_command_post_stations() -> void:
-	if not _is_active_server() or objective_stage == 0 or command_post_control < 0:
+	if not multiplayer.is_server() or objective_stage == 0 or command_post_control < 0:
 		return
 	var command_post: Node3D = _command_post_node()
 	if command_post == null:
@@ -2465,7 +2530,7 @@ func scoreboard_text() -> String:
 
 
 func _spawn_bot(index: int) -> void:
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 
 	var bot_id: int = next_bot_peer_id

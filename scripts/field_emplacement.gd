@@ -1,7 +1,9 @@
 extends Node3D
 
+const TEX_METAL: Texture2D = preload("res://assets/textures/metal_panel.png")
 
-func _has_active_multiplayer_peer() -> bool:
+
+func _multiplayer_session_active() -> bool:
 	var peer: MultiplayerPeer = multiplayer.multiplayer_peer
 	if peer == null:
 		return false
@@ -9,12 +11,6 @@ func _has_active_multiplayer_peer() -> bool:
 		peer.get_connection_status()
 		!= MultiplayerPeer.CONNECTION_DISCONNECTED
 	)
-
-func _is_active_server() -> bool:
-	if not _has_active_multiplayer_peer():
-		return false
-	return multiplayer.is_server()
-const TEX_METAL: Texture2D = preload("res://assets/textures/metal_panel.png")
 
 var emplacement_id := 0
 var preferred_team := 0
@@ -111,9 +107,11 @@ func _build_visuals() -> void:
 	add_child(status_label)
 
 func _process(delta: float) -> void:
+	if not _multiplayer_session_active():
+		return
 	_update_control_state()
 
-	if not _is_active_server():
+	if not multiplayer.is_server():
 		return
 	if effective_team < 0:
 		return
