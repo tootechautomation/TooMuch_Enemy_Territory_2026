@@ -35,6 +35,8 @@ const STAMINA_DRAIN_PER_SECOND := 24.0
 const STAMINA_REGEN_PER_SECOND := 18.0
 const STAMINA_REGEN_DELAY_MS := 900
 const SUPPRESSION_DURATION_MS := 1800
+const HEAVY_FIRE_DURATION_MS := 9000
+const MEDIC_REVIVE_PULSE_RADIUS := 12.0
 const REVIVE_RANGE := 2.8
 const BLEEDOUT_MS := 15000
 const STANDING_HEAD_Y := 0.65
@@ -160,6 +162,9 @@ var smoke_grenades := 1
 var replicated_smoke_grenades := 1
 var spectator_freecam := false
 var spectator_freecam_position := Vector3.ZERO
+var heavy_fire_until_ms := 0
+var replicated_heavy_fire_ms := 0
+var class_mode_label: Label
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -482,7 +487,7 @@ func _server_simulate(delta: float) -> void:
 		server_take_damage(fall_damage, 0)
 
 
-func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int, stamina_value: float, suppression_ms: int, smoke_count: int) -> void:
+func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int, stamina_value: float, suppression_ms: int, smoke_count: int, heavy_fire_ms: int) -> void:
 	if multiplayer.is_server():
 		return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
@@ -517,6 +522,7 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 	)
 	replicated_suppression_ms = maxi(0, suppression_ms)
 	replicated_smoke_grenades = maxi(0, smoke_count)
+	replicated_heavy_fire_ms = maxi(0, heavy_fire_ms)
 	_update_spotted_marker()
 	_apply_crouch_visual(crouching)
 
@@ -765,7 +771,10 @@ func _weapon_reserve_ammo() -> int:
 	return _resource_int(weapon, "reserve_ammo", 120)
 
 func _weapon_damage() -> int:
-	return _resource_int(weapon, "damage", 20)
+	var base_damage: int = _resource_int(weapon, "damage", 20)
+	if heavy_fire_remaining_ms() > 0 and current_weapon_index == 0:
+		base_damage = int(round(base_damage * 1.16))
+	return base_damage
 
 func _weapon_reload_seconds() -> float:
 	return _resource_float(weapon, "reload_seconds", 2.0)
@@ -793,7 +802,10 @@ func _weapon_fire_interval_ms() -> int:
 	)
 	if rounds_per_minute <= 0.0:
 		return 120
-	return maxi(1, int(round(60000.0 / rounds_per_minute)))
+	var interval: int = maxi(1, int(round(60000.0 / rounds_per_minute)))
+	if heavy_fire_remaining_ms() > 0 and current_weapon_index == 0:
+		interval = maxi(55, int(round(interval * 0.72)))
+	return interval
 
 func _class_primary_weapon(class_id: int) -> Resource:
 	match clampi(class_id, 0, 4):
@@ -1058,6 +1070,11 @@ func combat_notice(message: String) -> void:
 	)
 	elimination_notice.visible = true
 
+func heavy_fire_remaining_ms() -> int:
+	if not multiplayer.is_server():
+		return replicated_heavy_fire_ms
+	return maxi(0, heavy_fire_until_ms - Time.get_ticks_msec())
+
 func suppression_remaining_ms() -> int:
 	if not multiplayer.is_server():
 		return replicated_suppression_ms
@@ -1218,6 +1235,7 @@ func server_respawn(spawn_position: Vector3) -> void:
 	health = _class_health(player_class)
 	stamina = MAX_STAMINA
 	suppressed_until_ms = 0
+	heavy_fire_until_ms = 0
 	smoke_grenades = 1
 	recent_damage.clear()
 	previous_vertical_velocity = 0.0
@@ -1446,120 +1464,93 @@ func _update_spotted_marker() -> void:
 func _ability_name() -> String:
 	match player_class:
 		PlayerClass.SOLDIER:
-			return "Combat Resupply"
+			return "Heavy Fire"
 		PlayerClass.MEDIC:
-			return "Healing Burst"
+			return "Revive Pulse"
 		PlayerClass.ENGINEER:
-			return "Field Repair"
+			return "Fortify"
 		PlayerClass.FIELD_OPS:
-			return "Ammo Pulse"
+			return "Artillery Strike"
 		PlayerClass.SCOUT:
-			return "Recon Pulse"
+			return "Sensor Beacon"
 		_:
 			return "Ability"
 
 func server_ability_request() -> void:
 	if not multiplayer.is_server() or not alive or downed:
 		return
-
 	var now: int = Time.get_ticks_msec()
 	if now < next_ability_time:
 		return
-
 	next_ability_time = now + ABILITY_COOLDOWN_MS
 	var main: Node = get_parent()
+	if main == null:
+		return
 
 	match player_class:
 		PlayerClass.SOLDIER:
-			reserve_ammo = mini(
-				reserve_ammo + 90,
-				_weapon_reserve_ammo() + 120
-			)
-			grenades_remaining = mini(grenades_remaining + 1, 3)
-			add_xp(3, "combat resupply")
+			heavy_fire_until_ms = now + HEAVY_FIRE_DURATION_MS
+			reserve_ammo = mini(reserve_ammo + 60, _weapon_reserve_ammo() + 100)
+			add_xp(4, "heavy fire")
+			main.push_kill_feed.rpc("%s activated Heavy Fire" % player_name)
 
 		PlayerClass.MEDIC:
+			var revived_count := 0
 			var healed_count := 0
 			for player_value in main.players.values():
 				var teammate: Node3D = player_value as Node3D
-				if teammate == null:
+				if teammate == null or int(teammate.get("team")) != team:
 					continue
-				if int(teammate.get("team")) != team:
+				if global_position.distance_to(teammate.global_position) > MEDIC_REVIVE_PULSE_RADIUS:
 					continue
-				if not bool(teammate.get("alive")):
-					continue
-				if global_position.distance_to(teammate.global_position) > 10.0:
-					continue
-
-				var teammate_max: int = teammate.call(
-					"_class_health",
-					int(teammate.get("player_class"))
-				)
-				var current_health: int = int(teammate.get("health"))
-				var new_health: int = mini(
-					teammate_max,
-					current_health + 40
-				)
-				if new_health > current_health:
-					teammate.set("health", new_health)
-					healed_count += 1
-
-			if healed_count > 0:
-				add_xp(healed_count * 4, "healing burst")
+				if bool(teammate.get("alive")) and bool(teammate.get("downed")):
+					teammate.call("server_revive", peer_id)
+					revived_count += 1
+				elif bool(teammate.get("alive")):
+					var maximum: int = int(teammate.call("_class_health", int(teammate.get("player_class"))))
+					var current: int = int(teammate.get("health"))
+					if current < maximum:
+						teammate.set("health", mini(maximum, current + 32))
+						healed_count += 1
 			if main.has_method("create_supply_pack"):
-				main.call("create_supply_pack", self, 0, 45)
+				main.call("create_supply_pack", self, 0, 50)
+			add_xp(revived_count * 12 + healed_count * 3, "revive pulse")
+			main.push_kill_feed.rpc("%s used Revive Pulse" % player_name)
 
 		PlayerClass.ENGINEER:
-			health = mini(
-				_class_health(player_class),
-				health + 35
-			)
+			health = mini(_class_health(player_class), health + 30)
+			var repaired := 0
+			if main.has_method("repair_nearby_barricades"):
+				repaired = int(main.call("repair_nearby_barricades", self, 85))
 			if main.has_method("server_engineer_interact"):
-				for step in range(3):
+				for step in range(2):
 					main.call("server_engineer_interact", self)
-			add_xp(3, "field repair")
+			add_xp(4 + repaired * 3, "fortify")
+			main.push_kill_feed.rpc("%s reinforced field defenses" % player_name)
 
 		PlayerClass.FIELD_OPS:
-			var supplied_count := 0
-			for player_value in main.players.values():
-				var teammate: Node3D = player_value as Node3D
-				if teammate == null:
-					continue
-				if int(teammate.get("team")) != team:
-					continue
-				if not bool(teammate.get("alive")):
-					continue
-				if global_position.distance_to(teammate.global_position) > 12.0:
-					continue
-
-				var current_reserve: int = int(
-					teammate.get("reserve_ammo")
-				)
-				var maximum_reserve: int = int(
-					teammate.call("_weapon_reserve_ammo")
-				)
-				var new_reserve: int = mini(
-					maximum_reserve + 60,
-					current_reserve + 70
-				)
-				if new_reserve > current_reserve:
-					teammate.set("reserve_ammo", new_reserve)
-					teammate.call("_store_current_weapon_ammo")
-					supplied_count += 1
-
-			if supplied_count > 0:
-				add_xp(supplied_count * 3, "ammo pulse")
+			var target_position: Vector3 = global_position + (-global_transform.basis.z * 22.0)
+			target_position.y = 0.15
+			var ray_start: Vector3 = $Head.global_position
+			var ray_end: Vector3 = ray_start + (-$Head.global_transform.basis.z * 50.0)
+			var query := PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+			query.exclude = [self]
+			var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+			if not hit.is_empty():
+				target_position = Vector3(hit.get("position", target_position))
+			if main.has_method("server_call_artillery"):
+				main.call("server_call_artillery", self, target_position)
 			if main.has_method("create_supply_pack"):
-				main.call("create_supply_pack", self, 1, 80)
+				main.call("create_supply_pack", self, 1, 85)
+			add_xp(5, "artillery call")
 
 		PlayerClass.SCOUT:
+			if main.has_method("create_sensor_beacon"):
+				main.call("create_sensor_beacon", self)
 			if main.has_method("server_scout_recon"):
-				main.call(
-					"server_scout_recon",
-					self,
-					36.0,
-					SCOUT_SPOT_DURATION_MS
-				)
+				main.call("server_scout_recon", self, 28.0, 3500)
+			add_xp(4, "sensor beacon")
+			main.push_kill_feed.rpc("%s deployed a sensor beacon" % player_name)
 
 func server_class_request(index: int) -> void:
 	if not multiplayer.is_server():
@@ -1963,6 +1954,7 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 	health = _class_health(player_class)
 	stamina = MAX_STAMINA
 	suppressed_until_ms = 0
+	heavy_fire_until_ms = 0
 	smoke_grenades = 1
 	_reset_loadout_ammo()
 	grenades_remaining = 2
@@ -2729,6 +2721,13 @@ func _build_hud() -> void:
 	operations_label.add_theme_font_size_override("font_size", 18)
 	layer.add_child(operations_label)
 
+	class_mode_label = Label.new()
+	class_mode_label.position = Vector2(445, 150)
+	class_mode_label.custom_minimum_size = Vector2(390, 26)
+	class_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	class_mode_label.add_theme_font_size_override("font_size", 18)
+	layer.add_child(class_mode_label)
+
 	command_post_bar = ProgressBar.new()
 	command_post_bar.position = Vector2(440, 122)
 	command_post_bar.size = Vector2(400, 18)
@@ -3036,6 +3035,13 @@ func _update_hud() -> void:
 		command_post_bar.value = float(
 			main.get("command_post_progress")
 		)
+
+	if class_mode_label != null:
+		var ability_state := "READY" if replicated_ability_cooldown_ms <= 0 else "%.1fs" % (float(replicated_ability_cooldown_ms) / 1000.0)
+		var active_mode := ""
+		if replicated_heavy_fire_ms > 0:
+			active_mode = " · HEAVY FIRE %.1fs" % (float(replicated_heavy_fire_ms) / 1000.0)
+		class_mode_label.text = "%s [%s]%s" % [_ability_name(), ability_state, active_mode]
 
 	var minutes := int(main.get("match_time_remaining")) / 60
 	var seconds := int(main.get("match_time_remaining")) % 60

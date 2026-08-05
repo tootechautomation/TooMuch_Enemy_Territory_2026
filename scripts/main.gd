@@ -5,10 +5,11 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const ConstructibleScript = preload("res://scripts/constructible.gd")
 const SmokeCloudScript = preload("res://scripts/smoke_cloud.gd")
+const SensorBeaconScript = preload("res://scripts/sensor_beacon.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.1.0"
-const NETWORK_PROTOCOL := 310
+const BUILD_VERSION := "3.2.0"
+const NETWORK_PROTOCOL := 320
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -20,6 +21,11 @@ const COMMAND_POST_RADIUS := 5.5
 const FORWARD_SPAWN_WAVE_BONUS := 2.0
 const MAX_BARRICADES_PER_ENGINEER := 2
 const COMMAND_POST_STATION_INTERVAL := 1.0
+const ARTILLERY_WARNING_SECONDS := 2.8
+const ARTILLERY_RADIUS := 7.5
+const ARTILLERY_DAMAGE := 92
+const SENSOR_BEACON_DURATION := 18.0
+const SENSOR_BEACON_RADIUS := 24.0
 
 var players: Dictionary = {}
 var player_teams: Dictionary = {}
@@ -36,6 +42,9 @@ var next_smoke_id := 1
 var station_accumulator := 0.0
 var command_health_station: MeshInstance3D
 var command_ammo_station: MeshInstance3D
+var sensor_beacons: Dictionary = {}
+var next_sensor_beacon_id := 1
+var pending_artillery: Array[Dictionary] = []
 var spawn_points := {
 	0: [
 		Vector3(-16.0, 1.0, 0.0),
@@ -126,6 +135,8 @@ func _process(delta: float) -> void:
 
 	if not multiplayer.is_server():
 		return
+
+	_update_pending_artillery(delta)
 
 	station_accumulator += delta
 	if station_accumulator >= COMMAND_POST_STATION_INTERVAL:
@@ -722,6 +733,188 @@ func show_squad_ping(
 
 	push_kill_feed.rpc("%s marked a squad target" % sender_name)
 
+func server_call_artillery(caller: Node3D, target_position: Vector3) -> void:
+	if not multiplayer.is_server() or caller == null:
+		return
+	target_position.y = 0.15
+	pending_artillery.append({
+		"team": int(caller.get("team")),
+		"owner_id": int(caller.get("peer_id")),
+		"position": target_position,
+		"remaining": ARTILLERY_WARNING_SECONDS
+	})
+	show_artillery_warning.rpc(target_position, ARTILLERY_WARNING_SECONDS)
+	push_kill_feed.rpc("%s called artillery" % str(caller.get("player_name")))
+
+func _update_pending_artillery(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	var completed: Array[int] = []
+	for index in pending_artillery.size():
+		var strike: Dictionary = pending_artillery[index]
+		strike["remaining"] = float(strike.get("remaining", 0.0)) - delta
+		pending_artillery[index] = strike
+		if float(strike["remaining"]) <= 0.0:
+			_execute_artillery_strike(strike)
+			completed.append(index)
+	completed.reverse()
+	for index in completed:
+		pending_artillery.remove_at(index)
+
+func _execute_artillery_strike(strike: Dictionary) -> void:
+	var position: Vector3 = Vector3(strike.get("position", Vector3.ZERO))
+	var strike_team: int = int(strike.get("team", -1))
+	var owner_id: int = int(strike.get("owner_id", 0))
+	for player_value in players.values():
+		var target: Node3D = player_value as Node3D
+		if target == null or not bool(target.get("alive")):
+			continue
+		if int(target.get("team")) == strike_team:
+			continue
+		var distance: float = target.global_position.distance_to(position)
+		if distance > ARTILLERY_RADIUS:
+			continue
+		var falloff: float = 1.0 - clampf(distance / ARTILLERY_RADIUS, 0.0, 1.0)
+		var damage: int = maxi(18, int(round(ARTILLERY_DAMAGE * falloff)))
+		target.call("server_take_damage", damage, owner_id)
+	for constructible_value in constructibles.values():
+		var constructible: Node = constructible_value as Node
+		var constructible_3d: Node3D = constructible as Node3D
+		if constructible == null or constructible_3d == null:
+			continue
+		if not constructible.has_method("server_take_damage"):
+			continue
+		if constructible_3d.global_position.distance_to(position) <= ARTILLERY_RADIUS:
+			constructible.call("server_take_damage", ARTILLERY_DAMAGE, owner_id)
+	show_artillery_impact.rpc(position)
+
+@rpc("authority", "call_local", "reliable")
+func show_artillery_warning(target_position: Vector3, delay_seconds: float) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var marker := Label3D.new()
+	marker.text = "ARTILLERY %.1fs" % delay_seconds
+	marker.position = target_position + Vector3.UP
+	marker.font_size = 34
+	marker.outline_size = 12
+	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	marker.fixed_size = true
+	marker.modulate = Color(1.0, 0.24, 0.08)
+	add_child(marker)
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = delay_seconds
+	timer.timeout.connect(marker.queue_free)
+	marker.add_child(timer)
+	timer.start()
+
+@rpc("authority", "call_local", "reliable")
+func show_artillery_impact(target_position: Vector3) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var root := Node3D.new()
+	root.position = target_position
+	add_child(root)
+	for offset in [Vector3.ZERO, Vector3(2.2,0,1.4), Vector3(-1.8,0,-1.9), Vector3(1.3,0,-2.4)]:
+		var flash := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.8
+		sphere.height = 1.6
+		flash.mesh = sphere
+		flash.position = offset + Vector3.UP * 0.5
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.emission_enabled = true
+		material.albedo_color = Color(1.0, 0.32, 0.04)
+		material.emission = Color(1.0, 0.18, 0.02)
+		flash.material_override = material
+		root.add_child(flash)
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = 0.35
+	timer.timeout.connect(root.queue_free)
+	root.add_child(timer)
+	timer.start()
+
+func create_sensor_beacon(owner: Node3D) -> void:
+	if not multiplayer.is_server() or owner == null:
+		return
+	var owner_id: int = int(owner.get("peer_id"))
+	var old_ids: Array[int] = []
+	for beacon_id_value in sensor_beacons:
+		var beacon_id: int = int(beacon_id_value)
+		var old_beacon: Node = sensor_beacons[beacon_id] as Node
+		if old_beacon != null and int(old_beacon.get("owner_id")) == owner_id:
+			old_ids.append(beacon_id)
+	for old_id in old_ids:
+		server_remove_sensor_beacon(old_id)
+	var id: int = next_sensor_beacon_id
+	next_sensor_beacon_id += 1
+	var position: Vector3 = owner.global_position + (-owner.global_transform.basis.z * 1.5)
+	position.y = 0.0
+	spawn_sensor_beacon.rpc(id, owner_id, int(owner.get("team")), position, SENSOR_BEACON_DURATION, SENSOR_BEACON_RADIUS)
+
+@rpc("authority", "call_local", "reliable")
+func spawn_sensor_beacon(beacon_id: int, owner_id: int, team: int, position: Vector3, duration: float, radius: float) -> void:
+	if sensor_beacons.has(beacon_id):
+		return
+	var beacon := Node3D.new()
+	beacon.name = "SensorBeacon_%d" % beacon_id
+	beacon.set_script(SensorBeaconScript)
+	add_child(beacon)
+	beacon.call("configure", beacon_id, owner_id, team, position, duration, radius)
+	sensor_beacons[beacon_id] = beacon
+
+func server_sensor_beacon_pulse(beacon: Node3D) -> void:
+	if not multiplayer.is_server() or beacon == null:
+		return
+	var beacon_team: int = int(beacon.get("team"))
+	var radius: float = float(beacon.get("radius"))
+	for player_value in players.values():
+		var target: Node3D = player_value as Node3D
+		if target == null or int(target.get("team")) == beacon_team:
+			continue
+		if not bool(target.get("alive")):
+			continue
+		if target.global_position.distance_to(beacon.global_position) <= radius:
+			target.call("server_set_spotted", 2600)
+
+func server_remove_sensor_beacon(beacon_id: int) -> void:
+	if multiplayer.is_server():
+		remove_sensor_beacon.rpc(beacon_id)
+
+@rpc("authority", "call_local", "reliable")
+func remove_sensor_beacon(beacon_id: int) -> void:
+	if not sensor_beacons.has(beacon_id):
+		return
+	var beacon: Node = sensor_beacons[beacon_id] as Node
+	if beacon != null:
+		beacon.queue_free()
+	sensor_beacons.erase(beacon_id)
+
+func repair_nearby_barricades(engineer: Node3D, amount: int) -> int:
+	if not multiplayer.is_server() or engineer == null:
+		return 0
+	var repaired := 0
+	for constructible_value in constructibles.values():
+		var barricade: Node = constructible_value as Node
+		var barricade_3d: Node3D = barricade as Node3D
+		if barricade == null or barricade_3d == null:
+			continue
+		if int(barricade.get("team")) != int(engineer.get("team")):
+			continue
+		if engineer.global_position.distance_to(barricade_3d.global_position) > 8.0:
+			continue
+		var health: int = int(barricade.get("health"))
+		var maximum: int = int(barricade.get("maximum_health"))
+		if health >= maximum:
+			continue
+		var new_health: int = mini(maximum, health + amount)
+		barricade.set("health", new_health)
+		barricade.call("_update_health_label_rpc", new_health)
+		repaired += 1
+	return repaired
+
 @rpc("any_peer", "call_remote", "reliable")
 func request_engineer_barricade(requested_peer_id: int, position_hint: Vector3, rotation_y: float) -> void:
 	var engineer: Node3D = _player_from_remote_sender()
@@ -943,7 +1136,8 @@ func _broadcast_player_snapshots() -> void:
 			int(player.call("spotted_remaining_ms")),
 			float(player.get("stamina")),
 			int(player.call("suppression_remaining_ms")),
-			int(player.get("smoke_grenades"))
+			int(player.get("smoke_grenades")),
+			int(player.call("heavy_fire_remaining_ms"))
 		)
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
@@ -971,7 +1165,8 @@ func receive_player_snapshot(
 	spotted_ms: int,
 	stamina_value: float,
 	suppression_ms: int,
-	smoke_count: int
+	smoke_count: int,
+	heavy_fire_ms: int
 ) -> void:
 	if multiplayer.is_server():
 		return
@@ -1009,7 +1204,8 @@ func receive_player_snapshot(
 		spotted_ms,
 		stamina_value,
 		suppression_ms,
-		smoke_count
+		smoke_count,
+		heavy_fire_ms
 	)
 
 @rpc("authority", "call_local", "reliable")
@@ -2300,6 +2496,13 @@ func _reset_round() -> void:
 		if smoke != null:
 			smoke.queue_free()
 	smoke_clouds.clear()
+
+	for beacon_value in sensor_beacons.values():
+		var beacon: Node = beacon_value as Node
+		if beacon != null:
+			beacon.queue_free()
+	sensor_beacons.clear()
+	pending_artillery.clear()
 
 	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
