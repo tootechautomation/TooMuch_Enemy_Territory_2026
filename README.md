@@ -1,28 +1,28 @@
 # Frontline: Objective
 
-An original, open-source prototype inspired by classic class-based objective shooters.
+An original Godot 4 class-based objective shooter prototype. It contains no Wolfenstein game data, maps, branding, characters, sounds, or artwork.
 
-This project contains no Wolfenstein code, names, maps, characters, sounds, or art.
+## Version 0.3 highlights
 
-## Current prototype
-
-- Godot 4 client and headless dedicated server
-- ENet UDP multiplayer
-- Automatic team assignment
-- First-person movement and shooting
-- Five selectable classes
-- Engineer-only destructible objective
-- Health, ammo, respawning, HUD, and win announcement
-- Procedurally assembled gray-box map; no external assets required
+- Server-authoritative movement, firing, damage, reloads, objectives, and respawns
+- Sprint and crouch movement
+- Modular weapon resources
+- Magazine and reserve ammunition
+- Timed reloading, weapon spread, damage, range, and rate of fire
+- Interpolated remote-player snapshots
+- Five classes, spawn waves, match timer, and engineer objective
 
 ## Controls
 
 - WASD: move
+- Shift: sprint
+- C: crouch
+- Space: jump
 - Mouse: aim
 - Left mouse: fire
-- Space: jump
-- E: damage the objective while playing Engineer on the attacking team
-- 1–5: select class
+- R: reload
+- E: engineer objective action
+- 1–5: choose class
 - Escape: release mouse
 
 ## Run locally

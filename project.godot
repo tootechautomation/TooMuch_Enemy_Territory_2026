@@ -25,3 +25,6 @@ class_2={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":50)]}
 class_3={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":51)]}
 class_4={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":52)]}
 class_5={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":53)]}
+sprint={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":4194325)]}
+crouch={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":67)]}
+reload={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":82)]}
