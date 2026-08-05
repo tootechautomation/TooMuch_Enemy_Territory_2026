@@ -532,6 +532,7 @@ func server_fire(direction: Vector3) -> void:
 				else:
 					confirm_hit.rpc_id(peer_id)
 
+	var main_node: Node = get_parent()
 	if main_node != null and main_node.has_method(
 		"show_shot_effect"
 	):
@@ -1794,7 +1795,6 @@ func _server_bot_fire(target: Node3D) -> void:
 			peer_id
 		)
 
-	var main_node: Node = get_parent()
 	if main_node != null and main_node.has_method(
 		"show_shot_effect"
 	):

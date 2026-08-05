@@ -1,35 +1,20 @@
 # Frontline: Objective
 
-## Version 2.3.0 tactical combat and scoring
+## Version 2.3.1 parser correction
 
-This combined milestone adds:
+This release corrects the `main_node` scope errors introduced in v2.3.0.
 
-### Tactical HUD
-- Objective direction: AHEAD, LEFT, RIGHT, or BEHIND
-- Live distance to the active objective
-- Enemy grenade proximity warning
-- Damage numbers with remaining enemy health
+Fixed:
 
-### Combat scoring
-- Ten-second damage-contribution tracking
-- Assist XP and assist notifications
-- Kill-streak feedback at three and five eliminations
-- Streak reset on death
+- `server_fire()` now declares `main_node` before sending shot effects.
+- `_server_bot_fire()` now has only one `main_node` declaration.
+- Tactical combat, assists, damage numbers, fall damage, grenade warnings,
+  objective direction, kill streaks, and bot skill remain included.
 
-### Movement
-- Server-authoritative fall damage
-- Damage scales from hard landing to lethal impact
+Install the same package on the Linux server and Windows client.
 
-### Bots
-- Configurable bot difficulty:
-  `--bot-skill 0.5` through `--bot-skill 2.0`
-- Skill multiplier changes bot accuracy
-- Default remains `1.0`
+Expected HUD:
 
-Example server:
-
-```bash
-flatpak run org.godotengine.Godot --headless --path .   --server --port 27960 --bots 8 --bot-skill 1.25
+```text
+Connected: v2.3.1 protocol 231
 ```
-
-Install the same package on Windows and Linux.

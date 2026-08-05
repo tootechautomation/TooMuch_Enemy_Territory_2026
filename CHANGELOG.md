@@ -1,12 +1,8 @@
 # Changelog
 
-## 2.3.0
+## 2.3.1
 
-- Added objective direction and distance HUD
-- Added nearby enemy grenade warning
-- Added damage numbers and enemy-health confirmation
-- Added assist tracking and assist XP
-- Added kill-streak notifications
-- Added server-authoritative fall damage
-- Added configurable bot skill multiplier
-- Bumped protocol to 230
+- Fixed undeclared `main_node` in `server_fire`
+- Removed duplicate `main_node` declaration in `_server_bot_fire`
+- Added function-scope consistency checks during packaging
+- Bumped protocol to 231
