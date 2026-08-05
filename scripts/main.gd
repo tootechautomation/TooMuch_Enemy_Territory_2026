@@ -390,6 +390,11 @@ func server_explode_grenade(
 		var damage: int = maxi(1, int(round(maximum_damage * damage_scale)))
 		player.call("server_take_damage", damage, owner_id)
 
+		if players.has(owner_id):
+			var grenade_owner: Node3D = players[owner_id] as Node3D
+			if grenade_owner != null:
+				grenade_owner.call("server_confirm_hit")
+
 	explode_grenade.rpc(grenade_id, explosion_position)
 
 @rpc("authority", "call_local", "reliable")

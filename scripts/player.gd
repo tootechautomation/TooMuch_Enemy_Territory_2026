@@ -61,6 +61,11 @@ var weapon_reserves: Array[int] = []
 var current_weapon_index := 0
 var hit_marker: Label
 var hit_marker_until_ms := 0
+var muzzle_flash: MeshInstance3D
+var muzzle_flash_until_ms := 0
+var damage_indicator: Label
+var damage_indicator_until_ms := 0
+var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
 var next_grenade_time := 0
 
@@ -131,7 +136,16 @@ func _collect_and_send_input() -> void:
 
 	if not downed and Input.is_action_pressed("fire"):
 		var camera := $Head/Camera3D as Camera3D
-		request_fire.rpc_id(1, camera.global_position, -camera.global_transform.basis.z)
+		if camera != null:
+			var now: int = Time.get_ticks_msec()
+			if now >= local_next_fire_feedback_ms and ammo_in_mag > 0 and not is_reloading:
+				local_next_fire_feedback_ms = now + weapon.fire_interval_ms()
+				_local_fire_feedback()
+			request_fire.rpc_id(
+				1,
+				camera.global_position,
+				-camera.global_transform.basis.z
+			)
 
 	if not downed and Input.is_action_just_pressed("reload"):
 		request_reload.rpc_id(1)
@@ -366,12 +380,36 @@ func confirm_hit() -> void:
 	if hit_marker != null:
 		hit_marker.visible = true
 
+func server_confirm_hit() -> void:
+	if not multiplayer.is_server():
+		return
+	confirm_hit.rpc_id(peer_id)
+
 func server_take_damage(amount: int, attacker_id: int) -> void:
-	if not multiplayer.is_server() or not alive or downed: return
+	if not multiplayer.is_server() or not alive or downed:
+		return
+
 	health = maxi(0, health - amount)
+
+	var attacker_position: Vector3 = global_position
+	if get_parent().players.has(attacker_id):
+		var attacker: Node3D = get_parent().players[attacker_id] as Node3D
+		if attacker != null:
+			attacker_position = attacker.global_position
+	damage_feedback.rpc_id(peer_id, attacker_position, amount)
+
 	if health == 0:
-		downed = true; health = 1; bleedout_finish_ms = Time.get_ticks_msec() + BLEEDOUT_MS; is_reloading = false; velocity = Vector3.ZERO
-		get_parent().push_kill_feed.rpc("%s downed %s" % [get_parent().player_names.get(attacker_id, "World"), player_name])
+		downed = true
+		health = 1
+		bleedout_finish_ms = Time.get_ticks_msec() + BLEEDOUT_MS
+		is_reloading = false
+		velocity = Vector3.ZERO
+		get_parent().push_kill_feed.rpc(
+			"%s downed %s" % [
+				get_parent().player_names.get(attacker_id, "World"),
+				player_name
+			]
+		)
 		set_meta("last_attacker_id", attacker_id)
 
 func _finish_death(attacker_override: int) -> void:
@@ -379,6 +417,41 @@ func _finish_death(attacker_override: int) -> void:
 	var attacker_id := attacker_override if attacker_override != 0 else int(get_meta("last_attacker_id", 0))
 	alive = false; downed = false; health = 0; deaths += 1; visible = false; velocity = Vector3.ZERO
 	get_parent().register_elimination(peer_id, attacker_id)
+
+@rpc("authority", "call_remote", "reliable")
+func damage_feedback(attacker_position: Vector3, amount: int) -> void:
+	if not _is_local_player():
+		return
+
+	damage_indicator_until_ms = Time.get_ticks_msec() + 420
+	if damage_indicator == null:
+		return
+
+	var to_attacker: Vector3 = attacker_position - global_position
+	to_attacker.y = 0.0
+	var direction_text := "FRONT"
+
+	if to_attacker.length() > 0.01:
+		to_attacker = to_attacker.normalized()
+
+		var forward: Vector3 = -global_transform.basis.z
+		forward.y = 0.0
+		forward = forward.normalized()
+
+		var right: Vector3 = global_transform.basis.x
+		right.y = 0.0
+		right = right.normalized()
+
+		var forward_dot: float = forward.dot(to_attacker)
+		var right_dot: float = right.dot(to_attacker)
+
+		if absf(right_dot) > absf(forward_dot):
+			direction_text = "RIGHT" if right_dot > 0.0 else "LEFT"
+		else:
+			direction_text = "FRONT" if forward_dot > 0.0 else "REAR"
+
+	damage_indicator.text = "DAMAGE %s  -%d" % [direction_text, amount]
+	damage_indicator.visible = true
 
 func server_revive(reviver_id: int = 0) -> void:
 	if not multiplayer.is_server() or not alive or not downed:
@@ -619,6 +692,21 @@ func _update_spectator_camera() -> void:
 	if target_head != null:
 		camera.global_transform = target_head.global_transform
 
+func _local_fire_feedback() -> void:
+	if not _is_local_player():
+		return
+
+	pitch = clampf(
+		pitch - deg_to_rad(weapon.recoil_degrees),
+		-1.35,
+		1.35
+	)
+	$Head.rotation.x = pitch
+
+	muzzle_flash_until_ms = Time.get_ticks_msec() + 55
+	if muzzle_flash != null:
+		muzzle_flash.visible = true
+
 func _build_first_person_weapon() -> void:
 	weapon_view = Node3D.new()
 	weapon_view.name = "FirstPersonWeapon"
@@ -668,6 +756,25 @@ func _rebuild_first_person_weapon() -> void:
 	grip.material_override = wood
 	weapon_view.add_child(grip)
 
+	muzzle_flash = MeshInstance3D.new()
+	var flash_mesh := SphereMesh.new()
+	flash_mesh.radius = 0.045 if is_pistol else 0.06
+	flash_mesh.height = 0.09 if is_pistol else 0.12
+	muzzle_flash.mesh = flash_mesh
+	muzzle_flash.position = Vector3(
+		0.0,
+		0.0,
+		-0.45 if is_pistol else -0.88
+	)
+
+	var flash_material := StandardMaterial3D.new()
+	flash_material.albedo_color = Color(1.0, 0.65, 0.12)
+	flash_material.emission_enabled = true
+	flash_material.emission = Color(1.0, 0.35, 0.02)
+	muzzle_flash.material_override = flash_material
+	muzzle_flash.visible = false
+	weapon_view.add_child(muzzle_flash)
+
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
@@ -685,6 +792,13 @@ func _build_hud() -> void:
 	hit_marker.visible = false
 	layer.add_child(hit_marker)
 
+	damage_indicator = Label.new()
+	damage_indicator.text = "DAMAGE"
+	damage_indicator.position = Vector2(540, 90)
+	damage_indicator.add_theme_font_size_override("font_size", 26)
+	damage_indicator.visible = false
+	layer.add_child(damage_indicator)
+
 	scoreboard = Label.new(); scoreboard.position = Vector2(390, 150); scoreboard.add_theme_font_size_override("font_size", 18); scoreboard.visible = false; layer.add_child(scoreboard)
 	feed = Label.new(); feed.position = Vector2(930, 24); feed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; feed.custom_minimum_size = Vector2(320, 150); layer.add_child(feed)
 
@@ -692,8 +806,17 @@ func _update_hud() -> void:
 	if hud == null:
 		return
 
-	if hit_marker != null and hit_marker.visible and Time.get_ticks_msec() >= hit_marker_until_ms:
+	var now: int = Time.get_ticks_msec()
+
+	if hit_marker != null and hit_marker.visible and now >= hit_marker_until_ms:
 		hit_marker.visible = false
+
+	if damage_indicator != null and damage_indicator.visible and now >= damage_indicator_until_ms:
+		damage_indicator.visible = false
+
+	if muzzle_flash != null and muzzle_flash.visible and now >= muzzle_flash_until_ms:
+		muzzle_flash.visible = false
+
 	var names := ["Soldier", "Medic", "Engineer", "Field Ops", "Scout"]
 	var main = get_parent(); var minutes := int(main.match_time_remaining) / 60; var seconds := int(main.match_time_remaining) % 60
 	var life_text := "DOWNED" if downed else (
