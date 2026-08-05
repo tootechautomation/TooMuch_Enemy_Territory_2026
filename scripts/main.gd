@@ -3,10 +3,12 @@ extends Node
 const PlayerScene = preload("res://scenes/player.tscn")
 const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
+const ConstructibleScript = preload("res://scripts/constructible.gd")
+const SmokeCloudScript = preload("res://scripts/smoke_cloud.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.0.0"
-const NETWORK_PROTOCOL := 300
+const BUILD_VERSION := "3.1.0"
+const NETWORK_PROTOCOL := 310
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -16,6 +18,8 @@ const INITIAL_TEAM_TICKETS := 80
 const COMMAND_POST_CAPTURE_SECONDS := 12.0
 const COMMAND_POST_RADIUS := 5.5
 const FORWARD_SPAWN_WAVE_BONUS := 2.0
+const MAX_BARRICADES_PER_ENGINEER := 2
+const COMMAND_POST_STATION_INTERVAL := 1.0
 
 var players: Dictionary = {}
 var player_teams: Dictionary = {}
@@ -24,6 +28,14 @@ var supply_packs: Dictionary = {}
 var grenades: Dictionary = {}
 var next_grenade_id := 1
 var next_supply_pack_id := 1
+var constructibles: Dictionary = {}
+var next_constructible_id := 1
+var engineer_constructibles: Dictionary = {}
+var smoke_clouds: Dictionary = {}
+var next_smoke_id := 1
+var station_accumulator := 0.0
+var command_health_station: MeshInstance3D
+var command_ammo_station: MeshInstance3D
 var spawn_points := {
 	0: [
 		Vector3(-16.0, 1.0, 0.0),
@@ -114,6 +126,11 @@ func _process(delta: float) -> void:
 
 	if not multiplayer.is_server():
 		return
+
+	station_accumulator += delta
+	if station_accumulator >= COMMAND_POST_STATION_INTERVAL:
+		station_accumulator = 0.0
+		_update_command_post_stations()
 
 	snapshot_accumulator += delta
 	if snapshot_accumulator >= SNAPSHOT_INTERVAL:
@@ -706,6 +723,66 @@ func show_squad_ping(
 	push_kill_feed.rpc("%s marked a squad target" % sender_name)
 
 @rpc("any_peer", "call_remote", "reliable")
+func request_engineer_barricade(requested_peer_id: int, position_hint: Vector3, rotation_y: float) -> void:
+	var engineer: Node3D = _player_from_remote_sender()
+	if engineer == null or int(engineer.get("player_class")) != 2:
+		return
+	if not bool(engineer.get("alive")) or bool(engineer.get("downed")):
+		return
+	var engineer_id: int = int(engineer.get("peer_id"))
+	var owned_ids: Array = engineer_constructibles.get(engineer_id, [])
+	while owned_ids.size() >= MAX_BARRICADES_PER_ENGINEER:
+		var oldest_id: int = int(owned_ids.pop_front())
+		server_destroy_constructible(oldest_id, 0)
+	var forward_position: Vector3 = engineer.global_position + (-engineer.global_transform.basis.z * 2.4)
+	forward_position.y = 0.0
+	if forward_position.distance_to(position_hint) > 4.0:
+		position_hint = forward_position
+	position_hint.y = 0.0
+	var id: int = next_constructible_id
+	next_constructible_id += 1
+	owned_ids.append(id)
+	engineer_constructibles[engineer_id] = owned_ids
+	spawn_constructible.rpc(id, engineer_id, int(engineer.get("team")), position_hint, rotation_y, 180)
+	engineer.call("add_xp", 5, "field fortification")
+	push_kill_feed.rpc("%s deployed a barricade" % str(engineer.get("player_name")))
+
+@rpc("authority", "call_local", "reliable")
+func spawn_constructible(constructible_id: int, owner_id: int, team: int, spawn_position: Vector3, rotation_y: float, health: int) -> void:
+	if constructibles.has(constructible_id):
+		return
+	var barricade := StaticBody3D.new()
+	barricade.name = "Barricade_%d" % constructible_id
+	barricade.set_script(ConstructibleScript)
+	add_child(barricade)
+	barricade.call("configure", constructible_id, owner_id, team, spawn_position, rotation_y, health)
+	constructibles[constructible_id] = barricade
+
+func server_destroy_constructible(constructible_id: int, attacker_id: int) -> void:
+	if not multiplayer.is_server() or not constructibles.has(constructible_id):
+		return
+	var barricade: Node = constructibles[constructible_id] as Node
+	var owner_id := 0
+	if barricade != null:
+		owner_id = int(barricade.get("owner_id"))
+	if engineer_constructibles.has(owner_id):
+		var owned: Array = engineer_constructibles[owner_id]
+		owned.erase(constructible_id)
+		engineer_constructibles[owner_id] = owned
+	remove_constructible.rpc(constructible_id)
+	if attacker_id != 0 and players.has(attacker_id):
+		players[attacker_id].call("add_xp", 4, "fortification destroyed")
+
+@rpc("authority", "call_local", "reliable")
+func remove_constructible(constructible_id: int) -> void:
+	if not constructibles.has(constructible_id):
+		return
+	var barricade: Node = constructibles[constructible_id] as Node
+	if barricade != null:
+		barricade.queue_free()
+	constructibles.erase(constructible_id)
+
+@rpc("any_peer", "call_remote", "reliable")
 func request_player_fire(
 	requested_peer_id: int,
 	origin: Vector3,
@@ -865,7 +942,8 @@ func _broadcast_player_snapshots() -> void:
 			int(player.call("ability_cooldown_remaining_ms")),
 			int(player.call("spotted_remaining_ms")),
 			float(player.get("stamina")),
-			int(player.call("suppression_remaining_ms"))
+			int(player.call("suppression_remaining_ms")),
+			int(player.get("smoke_grenades"))
 		)
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
@@ -892,7 +970,8 @@ func receive_player_snapshot(
 	ability_cooldown_ms: int,
 	spotted_ms: int,
 	stamina_value: float,
-	suppression_ms: int
+	suppression_ms: int,
+	smoke_count: int
 ) -> void:
 	if multiplayer.is_server():
 		return
@@ -929,7 +1008,8 @@ func receive_player_snapshot(
 		ability_cooldown_ms,
 		spotted_ms,
 		stamina_value,
-		suppression_ms
+		suppression_ms,
+		smoke_count
 	)
 
 @rpc("authority", "call_local", "reliable")
@@ -1275,6 +1355,59 @@ func register_elimination(victim_id: int, attacker_id: int) -> void:
 			player_names.get(victim_id, "Player")
 		]
 	)
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_player_smoke(requested_peer_id: int, origin: Vector3, direction: Vector3) -> void:
+	var player: Node3D = _player_from_remote_sender()
+	if player == null or int(player.get("smoke_grenades")) <= 0:
+		return
+	if not bool(player.get("alive")) or bool(player.get("downed")):
+		return
+	player.set("smoke_grenades", int(player.get("smoke_grenades")) - 1)
+	var landing_position: Vector3 = origin + direction.normalized() * 10.0
+	landing_position.y = 0.15
+	var smoke_id: int = next_smoke_id
+	next_smoke_id += 1
+	spawn_smoke.rpc(smoke_id, int(player.get("team")), landing_position, 12.0, 5.5)
+
+@rpc("authority", "call_local", "reliable")
+func spawn_smoke(smoke_id: int, team: int, spawn_position: Vector3, duration: float, radius: float) -> void:
+	if smoke_clouds.has(smoke_id):
+		return
+	var cloud := Node3D.new()
+	cloud.name = "Smoke_%d" % smoke_id
+	cloud.set_script(SmokeCloudScript)
+	add_child(cloud)
+	cloud.call("configure", smoke_id, team, spawn_position, duration, radius)
+	smoke_clouds[smoke_id] = cloud
+
+func server_remove_smoke(smoke_id: int) -> void:
+	if multiplayer.is_server():
+		remove_smoke.rpc(smoke_id)
+
+@rpc("authority", "call_local", "reliable")
+func remove_smoke(smoke_id: int) -> void:
+	if not smoke_clouds.has(smoke_id):
+		return
+	var cloud: Node = smoke_clouds[smoke_id] as Node
+	if cloud != null:
+		cloud.queue_free()
+	smoke_clouds.erase(smoke_id)
+
+func line_blocked_by_smoke(start_position: Vector3, end_position: Vector3) -> bool:
+	var segment: Vector3 = end_position - start_position
+	var segment_length_sq: float = segment.length_squared()
+	if segment_length_sq <= 0.001:
+		return false
+	for smoke_value in smoke_clouds.values():
+		var cloud: Node3D = smoke_value as Node3D
+		if cloud == null:
+			continue
+		var t: float = clampf((cloud.global_position - start_position).dot(segment) / segment_length_sq, 0.0, 1.0)
+		var closest: Vector3 = start_position + segment * t
+		if closest.distance_to(cloud.global_position) <= float(cloud.get("radius")):
+			return true
+	return false
 
 func server_throw_grenade(
 	owner: Node3D,
@@ -1672,7 +1805,44 @@ func announce(message: String) -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
 	var label := Label.new(); label.text = message; label.position = Vector2(390, 50); label.add_theme_font_size_override("font_size", 28); layer.add_child(label)
 
+func _update_command_post_stations() -> void:
+	if not multiplayer.is_server() or objective_stage == 0 or command_post_control < 0:
+		return
+	var command_post: Node3D = _command_post_node()
+	if command_post == null:
+		return
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null or int(player.get("team")) != command_post_control:
+			continue
+		if not bool(player.get("alive")) or player.global_position.distance_to(command_post.global_position) > 6.5:
+			continue
+		var max_health: int = int(player.call("_class_health", int(player.get("player_class"))))
+		var current_health: int = int(player.get("health"))
+		if current_health < max_health:
+			player.set("health", mini(max_health, current_health + 4))
+		var reserve: int = int(player.get("reserve_ammo"))
+		var maximum_reserve: int = int(player.call("_weapon_reserve_ammo"))
+		if reserve < maximum_reserve:
+			player.set("reserve_ammo", mini(maximum_reserve, reserve + 7))
+			player.call("_store_current_weapon_ammo")
+
+func _update_station_visuals() -> void:
+	if command_health_station == null or command_ammo_station == null:
+		return
+	var active: bool = objective_stage >= 1 and command_post_control >= 0
+	command_health_station.visible = active
+	command_ammo_station.visible = active
+	if not active:
+		return
+	var owner_color := Color(0.18, 0.48, 1.0) if command_post_control == 0 else Color(1.0, 0.22, 0.16)
+	for station in [command_health_station, command_ammo_station]:
+		var material: StandardMaterial3D = station.material_override as StandardMaterial3D
+		if material != null:
+			material.emission = owner_color * 0.45
+
 func _update_command_post_visuals() -> void:
+	_update_station_visuals()
 	if (
 		command_post_marker == null
 		or command_post_progress_label == null
@@ -2118,6 +2288,19 @@ func _reset_round() -> void:
 			grenade.queue_free()
 	grenades.clear()
 
+	for constructible_value in constructibles.values():
+		var constructible: Node = constructible_value as Node
+		if constructible != null:
+			constructible.queue_free()
+	constructibles.clear()
+	engineer_constructibles.clear()
+
+	for smoke_value in smoke_clouds.values():
+		var smoke: Node = smoke_value as Node
+		if smoke != null:
+			smoke.queue_free()
+	smoke_clouds.clear()
+
 	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
 		bridge.visible = false
@@ -2274,6 +2457,34 @@ func _build_world() -> void:
 	command_post_beacon.omni_range = 7.0
 	command_post_beacon.light_energy = 1.8
 	command_post.add_child(command_post_beacon)
+
+	command_health_station = MeshInstance3D.new()
+	command_health_station.name = "HealthStation"
+	var health_station_mesh := BoxMesh.new()
+	health_station_mesh.size = Vector3(1.25, 0.8, 1.0)
+	command_health_station.mesh = health_station_mesh
+	command_health_station.position = Vector3(-2.0, 0.4, 0.0)
+	var health_station_material := StandardMaterial3D.new()
+	health_station_material.albedo_color = Color(0.15, 0.62, 0.24)
+	health_station_material.emission_enabled = true
+	health_station_material.emission = Color(0.08, 0.35, 0.12)
+	command_health_station.material_override = health_station_material
+	command_health_station.visible = false
+	command_post.add_child(command_health_station)
+
+	command_ammo_station = MeshInstance3D.new()
+	command_ammo_station.name = "AmmoStation"
+	var ammo_station_mesh := BoxMesh.new()
+	ammo_station_mesh.size = Vector3(1.25, 0.8, 1.0)
+	command_ammo_station.mesh = ammo_station_mesh
+	command_ammo_station.position = Vector3(2.0, 0.4, 0.0)
+	var ammo_station_material := StandardMaterial3D.new()
+	ammo_station_material.albedo_color = Color(0.76, 0.62, 0.14)
+	ammo_station_material.emission_enabled = true
+	ammo_station_material.emission = Color(0.38, 0.28, 0.05)
+	command_ammo_station.material_override = ammo_station_material
+	command_ammo_station.visible = false
+	command_post.add_child(command_ammo_station)
 
 	var build_site := Node3D.new()
 	build_site.name = "BridgeBuildSite"

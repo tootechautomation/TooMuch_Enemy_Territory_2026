@@ -155,6 +155,11 @@ var suppression_overlay: ColorRect
 var operations_label: Label
 var command_post_bar: ProgressBar
 var squad_ping_cooldown_until_ms := 0
+var barricade_cooldown_until_ms := 0
+var smoke_grenades := 1
+var replicated_smoke_grenades := 1
+var spectator_freecam := false
+var spectator_freecam_position := Vector3.ZERO
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -314,6 +319,17 @@ func _collect_and_send_input() -> void:
 				-ping_camera.global_transform.basis.z
 			)
 
+	if not downed and player_class == PlayerClass.ENGINEER and Input.is_action_just_pressed("deploy_barricade") and Time.get_ticks_msec() >= barricade_cooldown_until_ms:
+		if main_node != null:
+			barricade_cooldown_until_ms = Time.get_ticks_msec() + 2500
+			var deploy_position: Vector3 = global_position + (-global_transform.basis.z * 2.4)
+			main_node.request_engineer_barricade.rpc_id(1, local_peer_id, deploy_position, rotation.y)
+
+	if not downed and replicated_smoke_grenades > 0 and Input.is_action_just_pressed("throw_smoke"):
+		var smoke_camera: Camera3D = $Head/Camera3D as Camera3D
+		if smoke_camera != null and main_node != null:
+			main_node.request_player_smoke.rpc_id(1, local_peer_id, smoke_camera.global_position, -smoke_camera.global_transform.basis.z)
+
 	if not downed and Input.is_action_just_pressed("reload"):
 		if (
 			reload_audio != null
@@ -466,7 +482,7 @@ func _server_simulate(delta: float) -> void:
 		server_take_damage(fall_damage, 0)
 
 
-func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int, stamina_value: float, suppression_ms: int) -> void:
+func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int, stamina_value: float, suppression_ms: int, smoke_count: int) -> void:
 	if multiplayer.is_server():
 		return
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
@@ -500,6 +516,7 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 		MAX_STAMINA
 	)
 	replicated_suppression_ms = maxi(0, suppression_ms)
+	replicated_smoke_grenades = maxi(0, smoke_count)
 	_update_spotted_marker()
 	_apply_crouch_visual(crouching)
 
@@ -594,6 +611,11 @@ func server_fire(direction: Vector3) -> void:
 
 	if not hit.is_empty():
 		effect_end = Vector3(hit.get("position", effect_end))
+
+	if not hit.is_empty():
+		var hit_collider: Object = hit.get("collider")
+		if hit_collider != null and hit_collider.has_method("server_take_damage") and not hit_collider is CharacterBody3D:
+			hit_collider.call("server_take_damage", _weapon_damage(), peer_id)
 
 	if (
 		not hit.is_empty()
@@ -1196,6 +1218,7 @@ func server_respawn(spawn_position: Vector3) -> void:
 	health = _class_health(player_class)
 	stamina = MAX_STAMINA
 	suppressed_until_ms = 0
+	smoke_grenades = 1
 	recent_damage.clear()
 	previous_vertical_velocity = 0.0
 	_reset_loadout_ammo()
@@ -1858,6 +1881,10 @@ func _bot_has_line_of_sight(target: Node3D) -> bool:
 	var to := target.global_position + Vector3.UP * 0.8
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.exclude = [self]
+	var main_node: Node = get_parent()
+	if main_node != null and main_node.has_method("line_blocked_by_smoke"):
+		if bool(main_node.call("line_blocked_by_smoke", from, to)):
+			return false
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	return hit.is_empty() or hit.get("collider") == target
 
@@ -1936,6 +1963,7 @@ func server_force_respawn(spawn_position: Vector3) -> void:
 	health = _class_health(player_class)
 	stamina = MAX_STAMINA
 	suppressed_until_ms = 0
+	smoke_grenades = 1
 	_reset_loadout_ammo()
 	grenades_remaining = 2
 	_apply_server_crouch(false)
@@ -2032,26 +2060,40 @@ func _cycle_spectator_target() -> void:
 func _update_spectator_camera() -> void:
 	if not _is_local_player():
 		return
-
 	var camera := $Head/Camera3D as Camera3D
-
+	if camera == null:
+		return
 	if alive:
 		spectator_target_id = 0
 		spectator_index = -1
+		spectator_freecam = false
 		camera.position = Vector3.ZERO
 		camera.rotation = Vector3.ZERO
 		return
-
+	if Input.is_action_just_pressed("spectator_freecam"):
+		spectator_freecam = not spectator_freecam
+		if spectator_freecam:
+			spectator_freecam_position = camera.global_position
+	if spectator_freecam:
+		var delta: float = get_process_delta_time()
+		var free_move := Input.get_vector("move_left","move_right","move_forward","move_back")
+		var movement: Vector3 = camera.global_transform.basis.x * free_move.x + (-camera.global_transform.basis.z) * -free_move.y
+		if Input.is_action_pressed("jump"):
+			movement += Vector3.UP
+		if Input.is_action_pressed("crouch"):
+			movement -= Vector3.UP
+		if movement.length() > 0.01:
+			spectator_freecam_position += movement.normalized() * 12.0 * delta
+		camera.global_position = spectator_freecam_position
+		return
 	var candidates := _living_teammates()
 	if candidates.is_empty():
 		return
-
 	var target: Node3D = get_parent().players.get(spectator_target_id) as Node3D
 	if target == null or not bool(target.get("alive")) or bool(target.get("downed")) or int(target.get("team")) != team:
 		spectator_index = 0
 		target = candidates[0] as Node3D
 		spectator_target_id = int(target.get("peer_id"))
-
 	var target_head: Node3D = target.get_node_or_null("Head") as Node3D
 	if target_head != null:
 		camera.global_transform = target_head.global_transform
@@ -3140,7 +3182,7 @@ func _update_hud() -> void:
 		if replicated_ability_cooldown_ms <= 0
 		else "%.1fs" % cooldown
 	)
-	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  MMB: squad ping\nBlue=Attackers  Red=Defenders  Accent=Class" % [
+	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  Smoke %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  MMB: ping  B: smoke  C: barricade  F: freecam\nBlue=Attackers  Red=Defenders  Accent=Class" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],
@@ -3161,6 +3203,7 @@ func _update_hud() -> void:
 		current_weapon_index + 1,
 		weapon_slots.size(),
 		grenades_remaining,
+		replicated_smoke_grenades,
 		protection_text,
 		primary_name,
 		interaction_prompt,

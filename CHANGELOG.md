@@ -1,13 +1,10 @@
 # Changelog
 
-## 3.0.0
-- Added secondary command-post capture objective
-- Added team reinforcement tickets
-- Added forward spawns
-- Added command-post reinforcement wave bonus
-- Added overtime rules
-- Added ticket-based victory conditions
-- Added dynamic battlefield lighting
-- Added command-post world and HUD presentation
-- Updated bot goals, objective text, and scoreboard
-- Bumped protocol to 300
+## 3.1.0
+- Added Engineer barricades
+- Added destructible field defenses
+- Added smoke concealment and bot sight blocking
+- Added command-post logistics stations
+- Added free spectator camera
+- Added new HUD counters and controls
+- Bumped protocol to 310
