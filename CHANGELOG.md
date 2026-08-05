@@ -1,11 +1,10 @@
 # Changelog
 
-## 1.8.0
+## 1.9.0
 
-- Added right-click ADS
-- Added Scout scope zoom and overlay
-- Added ADS FOV transitions
-- Added authoritative spread reduction
-- Added authoritative movement slowdown
-- Disabled sprint while aiming
-- Bumped protocol to 180
+- Added procedural team-colored player skins
+- Added class accent colors
+- Added friendly nameplates
+- Added friendly class labels
+- Added spotted-enemy identification
+- Bumped protocol to 190

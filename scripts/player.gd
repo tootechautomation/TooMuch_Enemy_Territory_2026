@@ -98,6 +98,13 @@ var spotted_label: Label3D
 var crosshair: Label
 var scope_overlay: Control
 var scope_reticle: Label
+var world_nameplate: Label3D
+var world_class_label: Label3D
+var body_material: StandardMaterial3D
+var accent_material: StandardMaterial3D
+var class_accent_mesh: MeshInstance3D
+var last_visual_team := -1
+var last_visual_class := -1
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -110,6 +117,8 @@ var server_logged_first_input := false
 func _ready() -> void:
 	_initialize_loadout()
 	_build_spotted_marker()
+	_build_identity_visuals()
+	_refresh_identity_visuals(true)
 	target_position = global_position
 	if _is_local_player() and DisplayServer.get_name() != "headless":
 		$Head/Camera3D.current = true
@@ -144,10 +153,12 @@ func _physics_process(delta: float) -> void:
 		_collect_and_send_input()
 		_update_spectator_camera()
 		_update_hud()
+		_update_identity_visibility()
 	elif not multiplayer.is_server():
 		global_position = global_position.lerp(target_position, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
 		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
 		$Head.rotation.x = lerp_angle($Head.rotation.x, target_pitch, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
+		_update_identity_visibility()
 	if multiplayer.is_server(): _server_simulate(delta)
 
 func _poll_spawn_menu_toggle() -> void:
@@ -337,6 +348,7 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 	var previous_class: int = player_class
 	player_class = class_id
 	team = player_team
+	_refresh_identity_visuals()
 
 	if player_class != previous_class:
 		current_weapon_index = 0
@@ -365,6 +377,8 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 		weapon_reserves[current_weapon_index] = reserve_ammo
 
 	visible = alive
+	if class_accent_mesh != null:
+		class_accent_mesh.visible = alive and not downed
 	if weapon_view:
 		weapon_view.visible = alive and not downed
 
@@ -854,6 +868,131 @@ func server_apply_spotted(duration_ms: int) -> void:
 		Time.get_ticks_msec() + maxi(0, duration_ms)
 	)
 
+func _team_color(team_id: int) -> Color:
+	return Color(0.14, 0.34, 0.82) if team_id == 0 else Color(0.82, 0.18, 0.14)
+
+func _class_accent_color(class_id: int) -> Color:
+	match class_id:
+		PlayerClass.SOLDIER: return Color(0.78, 0.72, 0.22)
+		PlayerClass.MEDIC: return Color(0.18, 0.82, 0.34)
+		PlayerClass.ENGINEER: return Color(0.90, 0.48, 0.12)
+		PlayerClass.FIELD_OPS: return Color(0.60, 0.30, 0.82)
+		PlayerClass.SCOUT: return Color(0.12, 0.78, 0.78)
+		_: return Color.WHITE
+
+func _class_short_name(class_id: int) -> String:
+	match class_id:
+		PlayerClass.SOLDIER: return "SOLDIER"
+		PlayerClass.MEDIC: return "MEDIC"
+		PlayerClass.ENGINEER: return "ENGINEER"
+		PlayerClass.FIELD_OPS: return "FIELD OPS"
+		PlayerClass.SCOUT: return "SCOUT"
+		_: return "CLASS"
+
+func _build_identity_visuals() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var body: MeshInstance3D = $Body as MeshInstance3D
+	if body != null:
+		body_material = StandardMaterial3D.new()
+		body_material.roughness = 0.82
+		body.material_override = body_material
+
+	class_accent_mesh = MeshInstance3D.new()
+	class_accent_mesh.name = "ClassAccent"
+	var accent_mesh := BoxMesh.new()
+	accent_mesh.size = Vector3(0.56, 0.18, 0.18)
+	class_accent_mesh.mesh = accent_mesh
+	class_accent_mesh.position = Vector3(0.0, 0.38, 0.18)
+	accent_material = StandardMaterial3D.new()
+	accent_material.emission_enabled = true
+	accent_material.emission_energy_multiplier = 0.35
+	class_accent_mesh.material_override = accent_material
+	add_child(class_accent_mesh)
+
+	world_nameplate = Label3D.new()
+	world_nameplate.name = "WorldNameplate"
+	world_nameplate.position = Vector3(0.0, 1.62, 0.0)
+	world_nameplate.font_size = 34
+	world_nameplate.outline_size = 10
+	world_nameplate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	world_nameplate.fixed_size = true
+	world_nameplate.visible = false
+	add_child(world_nameplate)
+
+	world_class_label = Label3D.new()
+	world_class_label.name = "WorldClassLabel"
+	world_class_label.position = Vector3(0.0, 1.38, 0.0)
+	world_class_label.font_size = 22
+	world_class_label.outline_size = 8
+	world_class_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	world_class_label.fixed_size = true
+	world_class_label.visible = false
+	add_child(world_class_label)
+
+func _refresh_identity_visuals(force: bool = false) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if not force and team == last_visual_team and player_class == last_visual_class:
+		return
+
+	last_visual_team = team
+	last_visual_class = player_class
+	var team_color: Color = _team_color(team)
+	var accent_color: Color = _class_accent_color(player_class)
+
+	if body_material != null:
+		body_material.albedo_color = team_color
+		body_material.emission_enabled = true
+		body_material.emission = team_color * 0.10
+
+	if accent_material != null:
+		accent_material.albedo_color = accent_color
+		accent_material.emission = accent_color
+
+	if world_nameplate != null:
+		world_nameplate.text = player_name
+		world_nameplate.modulate = team_color.lightened(0.35)
+
+	if world_class_label != null:
+		world_class_label.text = _class_short_name(player_class)
+		world_class_label.modulate = accent_color.lightened(0.25)
+
+func _update_identity_visibility() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if world_nameplate == null or world_class_label == null:
+		return
+	if _is_local_player():
+		world_nameplate.visible = false
+		world_class_label.visible = false
+		return
+
+	var main: Node = get_parent()
+	if main == null:
+		return
+	var player_map: Dictionary = main.get("players")
+	var local_id: int = multiplayer.get_unique_id()
+	if not player_map.has(local_id):
+		world_nameplate.visible = false
+		world_class_label.visible = false
+		return
+
+	var local_player: Node3D = player_map[local_id] as Node3D
+	if local_player == null:
+		return
+
+	var same_team: bool = int(local_player.get("team")) == team
+	var distance: float = local_player.global_position.distance_to(global_position)
+	var enemy_spotted: bool = replicated_spotted_ms > 0
+
+	world_nameplate.visible = alive and not downed and (
+		(same_team and distance <= 34.0)
+		or (enemy_spotted and distance <= 50.0)
+	)
+	world_class_label.visible = alive and not downed and same_team and distance <= 24.0
+
 func _build_spotted_marker() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -1142,6 +1281,7 @@ func server_apply_class(class_id: int) -> void:
 
 	player_class = clampi(class_id, 0, 4)
 	health = _class_health(player_class)
+	_refresh_identity_visuals(true)
 	next_ability_time = 0
 	spotted_until_ms = 0
 	current_weapon_index = 0
@@ -1434,6 +1574,7 @@ func _submit_spawn_selection() -> void:
 	has_deployed = true
 	player_class = selected_class
 	team = selected_team
+	_refresh_identity_visuals(true)
 	current_weapon_index = 0
 	_configure_class_loadout(true, true)
 	_hide_spawn_menu()
@@ -1745,7 +1886,7 @@ func _update_hud() -> void:
 		if replicated_ability_cooldown_ms <= 0
 		else "%.1fs" % cooldown
 	)
-	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu" % [
+	hud.text = "%s | %s | %s\n%s\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  %s\nLoadout: %s + Service Pistol\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu\nBlue=Attackers  Red=Defenders  Accent=Class" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],

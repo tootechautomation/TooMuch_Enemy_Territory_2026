@@ -1,19 +1,19 @@
 # Frontline: Objective
 
-## Version 1.8.0 aiming and Scout zoom
+## Version 1.9.0 team skins and player identification
 
-- Hold right mouse button to aim down sights.
-- Scout primary gets a strong scope zoom and overlay.
-- Other weapons get a lighter ADS zoom.
-- ADS reduces server-authoritative spread.
-- ADS slows movement and disables sprint.
-- Reload and weapon switching cancel ADS.
+Added procedural team skins and identification:
+
+- Blue players: Attackers
+- Red players: Defenders
+- Yellow accent: Soldier
+- Green accent: Medic
+- Orange accent: Engineer
+- Purple accent: Field Ops
+- Cyan accent: Scout
+- Friendly nameplates within 34 meters
+- Friendly class labels within 24 meters
+- Spotted enemy nameplates within 50 meters
+- Immediate visual refresh after changing team or class
 
 Install the same package on Windows and Linux.
-
-Expected HUD:
-
-```text
-Connected: v1.8.0 protocol 180
-RMB: aim/zoom
-```
