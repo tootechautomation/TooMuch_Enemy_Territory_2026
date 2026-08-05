@@ -256,7 +256,6 @@ func _server_simulate(delta: float) -> void:
 
 	if not alive or downed:
 		velocity = Vector3.ZERO
-		_send_snapshot()
 		return
 
 	if not is_on_floor():
@@ -286,37 +285,6 @@ func _server_simulate(delta: float) -> void:
 	velocity.z = direction.z * move_speed
 	move_and_slide()
 
-	_send_snapshot()
-
-func _send_snapshot() -> void:
-	if not multiplayer.is_server():
-		return
-
-	var main_node: Node = get_parent()
-	if main_node == null:
-		return
-	if not main_node.has_method("receive_player_snapshot"):
-		return
-
-	main_node.receive_player_snapshot.rpc(
-		peer_id,
-		global_position,
-		rotation.y,
-		$Head.rotation.x,
-		health,
-		ammo_in_mag,
-		reserve_ammo,
-		alive,
-		downed,
-		is_reloading,
-		player_class,
-		kills,
-		deaths,
-		xp,
-		current_weapon_index,
-		grenades_remaining,
-		is_crouching
-	)
 
 func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool) -> void:
 	if multiplayer.is_server():
@@ -354,11 +322,14 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 		elif not alive and not spawn_menu_open:
 			_show_spawn_menu()
 
-func server_fire(origin: Vector3, direction: Vector3) -> void:
+func server_fire(direction: Vector3) -> void:
 	if not multiplayer.is_server() or not alive or downed or is_reloading:
 		return
-	var now := Time.get_ticks_msec()
-	if now < next_fire_time or ammo_in_mag <= 0 or origin.distance_to($Head.global_position) > 2.0: return
+	var now: int = Time.get_ticks_msec()
+	if now < next_fire_time or ammo_in_mag <= 0:
+		return
+
+	var origin: Vector3 = $Head.global_position
 	next_fire_time = now + _weapon_fire_interval_ms()
 	ammo_in_mag -= 1
 	_store_current_weapon_ammo()
@@ -392,7 +363,6 @@ func _apply_spread(direction: Vector3, degrees: float) -> Vector3:
 	return direction.rotated(Vector3.UP, randf_range(-spread_radians, spread_radians)).rotated(global_transform.basis.x, randf_range(-spread_radians, spread_radians)).normalized()
 
 func server_throw_grenade_request(
-	origin: Vector3,
 	direction: Vector3
 ) -> void:
 	if not multiplayer.is_server():
@@ -405,9 +375,8 @@ func server_throw_grenade_request(
 	var now: int = Time.get_ticks_msec()
 	if now < next_grenade_time:
 		return
-	if origin.distance_to($Head.global_position) > 2.0:
-		return
 
+	var origin: Vector3 = $Head.global_position
 	next_grenade_time = now + 900
 	var main: Node = get_parent()
 	if main != null and main.has_method("server_throw_grenade"):
@@ -1299,6 +1268,11 @@ func _update_hud() -> void:
 		protocol_status = str(main.get("protocol_message"))
 		input_ack = int(main.get("last_server_input_ack"))
 	protocol_status += " · input ack %d" % input_ack
+	protocol_status += " · pos %.1f,%.1f · ammo %d" % [
+		global_position.x,
+		global_position.z,
+		ammo_in_mag
+	]
 
 	var minutes := int(main.get("match_time_remaining")) / 60
 	var seconds := int(main.get("match_time_remaining")) % 60

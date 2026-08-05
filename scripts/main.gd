@@ -5,8 +5,8 @@ const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "1.4.3"
-const NETWORK_PROTOCOL := 143
+const BUILD_VERSION := "1.4.4"
+const NETWORK_PROTOCOL := 144
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -43,6 +43,8 @@ var status_label: Label
 var protocol_verified := false
 var protocol_message := "Protocol pending"
 var last_server_input_ack := -1
+var snapshot_accumulator := 0.0
+const SNAPSHOT_INTERVAL := 0.05
 var verified_peers: Dictionary = {}
 var kill_feed: Array[String] = []
 
@@ -57,6 +59,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
+
+	snapshot_accumulator += delta
+	if snapshot_accumulator >= SNAPSHOT_INTERVAL:
+		snapshot_accumulator = 0.0
+		_broadcast_player_snapshots()
 
 	if match_over:
 		round_restart_remaining = maxf(0.0, round_restart_remaining - delta)
@@ -366,7 +373,7 @@ func request_player_fire(
 ) -> void:
 	var player: Node3D = _player_from_remote_sender()
 	if player != null:
-		player.call("server_fire", origin, direction)
+		player.call("server_fire", direction)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_grenade(
@@ -376,7 +383,7 @@ func request_player_grenade(
 ) -> void:
 	var player: Node3D = _player_from_remote_sender()
 	if player != null:
-		player.call("server_throw_grenade_request", origin, direction)
+		player.call("server_throw_grenade_request", direction)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_reload(requested_peer_id: int) -> void:
@@ -444,6 +451,41 @@ func receive_input_ack(sequence: int) -> void:
 	if multiplayer.is_server():
 		return
 	last_server_input_ack = sequence
+
+func _broadcast_player_snapshots() -> void:
+	if not multiplayer.is_server():
+		return
+
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+
+		var head: Node3D = player.get_node_or_null("Head") as Node3D
+		var head_pitch: float = 0.0
+		if head != null:
+			head_pitch = head.rotation.x
+
+		receive_player_snapshot.rpc(
+			int(player.get("peer_id")),
+			player.global_position,
+			player.rotation.y,
+			head_pitch,
+			int(player.get("health")),
+			int(player.get("ammo_in_mag")),
+			int(player.get("reserve_ammo")),
+			bool(player.get("alive")),
+			bool(player.get("downed")),
+			bool(player.get("is_reloading")),
+			int(player.get("player_class")),
+			int(player.get("team")),
+			int(player.get("kills")),
+			int(player.get("deaths")),
+			int(player.get("xp")),
+			int(player.get("current_weapon_index")),
+			int(player.get("grenades_remaining")),
+			bool(player.get("is_crouching"))
+		)
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
 func receive_player_snapshot(

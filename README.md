@@ -1,21 +1,22 @@
 # Frontline: Objective
 
-## Version 1.4.3 remote-sender command fix
+## Version 1.4.4 authoritative snapshot fix
 
-The server no longer trusts or depends on a player ID supplied by the client.
+The input acknowledgement proved commands reached the VPS. This build fixes the server-to-client state return path.
 
-For every gameplay RPC, the server now:
+Changes:
 
-1. Reads `multiplayer.get_remote_sender_id()`.
-2. Finds the player belonging to that connection.
-3. Dispatches movement, firing, reload, grenade, menu, class, and interaction commands to that player.
+- `main.gd` now broadcasts every player snapshot centrally at 20 Hz.
+- Player nodes no longer attempt to originate their own snapshot RPCs.
+- Movement, ammunition, reload state, grenade inventory, team, class, health, and position all use one authoritative broadcast.
+- Fire and grenade origins are now calculated on the server from the player's Head node.
+- Client-supplied camera position is no longer used as a rejection condition.
+- HUD displays authoritative position and ammo beside the input acknowledgement.
 
-The client also uses `multiplayer.get_unique_id()` when constructing requests.
-
-The HUD includes an input acknowledgement counter:
+Expected:
 
 ```text
-Connected: v1.4.3 protocol 143 · input ack 1234
+Connected: v1.4.4 protocol 144 · input ack 1234 · pos -8.2,1.5 · ammo 27
 ```
 
-The number should increase continuously after deployment. Install the same package on Windows and Linux.
+Pressing WASD should change `pos`. Shooting should reduce `ammo`.

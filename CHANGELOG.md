@@ -1,10 +1,10 @@
 # Changelog
 
-## 1.4.3
+## 1.4.4
 
-- Authorized gameplay commands using Godot remote sender ID
-- Stopped depending on client-supplied player IDs
-- Used multiplayer unique ID for outgoing client requests
-- Added server input acknowledgement counter to HUD
-- Applied the same authorization to deployment and all gameplay actions
-- Bumped protocol to 143
+- Centralized player snapshot broadcasting in Main
+- Broadcast authoritative state at 20 Hz
+- Removed player-node snapshot sender
+- Used server-owned fire and grenade origins
+- Added authoritative position/ammo HUD diagnostics
+- Bumped protocol to 144
