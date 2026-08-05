@@ -1,20 +1,24 @@
 # Frontline: Objective
 
-## Version 2.3.1 parser correction
+## Version 2.4.0 battlefield awareness and audio
 
-This release corrects the `main_node` scope errors introduced in v2.3.0.
+Added a live tactical radar plus original procedural audio.
 
-Fixed:
+Radar:
+- Friendly players: blue dots
+- Scout-spotted enemies: red dots
+- Active objective: yellow diamond
+- Enemy grenades: orange warning markers
+- Approximately 42-meter range
 
-- `server_fire()` now declares `main_node` before sending shot effects.
-- `_server_bot_fire()` now has only one `main_node` declaration.
-- Tactical combat, assists, damage numbers, fall damage, grenade warnings,
-  objective direction, kill streaks, and bot skill remain included.
+Audio:
+- Rifle and pistol fire
+- Empty click and reload
+- Speed-based footsteps
+- Hit and headshot confirmations
+- Accelerating grenade fuse beeps
+- Positional grenade explosions
 
-Install the same package on the Linux server and Windows client.
+Install the same package on Windows and Linux.
 
-Expected HUD:
-
-```text
-Connected: v2.3.1 protocol 231
-```
+Expected HUD: `Connected: v2.4.0 protocol 240`

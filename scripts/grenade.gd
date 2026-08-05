@@ -3,6 +3,7 @@ extends CharacterBody3D
 const GRAVITY := 18.0
 const BOUNCE_FACTOR := 0.42
 const POSITION_SYNC_INTERVAL := 0.05
+const GRENADE_BEEP_SOUND: AudioStream = preload("res://audio/grenade_beep.wav")
 
 var grenade_id := 0
 var owner_id := 0
@@ -13,6 +14,8 @@ var maximum_damage := 95
 var sync_accumulator := 0.0
 var target_position := Vector3.ZERO
 var target_velocity := Vector3.ZERO
+var beep_audio: AudioStreamPlayer3D
+var next_beep_time := 0.0
 
 func configure(
 	new_grenade_id: int,
@@ -30,8 +33,22 @@ func configure(
 	velocity = initial_velocity
 	target_velocity = initial_velocity
 	fuse_remaining = fuse_seconds
+	next_beep_time = 0.05
+	if DisplayServer.get_name() != "headless":
+		beep_audio = AudioStreamPlayer3D.new()
+		beep_audio.stream = GRENADE_BEEP_SOUND
+		beep_audio.max_distance = 22.0
+		beep_audio.volume_db = -4.0
+		add_child(beep_audio)
 
 func _physics_process(delta: float) -> void:
+	if beep_audio != null and fuse_remaining > 0.0:
+		var beep_interval: float = 0.18 if fuse_remaining <= 0.8 else (0.35 if fuse_remaining <= 1.6 else 0.65)
+		next_beep_time -= delta
+		if next_beep_time <= 0.0:
+			next_beep_time = beep_interval
+			beep_audio.play()
+
 	if multiplayer.is_server():
 		_server_simulate(delta)
 	else:

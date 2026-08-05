@@ -7,6 +7,13 @@ enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
 @export var player_name := "Player"
 @export var player_class: PlayerClass = PlayerClass.SOLDIER
 const SERVICE_RIFLE: Resource = preload("res://data/weapons/service_rifle.tres")
+const RIFLE_FIRE_SOUND: AudioStream = preload("res://audio/rifle_fire.wav")
+const PISTOL_FIRE_SOUND: AudioStream = preload("res://audio/pistol_fire.wav")
+const DRY_CLICK_SOUND: AudioStream = preload("res://audio/dry_click.wav")
+const RELOAD_SOUND: AudioStream = preload("res://audio/reload.wav")
+const FOOTSTEP_SOUND: AudioStream = preload("res://audio/footstep.wav")
+const HIT_CONFIRM_SOUND: AudioStream = preload("res://audio/hit_confirm.wav")
+const HEADSHOT_CONFIRM_SOUND: AudioStream = preload("res://audio/headshot_confirm.wav")
 const SERVICE_PISTOL: Resource = preload("res://data/weapons/service_pistol.tres")
 const SOLDIER_LMG: Resource = preload("res://data/weapons/soldier_lmg.tres")
 const MEDIC_SMG: Resource = preload("res://data/weapons/medic_smg.tres")
@@ -124,6 +131,15 @@ var damage_number_until_ms := 0
 var recent_damage: Dictionary = {}
 var current_kill_streak := 0
 var previous_vertical_velocity := 0.0
+var weapon_audio: AudioStreamPlayer
+var reload_audio: AudioStreamPlayer
+var footstep_audio: AudioStreamPlayer3D
+var confirm_audio: AudioStreamPlayer
+var footstep_accumulator := 0.0
+var radar_panel: Control
+var radar_objective: Label
+var radar_actor_markers: Dictionary = {}
+var radar_grenade_markers: Array[Label] = []
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -139,6 +155,7 @@ func _ready() -> void:
 	_build_spotted_marker()
 	_build_identity_visuals()
 	_refresh_identity_visuals(true)
+	_build_audio_players()
 	target_position = global_position
 	if _is_local_player() and DisplayServer.get_name() != "headless":
 		$Head/Camera3D.current = true
@@ -174,6 +191,8 @@ func _physics_process(delta: float) -> void:
 		_update_spectator_camera()
 		_update_hud()
 		_update_identity_visibility()
+		_update_footstep_audio(delta)
+		_update_radar()
 	elif not multiplayer.is_server():
 		global_position = global_position.lerp(target_position, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
 		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
@@ -245,9 +264,13 @@ func _collect_and_send_input() -> void:
 		var camera := $Head/Camera3D as Camera3D
 		if camera != null:
 			var now: int = Time.get_ticks_msec()
-			if now >= local_next_fire_feedback_ms and ammo_in_mag > 0 and not is_reloading:
+			if now >= local_next_fire_feedback_ms:
 				local_next_fire_feedback_ms = now + _weapon_fire_interval_ms()
-				_local_fire_feedback()
+				if ammo_in_mag > 0 and not is_reloading:
+					_local_fire_feedback()
+					_play_weapon_sound()
+				else:
+					_play_dry_click()
 			if main_node != null:
 				main_node.request_player_fire.rpc_id(
 					1,
@@ -257,6 +280,8 @@ func _collect_and_send_input() -> void:
 				)
 
 	if not downed and Input.is_action_just_pressed("reload"):
+		if reload_audio != null and not reload_audio.playing:
+			reload_audio.play()
 		if main_node != null:
 			main_node.request_player_reload.rpc_id(1, local_peer_id)
 
@@ -816,6 +841,7 @@ func confirm_weapon_switch(weapon_index: int) -> void:
 func confirm_hit() -> void:
 	if not _is_local_player():
 		return
+	_play_confirm_sound(false)
 	hit_marker_until_ms = Time.get_ticks_msec() + 140
 	if hit_marker != null:
 		hit_marker.text = "×"
@@ -827,6 +853,7 @@ func confirm_headshot() -> void:
 	if not _is_local_player():
 		return
 
+	_play_confirm_sound(true)
 	hit_marker_until_ms = Time.get_ticks_msec() + 260
 	if hit_marker != null:
 		hit_marker.text = "HEADSHOT"
@@ -2322,6 +2349,60 @@ func _rebuild_first_person_weapon() -> void:
 	weapon_view.add_child(muzzle_flash)
 
 
+func _build_audio_players() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	weapon_audio = AudioStreamPlayer.new()
+	weapon_audio.volume_db = -5.0
+	add_child(weapon_audio)
+	reload_audio = AudioStreamPlayer.new()
+	reload_audio.stream = RELOAD_SOUND
+	reload_audio.volume_db = -7.0
+	add_child(reload_audio)
+	footstep_audio = AudioStreamPlayer3D.new()
+	footstep_audio.stream = FOOTSTEP_SOUND
+	footstep_audio.max_distance = 18.0
+	footstep_audio.volume_db = -10.0
+	add_child(footstep_audio)
+	confirm_audio = AudioStreamPlayer.new()
+	confirm_audio.volume_db = -8.0
+	add_child(confirm_audio)
+
+func _play_weapon_sound() -> void:
+	if weapon_audio == null:
+		return
+	weapon_audio.stream = PISTOL_FIRE_SOUND if current_weapon_index == 1 else RIFLE_FIRE_SOUND
+	weapon_audio.pitch_scale = randf_range(0.96, 1.04)
+	weapon_audio.play()
+
+func _play_dry_click() -> void:
+	if weapon_audio == null:
+		return
+	weapon_audio.stream = DRY_CLICK_SOUND
+	weapon_audio.pitch_scale = 1.0
+	weapon_audio.play()
+
+func _update_footstep_audio(delta: float) -> void:
+	if footstep_audio == null or not alive or downed or not is_on_floor():
+		footstep_accumulator = 0.0
+		return
+	var speed: float = Vector2(velocity.x, velocity.z).length()
+	if speed < 1.0:
+		footstep_accumulator = 0.0
+		return
+	var interval: float = 0.29 if speed >= 8.0 else (0.40 if speed >= 5.0 else 0.52)
+	footstep_accumulator += delta
+	if footstep_accumulator >= interval:
+		footstep_accumulator = 0.0
+		footstep_audio.pitch_scale = randf_range(0.92, 1.08)
+		footstep_audio.play()
+
+func _play_confirm_sound(headshot: bool) -> void:
+	if confirm_audio == null:
+		return
+	confirm_audio.stream = HEADSHOT_CONFIRM_SOUND if headshot else HIT_CONFIRM_SOUND
+	confirm_audio.play()
+
 func _build_hud() -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
 	hud = Label.new(); hud.position = Vector2(18, 18); hud.add_theme_font_size_override("font_size", 18); layer.add_child(hud)
@@ -2440,6 +2521,30 @@ func _build_hud() -> void:
 	)
 	layer.add_child(tactical_indicator)
 
+	radar_panel = Control.new()
+	radar_panel.name = "TacticalRadar"
+	radar_panel.position = Vector2(1035, 480)
+	radar_panel.size = Vector2(220, 220)
+	layer.add_child(radar_panel)
+
+	var radar_background := ColorRect.new()
+	radar_background.color = Color(0.02, 0.04, 0.06, 0.78)
+	radar_background.size = Vector2(220, 220)
+	radar_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	radar_panel.add_child(radar_background)
+
+	var radar_border := Label.new()
+	radar_border.text = "TACTICAL MAP\n┌──────────────┐\n│              │\n│              │\n│              │\n│      ▲       │\n│              │\n│              │\n│              │\n└──────────────┘"
+	radar_border.position = Vector2(10, 4)
+	radar_border.add_theme_font_size_override("font_size", 15)
+	radar_panel.add_child(radar_border)
+
+	radar_objective = Label.new()
+	radar_objective.text = "◆"
+	radar_objective.add_theme_font_size_override("font_size", 18)
+	radar_objective.modulate = Color(1.0, 0.78, 0.12)
+	radar_panel.add_child(radar_objective)
+
 	scoreboard = Label.new()
 	scoreboard.position = Vector2(210, 100)
 	scoreboard.custom_minimum_size = Vector2(860, 520)
@@ -2447,6 +2552,88 @@ func _build_hud() -> void:
 	scoreboard.visible = false
 	layer.add_child(scoreboard)
 	feed = Label.new(); feed.position = Vector2(930, 24); feed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; feed.custom_minimum_size = Vector2(320, 150); layer.add_child(feed)
+
+func _radar_position(world_position: Vector3, radius_meters: float = 42.0) -> Vector2:
+	var relative: Vector3 = world_position - global_position
+	relative.y = 0.0
+	var local_x: float = relative.dot(global_transform.basis.x)
+	var local_forward: float = relative.dot(-global_transform.basis.z)
+	var scale_factor: float = 88.0 / radius_meters
+	return Vector2(
+		110.0 + clampf(local_x * scale_factor, -88.0, 88.0),
+		110.0 - clampf(local_forward * scale_factor, -88.0, 88.0)
+	)
+
+func _get_or_create_radar_actor(actor_id: int) -> Label:
+	if radar_actor_markers.has(actor_id):
+		return radar_actor_markers[actor_id] as Label
+	var marker := Label.new()
+	marker.text = "●"
+	marker.add_theme_font_size_override("font_size", 15)
+	radar_panel.add_child(marker)
+	radar_actor_markers[actor_id] = marker
+	return marker
+
+func _update_radar() -> void:
+	if radar_panel == null or not _is_local_player():
+		return
+	var main_node: Node = get_parent()
+	if main_node == null:
+		return
+
+	var objective_position := Vector3.ZERO
+	if int(main_node.get("objective_stage")) == 0:
+		var build_site: Node3D = main_node.get_node_or_null("BridgeBuildSite") as Node3D
+		if build_site != null:
+			objective_position = build_site.global_position
+	else:
+		var objective_node: Node3D = main_node.get_node_or_null("Objective") as Node3D
+		if objective_node != null:
+			objective_position = objective_node.global_position
+	if radar_objective != null:
+		radar_objective.position = _radar_position(objective_position) - Vector2(7, 10)
+
+	var active_ids: Dictionary = {}
+	var player_map: Dictionary = main_node.get("players")
+	for actor_value in player_map.values():
+		var actor: Node3D = actor_value as Node3D
+		if actor == null or actor == self or not bool(actor.get("alive")):
+			continue
+		var actor_id: int = int(actor.get("peer_id"))
+		var same_team: bool = int(actor.get("team")) == team
+		var spotted_enemy: bool = int(actor.call("spotted_remaining_ms")) > 0
+		if not same_team and not spotted_enemy:
+			continue
+		var marker: Label = _get_or_create_radar_actor(actor_id)
+		marker.position = _radar_position(actor.global_position) - Vector2(6, 9)
+		marker.modulate = Color(0.18, 0.72, 1.0) if same_team else Color(1.0, 0.18, 0.12)
+		marker.visible = true
+		active_ids[actor_id] = true
+
+	for actor_id_value in radar_actor_markers:
+		var actor_id: int = int(actor_id_value)
+		if not active_ids.has(actor_id):
+			var marker: Label = radar_actor_markers[actor_id] as Label
+			if marker != null:
+				marker.visible = false
+
+	for marker in radar_grenade_markers:
+		if marker != null:
+			marker.queue_free()
+	radar_grenade_markers.clear()
+
+	var grenade_map: Dictionary = main_node.get("grenades")
+	for grenade_value in grenade_map.values():
+		var grenade_node: Node3D = grenade_value as Node3D
+		if grenade_node == null or int(grenade_node.get("owner_team")) == team:
+			continue
+		var grenade_marker := Label.new()
+		grenade_marker.text = "!"
+		grenade_marker.modulate = Color(1.0, 0.28, 0.05)
+		grenade_marker.add_theme_font_size_override("font_size", 18)
+		grenade_marker.position = _radar_position(grenade_node.global_position) - Vector2(5, 10)
+		radar_panel.add_child(grenade_marker)
+		radar_grenade_markers.append(grenade_marker)
 
 func _update_hud() -> void:
 	if hud == null:
