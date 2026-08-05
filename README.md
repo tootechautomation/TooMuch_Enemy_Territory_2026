@@ -1,24 +1,17 @@
 # Frontline: Objective
 
-## Version 2.4.0 battlefield awareness and audio
+## Version 2.4.1 gray-screen recovery
 
-Added a live tactical radar plus original procedural audio.
+Fixed the v2.4.0 startup regression.
 
-Radar:
-- Friendly players: blue dots
-- Scout-spotted enemies: red dots
-- Active objective: yellow diamond
-- Enemy grenades: orange warning markers
-- Approximately 42-meter range
+- Camera, HUD, and deployment menu initialize before radar/audio.
+- Local Camera3D is explicitly activated.
+- Radar/audio initialize later through a deferred optional path.
+- Missing or not-yet-imported WAV files cannot stop the player `_ready()` method.
+- Audio is loaded with runtime existence and type checks.
+- Radar validates network dictionaries and node methods before reading them.
+- Grenade and explosion audio are also failure-safe.
 
-Audio:
-- Rifle and pistol fire
-- Empty click and reload
-- Speed-based footsteps
-- Hit and headshot confirmations
-- Accelerating grenade fuse beeps
-- Positional grenade explosions
+All v2.4 radar and audio features remain included.
 
-Install the same package on Windows and Linux.
-
-Expected HUD: `Connected: v2.4.0 protocol 240`
+Expected status: `Connected: v2.4.1 protocol 241`

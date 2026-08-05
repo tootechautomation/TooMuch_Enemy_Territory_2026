@@ -2,12 +2,11 @@ extends Node
 
 const PlayerScene = preload("res://scenes/player.tscn")
 const GrenadeScene = preload("res://scenes/grenade.tscn")
-const EXPLOSION_SOUND: AudioStream = preload("res://audio/explosion.wav")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "2.4.0"
-const NETWORK_PROTOCOL := 240
+const BUILD_VERSION := "2.4.1"
+const NETWORK_PROTOCOL := 241
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -1056,15 +1055,26 @@ func explode_grenade(
 			grenade.queue_free()
 		grenades.erase(grenade_id)
 
-	if DisplayServer.get_name() != "headless":
-		var explosion_audio := AudioStreamPlayer3D.new()
-		explosion_audio.stream = EXPLOSION_SOUND
-		explosion_audio.global_position = explosion_position
-		explosion_audio.max_distance = 45.0
-		explosion_audio.volume_db = -2.0
-		add_child(explosion_audio)
-		explosion_audio.finished.connect(explosion_audio.queue_free)
-		explosion_audio.play()
+	if (
+		DisplayServer.get_name() != "headless"
+		and ResourceLoader.exists("res://audio/explosion.wav")
+	):
+		var explosion_resource: Resource = load(
+			"res://audio/explosion.wav"
+		)
+		if explosion_resource is AudioStream:
+			var explosion_audio := AudioStreamPlayer3D.new()
+			explosion_audio.stream = (
+				explosion_resource as AudioStream
+			)
+			explosion_audio.global_position = explosion_position
+			explosion_audio.max_distance = 45.0
+			explosion_audio.volume_db = -2.0
+			add_child(explosion_audio)
+			explosion_audio.finished.connect(
+				explosion_audio.queue_free
+			)
+			explosion_audio.play()
 
 	var flash := MeshInstance3D.new()
 	var flash_mesh := SphereMesh.new()

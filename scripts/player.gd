@@ -7,13 +7,6 @@ enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
 @export var player_name := "Player"
 @export var player_class: PlayerClass = PlayerClass.SOLDIER
 const SERVICE_RIFLE: Resource = preload("res://data/weapons/service_rifle.tres")
-const RIFLE_FIRE_SOUND: AudioStream = preload("res://audio/rifle_fire.wav")
-const PISTOL_FIRE_SOUND: AudioStream = preload("res://audio/pistol_fire.wav")
-const DRY_CLICK_SOUND: AudioStream = preload("res://audio/dry_click.wav")
-const RELOAD_SOUND: AudioStream = preload("res://audio/reload.wav")
-const FOOTSTEP_SOUND: AudioStream = preload("res://audio/footstep.wav")
-const HIT_CONFIRM_SOUND: AudioStream = preload("res://audio/hit_confirm.wav")
-const HEADSHOT_CONFIRM_SOUND: AudioStream = preload("res://audio/headshot_confirm.wav")
 const SERVICE_PISTOL: Resource = preload("res://data/weapons/service_pistol.tres")
 const SOLDIER_LMG: Resource = preload("res://data/weapons/soldier_lmg.tres")
 const MEDIC_SMG: Resource = preload("res://data/weapons/medic_smg.tres")
@@ -131,6 +124,13 @@ var damage_number_until_ms := 0
 var recent_damage: Dictionary = {}
 var current_kill_streak := 0
 var previous_vertical_velocity := 0.0
+var rifle_fire_sound: AudioStream
+var pistol_fire_sound: AudioStream
+var dry_click_sound: AudioStream
+var reload_sound: AudioStream
+var footstep_sound: AudioStream
+var hit_confirm_sound: AudioStream
+var headshot_confirm_sound: AudioStream
 var weapon_audio: AudioStreamPlayer
 var reload_audio: AudioStreamPlayer
 var footstep_audio: AudioStreamPlayer3D
@@ -155,15 +155,19 @@ func _ready() -> void:
 	_build_spotted_marker()
 	_build_identity_visuals()
 	_refresh_identity_visuals(true)
-	_build_audio_players()
 	target_position = global_position
+
 	if _is_local_player() and DisplayServer.get_name() != "headless":
-		$Head/Camera3D.current = true
+		var local_camera: Camera3D = $Head/Camera3D as Camera3D
+		if local_camera != null:
+			local_camera.current = true
+
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_build_first_person_weapon()
 		_build_hud()
 		_build_spawn_menu()
 		_show_spawn_menu()
+		call_deferred("_initialize_optional_client_systems")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _is_local_player():
@@ -280,7 +284,11 @@ func _collect_and_send_input() -> void:
 				)
 
 	if not downed and Input.is_action_just_pressed("reload"):
-		if reload_audio != null and not reload_audio.playing:
+		if (
+			reload_audio != null
+			and reload_audio.stream != null
+			and not reload_audio.playing
+		):
 			reload_audio.play()
 		if main_node != null:
 			main_node.request_player_reload.rpc_id(1, local_peer_id)
@@ -2349,21 +2357,57 @@ func _rebuild_first_person_weapon() -> void:
 	weapon_view.add_child(muzzle_flash)
 
 
+func _initialize_optional_client_systems() -> void:
+	if not _is_local_player():
+		return
+
+	_build_audio_players()
+	if radar_panel != null:
+		radar_panel.visible = true
+
+func _safe_load_audio(path: String) -> AudioStream:
+	if not ResourceLoader.exists(path):
+		push_warning("Optional audio asset missing: %s" % path)
+		return null
+
+	var resource: Resource = load(path)
+	if resource is AudioStream:
+		return resource as AudioStream
+
+	push_warning("Invalid optional audio asset: %s" % path)
+	return null
+
 func _build_audio_players() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	if weapon_audio != null:
+		return
+
+	rifle_fire_sound = _safe_load_audio("res://audio/rifle_fire.wav")
+	pistol_fire_sound = _safe_load_audio("res://audio/pistol_fire.wav")
+	dry_click_sound = _safe_load_audio("res://audio/dry_click.wav")
+	reload_sound = _safe_load_audio("res://audio/reload.wav")
+	footstep_sound = _safe_load_audio("res://audio/footstep.wav")
+	hit_confirm_sound = _safe_load_audio("res://audio/hit_confirm.wav")
+	headshot_confirm_sound = _safe_load_audio(
+		"res://audio/headshot_confirm.wav"
+	)
+
 	weapon_audio = AudioStreamPlayer.new()
 	weapon_audio.volume_db = -5.0
 	add_child(weapon_audio)
+
 	reload_audio = AudioStreamPlayer.new()
-	reload_audio.stream = RELOAD_SOUND
+	reload_audio.stream = reload_sound
 	reload_audio.volume_db = -7.0
 	add_child(reload_audio)
+
 	footstep_audio = AudioStreamPlayer3D.new()
-	footstep_audio.stream = FOOTSTEP_SOUND
+	footstep_audio.stream = footstep_sound
 	footstep_audio.max_distance = 18.0
 	footstep_audio.volume_db = -10.0
 	add_child(footstep_audio)
+
 	confirm_audio = AudioStreamPlayer.new()
 	confirm_audio.volume_db = -8.0
 	add_child(confirm_audio)
@@ -2371,14 +2415,23 @@ func _build_audio_players() -> void:
 func _play_weapon_sound() -> void:
 	if weapon_audio == null:
 		return
-	weapon_audio.stream = PISTOL_FIRE_SOUND if current_weapon_index == 1 else RIFLE_FIRE_SOUND
+	var selected_stream: AudioStream = (
+		pistol_fire_sound
+		if current_weapon_index == 1
+		else rifle_fire_sound
+	)
+	if selected_stream == null:
+		return
+	weapon_audio.stream = selected_stream
 	weapon_audio.pitch_scale = randf_range(0.96, 1.04)
 	weapon_audio.play()
 
 func _play_dry_click() -> void:
 	if weapon_audio == null:
 		return
-	weapon_audio.stream = DRY_CLICK_SOUND
+	if dry_click_sound == null:
+		return
+	weapon_audio.stream = dry_click_sound
 	weapon_audio.pitch_scale = 1.0
 	weapon_audio.play()
 
@@ -2400,7 +2453,14 @@ func _update_footstep_audio(delta: float) -> void:
 func _play_confirm_sound(headshot: bool) -> void:
 	if confirm_audio == null:
 		return
-	confirm_audio.stream = HEADSHOT_CONFIRM_SOUND if headshot else HIT_CONFIRM_SOUND
+	var selected_stream: AudioStream = (
+		headshot_confirm_sound
+		if headshot
+		else hit_confirm_sound
+	)
+	if selected_stream == null:
+		return
+	confirm_audio.stream = selected_stream
 	confirm_audio.play()
 
 func _build_hud() -> void:
@@ -2525,6 +2585,7 @@ func _build_hud() -> void:
 	radar_panel.name = "TacticalRadar"
 	radar_panel.position = Vector2(1035, 480)
 	radar_panel.size = Vector2(220, 220)
+	radar_panel.visible = false
 	layer.add_child(radar_panel)
 
 	var radar_background := ColorRect.new()
@@ -2575,63 +2636,114 @@ func _get_or_create_radar_actor(actor_id: int) -> Label:
 	return marker
 
 func _update_radar() -> void:
-	if radar_panel == null or not _is_local_player():
+	if (
+		radar_panel == null
+		or not radar_panel.visible
+		or not _is_local_player()
+	):
 		return
+
 	var main_node: Node = get_parent()
 	if main_node == null:
 		return
 
-	var objective_position := Vector3.ZERO
+	var players_variant: Variant = main_node.get("players")
+	var grenades_variant: Variant = main_node.get("grenades")
+	if not players_variant is Dictionary:
+		return
+	if not grenades_variant is Dictionary:
+		return
+
+	var objective_position: Vector3 = global_position
 	if int(main_node.get("objective_stage")) == 0:
-		var build_site: Node3D = main_node.get_node_or_null("BridgeBuildSite") as Node3D
+		var build_site: Node3D = main_node.get_node_or_null(
+			"BridgeBuildSite"
+		) as Node3D
 		if build_site != null:
 			objective_position = build_site.global_position
 	else:
-		var objective_node: Node3D = main_node.get_node_or_null("Objective") as Node3D
+		var objective_node: Node3D = main_node.get_node_or_null(
+			"Objective"
+		) as Node3D
 		if objective_node != null:
 			objective_position = objective_node.global_position
+
 	if radar_objective != null:
-		radar_objective.position = _radar_position(objective_position) - Vector2(7, 10)
+		radar_objective.position = (
+			_radar_position(objective_position)
+			- Vector2(7, 10)
+		)
 
 	var active_ids: Dictionary = {}
-	var player_map: Dictionary = main_node.get("players")
+	var player_map: Dictionary = players_variant as Dictionary
+
 	for actor_value in player_map.values():
 		var actor: Node3D = actor_value as Node3D
-		if actor == null or actor == self or not bool(actor.get("alive")):
+		if actor == null or actor == self:
 			continue
+		if not bool(actor.get("alive")):
+			continue
+
 		var actor_id: int = int(actor.get("peer_id"))
 		var same_team: bool = int(actor.get("team")) == team
-		var spotted_enemy: bool = int(actor.call("spotted_remaining_ms")) > 0
+		var spotted_enemy := false
+
+		if actor.has_method("spotted_remaining_ms"):
+			spotted_enemy = (
+				int(actor.call("spotted_remaining_ms")) > 0
+			)
+
 		if not same_team and not spotted_enemy:
 			continue
+
 		var marker: Label = _get_or_create_radar_actor(actor_id)
-		marker.position = _radar_position(actor.global_position) - Vector2(6, 9)
-		marker.modulate = Color(0.18, 0.72, 1.0) if same_team else Color(1.0, 0.18, 0.12)
+		if marker == null:
+			continue
+
+		marker.position = (
+			_radar_position(actor.global_position)
+			- Vector2(6, 9)
+		)
+		marker.modulate = (
+			Color(0.18, 0.72, 1.0)
+			if same_team
+			else Color(1.0, 0.18, 0.12)
+		)
 		marker.visible = true
 		active_ids[actor_id] = true
 
 	for actor_id_value in radar_actor_markers:
 		var actor_id: int = int(actor_id_value)
-		if not active_ids.has(actor_id):
-			var marker: Label = radar_actor_markers[actor_id] as Label
-			if marker != null:
-				marker.visible = false
+		if active_ids.has(actor_id):
+			continue
+		var stale_marker: Label = (
+			radar_actor_markers[actor_id] as Label
+		)
+		if stale_marker != null:
+			stale_marker.visible = false
 
-	for marker in radar_grenade_markers:
-		if marker != null:
-			marker.queue_free()
+	for old_marker in radar_grenade_markers:
+		if old_marker != null and is_instance_valid(old_marker):
+			old_marker.queue_free()
 	radar_grenade_markers.clear()
 
-	var grenade_map: Dictionary = main_node.get("grenades")
+	var grenade_map: Dictionary = grenades_variant as Dictionary
 	for grenade_value in grenade_map.values():
 		var grenade_node: Node3D = grenade_value as Node3D
-		if grenade_node == null or int(grenade_node.get("owner_team")) == team:
+		if grenade_node == null:
 			continue
+		if int(grenade_node.get("owner_team")) == team:
+			continue
+
 		var grenade_marker := Label.new()
 		grenade_marker.text = "!"
 		grenade_marker.modulate = Color(1.0, 0.28, 0.05)
 		grenade_marker.add_theme_font_size_override("font_size", 18)
-		grenade_marker.position = _radar_position(grenade_node.global_position) - Vector2(5, 10)
+		grenade_marker.position = (
+			_radar_position(grenade_node.global_position)
+			- Vector2(5, 10)
+		)
+		grenade_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		radar_panel.add_child(grenade_marker)
 		radar_grenade_markers.append(grenade_marker)
 
