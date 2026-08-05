@@ -1124,12 +1124,12 @@ func _update_selection_status() -> void:
 		"Field Ops",
 		"Scout"
 	]
-	var class_name: String = class_names[
+	var selected_class_name: String = class_names[
 		clampi(selected_class, 0, class_names.size() - 1)
 	]
 	selection_status.text = "Selected: %s · %s" % [
 		team_name,
-		class_name
+		selected_class_name
 	]
 
 func _show_spawn_menu() -> void:
