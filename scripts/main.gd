@@ -146,17 +146,49 @@ func register_elimination(victim_id: int, attacker_id: int) -> void:
 	if players.has(attacker_id) and attacker_id != victim_id: players[attacker_id].kills += 1
 	push_kill_feed.rpc("%s eliminated %s" % [player_names.get(attacker_id, "World"), player_names.get(victim_id, "Player")])
 
-func create_supply_pack(owner, pack_type: int, amount: int) -> void:
-	if not multiplayer.is_server(): return
-	var id := next_supply_pack_id; next_supply_pack_id += 1
-	var position := owner.global_position + (-owner.global_transform.basis.z * 1.2); position.y = 0.35
-	spawn_supply_pack.rpc(id, owner.team, pack_type, amount, position)
+func create_supply_pack(owner: Node3D, pack_type: int, amount: int) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var id: int = next_supply_pack_id
+	next_supply_pack_id += 1
+
+	var spawn_position: Vector3 = (
+		owner.global_position
+		+ (-owner.global_transform.basis.z * 1.2)
+	)
+	spawn_position.y = 0.35
+
+	var owner_team: int = int(owner.get("team"))
+	spawn_supply_pack.rpc(
+		id,
+		owner_team,
+		pack_type,
+		amount,
+		spawn_position
+	)
 
 @rpc("authority", "call_local", "reliable")
-func spawn_supply_pack(pack_id: int, team: int, pack_type: int, amount: int, position: Vector3) -> void:
-	if supply_packs.has(pack_id): return
-	var pack := Node3D.new(); pack.set_script(SupplyPackScript); pack.pack_id = pack_id; pack.team = team; pack.pack_type = pack_type; pack.amount = amount; pack.position = position
-	add_child(pack); supply_packs[pack_id] = pack
+func spawn_supply_pack(
+	pack_id: int,
+	team: int,
+	pack_type: int,
+	amount: int,
+	spawn_position: Vector3
+) -> void:
+	if supply_packs.has(pack_id):
+		return
+
+	var pack := Node3D.new()
+	pack.set_script(SupplyPackScript)
+	pack.pack_id = pack_id
+	pack.team = team
+	pack.pack_type = pack_type
+	pack.amount = amount
+	pack.position = spawn_position
+
+	add_child(pack)
+	supply_packs[pack_id] = pack
 
 @rpc("authority", "call_local", "reliable")
 func remove_supply_pack(pack_id: int) -> void:
