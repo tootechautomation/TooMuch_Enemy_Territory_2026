@@ -1,20 +1,21 @@
 # Frontline: Objective
 
-## Version 8.0.0 Authoritative Structure Collision & Wall Audit
+## Version 8.1.0 Exact Scene Collision & Urban Realism
 
-Open buildings now create every visible wall directly under the building's
-rotated root as a matching `StaticBody3D` with an exact local `BoxShape3D`.
-This removes the world-space/reparent transform mismatch that could leave red
-brick walls visually present but physically passable.
+The four village townhouses now instantiate on both client and headless server.
+Collision is generated directly from each visible mesh with
+`create_trimesh_collision()`, so rotated walls, recesses, and openings remain
+aligned with the rendered scene.
 
-After the full graphical map is built, a deferred collision audit scans visible
-structural meshes. Unprotected walls and buildings receive trimesh collision,
-with a mesh-local box fallback only when trimesh generation fails.
+The broad townhouse solid proxies and hand-positioned gray plaster wall proxies
+have been removed. The structural auditor no longer creates broad AABB box
+fallbacks, eliminating the primary source of invisible walls.
 
-Decorative grime, scorch marks, particles, foliage, weapons, characters, and
-street debris are excluded.
+Server movement now uses a short capsule motion sweep before `move_and_slide()`
+to reduce thin-wall tunneling during sprinting or low frame-rate spikes.
 
-The headless VPS continues to use authoritative procedural collision bodies.
+The visual pass adds window glass, shutters, stone lintels and sills,
+foundations, cornices, gutters, exposed-brick damage, soot, and stone curbs.
 
-Build: v8.0.0
+Build: v8.1.0
 Protocol: 341

@@ -24,6 +24,9 @@ const RealAssetAdapterScript = preload(
 const StructureCollisionAuditorScript = preload(
 	"res://scripts/physics/structure_collision_auditor.gd"
 )
+const UrbanRealismPassScript = preload(
+	"res://scripts/visuals/urban_realism_pass.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -57,7 +60,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.0.0"
+const BUILD_VERSION := "8.1.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -278,6 +281,7 @@ var wwii_detail_pass: Node3D
 var wwii_material_library
 var battlefield_atmosphere: Node3D
 var structure_collision_report: Dictionary = {}
+var urban_realism_pass: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -2165,56 +2169,9 @@ func _add_interior_cover(
 		)
 
 func _build_structure_collision_pass() -> void:
-	# Fallback townhouse models use solid, inset authoritative volumes.
-	# External modular buildings should ship their own authored collision,
-	# but these safety volumes prevent walking through placeholder façades.
-	for building_data in [
-		[
-			"TownhouseA_SolidFallback",
-			Vector3(-51.0, 0.0, -27.0),
-			Vector3(7.8, 7.4, 5.9),
-			deg_to_rad(8.0)
-		],
-		[
-			"TownhouseB_SolidFallback",
-			Vector3(-52.0, 0.0, -8.0),
-			Vector3(8.2, 7.5, 6.1),
-			deg_to_rad(-4.0)
-		],
-		[
-			"TownhouseC_SolidFallback",
-			Vector3(-50.0, 0.0, 13.0),
-			Vector3(7.8, 7.4, 5.9),
-			deg_to_rad(7.0)
-		],
-		[
-			"TownhouseD_SolidFallback",
-			Vector3(-49.0, 0.0, 34.0),
-			Vector3(8.1, 7.5, 6.2),
-			deg_to_rad(-9.0)
-		]
-	]:
-		_create_solid_collision_proxy(
-			str(building_data[0]),
-			Vector3(building_data[1]),
-			Vector3(building_data[2]),
-			float(building_data[3])
-		)
-
-	# Gray/plaster route walls visible near the western staging and village.
-	# These were graphical meshes without matching authoritative bodies.
-	_create_wall_segment_collision(
-		"WestPlasterWallCollision",
-		Vector3(-45.2, 2.4, -13.7),
-		Vector3(0.28, 4.8, 11.0),
-		deg_to_rad(2.0)
-	)
-	_create_wall_segment_collision(
-		"WestPlasterCornerCollision",
-		Vector3(-40.6, 2.4, -18.8),
-		Vector3(9.4, 4.8, 0.28),
-		deg_to_rad(2.0)
-	)
+	# Townhouse and plaster structures now use exact collision generated from
+	# their visible scene meshes. Do not add broad solid fallback volumes here.
+	# Those proxies caused invisible walls and still failed to match openings.
 
 	# Large imported landmarks.
 	_create_collision_shell(
@@ -2740,6 +2697,89 @@ func _apply_material_recursive(
 	for child in root.get_children():
 		_apply_material_recursive(child, material)
 
+func _set_mesh_visibility_recursive(
+	root: Node,
+	visible_value: bool
+) -> void:
+	for node_value in root.find_children(
+		"*",
+		"VisualInstance3D",
+		true
+	):
+		var visual := node_value as VisualInstance3D
+		if visual != null:
+			visual.visible = visible_value
+
+func _spawn_structural_scene(
+	scene: PackedScene,
+	node_name: String,
+	position: Vector3,
+	rotation_y: float,
+	scale_value: Vector3,
+	material: Material = null
+) -> Node3D:
+	if scene == null:
+		return null
+
+	var instance := scene.instantiate()
+	if not instance is Node3D:
+		instance.queue_free()
+		return null
+
+	var root := instance as Node3D
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	root.scale = scale_value
+	root.set_meta("exact_structure_source", true)
+	add_child(root)
+
+	if DisplayServer.get_name() != "headless" and material != null:
+		_apply_material_recursive(root, material)
+
+	var generated_shapes := 0
+	for node_value in root.find_children(
+		"*",
+		"MeshInstance3D",
+		true
+	):
+		var mesh_instance := node_value as MeshInstance3D
+		if mesh_instance == null or mesh_instance.mesh == null:
+			continue
+		var before_count := mesh_instance.get_child_count()
+		mesh_instance.create_trimesh_collision()
+		for child_index in range(
+			before_count,
+			mesh_instance.get_child_count()
+		):
+			var child := mesh_instance.get_child(child_index)
+			if child is StaticBody3D:
+				var body := child as StaticBody3D
+				body.collision_layer = 1
+				body.collision_mask = 1
+				body.set_meta("exact_structure_collision", true)
+				generated_shapes += 1
+
+	if DisplayServer.get_name() == "headless":
+		_set_mesh_visibility_recursive(root, false)
+
+	print(
+		"Exact structure collision: %s bodies=%d"
+		% [node_name, generated_shapes]
+	)
+	return root
+
+func _build_urban_realism_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if urban_realism_pass != null:
+		return
+	urban_realism_pass = UrbanRealismPassScript.new()
+	urban_realism_pass.name = "UrbanRealismPass"
+	add_child(urban_realism_pass)
+	if urban_realism_pass.has_method("build"):
+		urban_realism_pass.call("build")
+
 func _spawn_visual_scene(
 	scene: PackedScene,
 	node_name: String,
@@ -2765,37 +2805,40 @@ func _spawn_visual_scene(
 	return root
 
 func _build_asset_based_village_pass() -> void:
-	if DisplayServer.get_name() == "headless":
-		return
+	var plaster_material: Material = null
+	var brick_material: Material = null
+	var cobble_material: Material = null
+	var rubble_material: Material = null
 
-	var plaster_material := _make_pbr_material(
-		pbr_plaster_albedo,
-		pbr_plaster_normal,
-		pbr_plaster_roughness,
-		Color(0.96, 0.92, 0.84),
-		1.7
-	)
-	var brick_material := _make_pbr_material(
-		pbr_brick_albedo,
-		pbr_brick_normal,
-		pbr_brick_roughness,
-		Color(0.90, 0.84, 0.80),
-		2.2
-	)
-	var cobble_material := _make_pbr_material(
-		pbr_cobble_albedo,
-		pbr_cobble_normal,
-		pbr_cobble_roughness,
-		Color(0.88, 0.90, 0.92),
-		3.8
-	)
-	var rubble_material := _make_pbr_material(
-		pbr_ground_albedo,
-		pbr_ground_normal,
-		pbr_ground_roughness,
-		Color(0.92, 0.88, 0.82),
-		2.8
-	)
+	if DisplayServer.get_name() != "headless":
+		plaster_material = _make_pbr_material(
+			pbr_plaster_albedo,
+			pbr_plaster_normal,
+			pbr_plaster_roughness,
+			Color(0.96, 0.92, 0.84),
+			1.7
+		)
+		brick_material = _make_pbr_material(
+			pbr_brick_albedo,
+			pbr_brick_normal,
+			pbr_brick_roughness,
+			Color(0.90, 0.84, 0.80),
+			2.2
+		)
+		cobble_material = _make_pbr_material(
+			pbr_cobble_albedo,
+			pbr_cobble_normal,
+			pbr_cobble_roughness,
+			Color(0.88, 0.90, 0.92),
+			3.8
+		)
+		rubble_material = _make_pbr_material(
+			pbr_ground_albedo,
+			pbr_ground_normal,
+			pbr_ground_roughness,
+			Color(0.92, 0.88, 0.82),
+			2.8
+		)
 
 	for building_data in [
 		[
@@ -2831,7 +2874,7 @@ func _build_asset_based_village_pass() -> void:
 			brick_material
 		]
 	]:
-		_spawn_visual_scene(
+		_spawn_structural_scene(
 			building_data[0] as PackedScene,
 			str(building_data[1]),
 			Vector3(building_data[2]),
@@ -2840,6 +2883,9 @@ func _build_asset_based_village_pass() -> void:
 			building_data[5] as Material
 		)
 
+
+	if DisplayServer.get_name() == "headless":
+		return
 
 	for rubble_position in [
 		Vector3(-45.0, 0.0, -22.0),
@@ -8302,6 +8348,7 @@ func _build_world() -> void:
 	_build_breakable_environment()
 	_build_high_fidelity_environment_pass()
 	_build_wwii_detail_pass()
+	_build_urban_realism_pass()
 	_apply_wwii_material_library()
 	_build_battlefield_atmosphere()
 	_build_battlefield_dressing_pass()

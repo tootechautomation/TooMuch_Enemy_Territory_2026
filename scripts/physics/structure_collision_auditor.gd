@@ -56,10 +56,9 @@ static func audit_and_repair(root: Node) -> Dictionary:
 			report["trimesh_generated"] += 1
 			continue
 
-		if _create_box_fallback(mesh_instance) != null:
-			report["box_fallbacks"] += 1
-		else:
-			report["failed"] += 1
+		# Do not generate broad AABB wall fallbacks. They are frequently
+		# misaligned with rotated or doorway-bearing structures.
+		report["failed"] += 1
 
 	return report
 

@@ -206,6 +206,7 @@ var damage_number_until_ms := 0
 var recent_damage: Dictionary = {}
 var current_kill_streak := 0
 var previous_vertical_velocity := 0.0
+var wall_sweep_margin := 0.12
 var rifle_fire_sound: AudioStream
 var pistol_fire_sound: AudioStream
 var dry_click_sound: AudioStream
@@ -464,6 +465,10 @@ func apply_local_profile_settings(settings: Dictionary) -> void:
 	_update_selection_status()
 
 func _ready() -> void:
+	safe_margin = 0.08
+	max_slides = 8
+	floor_snap_length = 0.35
+	floor_stop_on_slope = true
 	if DisplayServer.get_name() != "headless":
 		tex_uniform_attackers = _load_optional_texture(
 			"res://assets/textures/uniform_attackers.png"
@@ -872,6 +877,40 @@ func server_receive_input(move: Vector2, yaw: float, look_pitch: float, wants_ju
 	crouch_requested = wants_crouch
 	aim_requested = wants_aim
 
+func _server_wall_safety_sweep(
+	horizontal_motion: Vector3
+) -> Vector3:
+	if horizontal_motion.length_squared() <= 0.000001:
+		return horizontal_motion
+
+	var query := PhysicsShapeQueryParameters3D.new()
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.34
+	capsule.height = 1.72
+	query.shape = capsule
+	query.transform = Transform3D(
+		global_transform.basis,
+		global_position + Vector3.UP * 0.86
+	)
+	query.motion = horizontal_motion
+	query.collision_mask = 1
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	query.exclude = [self]
+
+	var cast_result: Array = (
+		get_world_3d().direct_space_state.cast_motion(query)
+	)
+	if cast_result.size() < 2:
+		return horizontal_motion
+
+	var safe_fraction := clampf(
+		float(cast_result[0]) - wall_sweep_margin,
+		0.0,
+		1.0
+	)
+	return horizontal_motion * safe_fraction
+
 func _server_simulate(delta: float) -> void:
 	_server_check_out_of_bounds_recovery()
 	var now: int = Time.get_ticks_msec()
@@ -939,6 +978,25 @@ func _server_simulate(delta: float) -> void:
 	velocity.x = direction.x * move_speed
 	velocity.z = direction.z * move_speed
 	previous_vertical_velocity = velocity.y
+
+	var intended_horizontal := Vector3(
+		velocity.x,
+		0.0,
+		velocity.z
+	) * delta
+	var safe_horizontal := _server_wall_safety_sweep(
+		intended_horizontal
+	)
+	if intended_horizontal.length_squared() > 0.000001:
+		var movement_ratio := clampf(
+			safe_horizontal.length()
+			/ intended_horizontal.length(),
+			0.0,
+			1.0
+		)
+		velocity.x *= movement_ratio
+		velocity.z *= movement_ratio
+
 	move_and_slide()
 
 	if (
