@@ -80,6 +80,9 @@ var next_interact_time := 0
 var next_ability_time := 0
 var kills := 0
 var deaths := 0
+var assists := 0
+var objective_points := 0
+var round_xp := 0
 var xp := 0
 var is_bot := false
 var interact_accumulator := 0.0
@@ -180,6 +183,7 @@ var replicated_heavy_fire_ms := 0
 var class_mode_label: Label
 var rally_cooldown_until_ms := 0
 var mission_banner: Label
+var rank_progress_label: Label
 var compass_label: Label
 var medal_icon: TextureRect
 var medal_label: Label
@@ -2215,27 +2219,103 @@ func server_apply_class(class_id: int) -> void:
 func add_xp(amount: int, reason: String = "") -> void:
 	if not multiplayer.is_server():
 		return
-	xp = maxi(0, xp + amount)
+
+	var safe_amount: int = maxi(0, amount)
+	xp += safe_amount
+	round_xp += safe_amount
+
+	var normalized_reason: String = reason.to_lower()
+	if normalized_reason == "assist":
+		assists += 1
+
+	if (
+		"objective" in normalized_reason
+		or "bridge" in normalized_reason
+		or "fortif" in normalized_reason
+		or "command post" in normalized_reason
+		or "supply depot" in normalized_reason
+		or "rally" in normalized_reason
+		or "artillery" in normalized_reason
+		or "revive" in normalized_reason
+	):
+		objective_points += safe_amount
+
 	if reason != "":
-		print("%s gained %d XP: %s" % [player_name, amount, reason])
+		print(
+			"%s gained %d XP: %s"
+			% [player_name, safe_amount, reason]
+		)
+
+func rank_level() -> int:
+	if xp >= 600:
+		return 5
+	if xp >= 300:
+		return 4
+	if xp >= 180:
+		return 3
+	if xp >= 100:
+		return 2
+	if xp >= 40:
+		return 1
+	return 0
 
 func rank_name() -> String:
-	if xp >= 300:
-		return "Captain"
-	if xp >= 180:
-		return "Lieutenant"
-	if xp >= 100:
-		return "Sergeant"
-	if xp >= 40:
-		return "Corporal"
-	return "Recruit"
+	match rank_level():
+		5:
+			return "Major"
+		4:
+			return "Captain"
+		3:
+			return "Lieutenant"
+		2:
+			return "Sergeant"
+		1:
+			return "Corporal"
+		_:
+			return "Recruit"
+
+func next_rank_xp() -> int:
+	match rank_level():
+		0:
+			return 40
+		1:
+			return 100
+		2:
+			return 180
+		3:
+			return 300
+		4:
+			return 600
+		_:
+			return 600
+
+func rank_progress_text() -> String:
+	if rank_level() >= 5:
+		return "%s · MAX RANK · %d XP" % [rank_name(), xp]
+	return "%s · %d/%d XP" % [
+		rank_name(),
+		xp,
+		next_rank_xp()
+	]
+
+func rank_health_bonus() -> int:
+	return rank_level() * 2
+
+func rank_reserve_bonus() -> int:
+	return rank_level() * 8
 
 func _class_health(class_id: int) -> int:
+	var base_health := 100
 	match class_id:
-		PlayerClass.SOLDIER: return 120
-		PlayerClass.MEDIC: return 110
-		PlayerClass.SCOUT: return 90
-		_: return 100
+		PlayerClass.SOLDIER:
+			base_health = 120
+		PlayerClass.MEDIC:
+			base_health = 110
+		PlayerClass.SCOUT:
+			base_health = 90
+		_:
+			base_health = 100
+	return base_health + rank_health_bonus()
 
 func _is_local_player() -> bool: return peer_id != 0 and peer_id == multiplayer.get_unique_id()
 
@@ -3007,6 +3087,15 @@ func _build_hud() -> void:
 	mission_banner.visible = false
 	layer.add_child(mission_banner)
 
+	rank_progress_label = Label.new()
+	rank_progress_label.position = Vector2(18, 248)
+	rank_progress_label.custom_minimum_size = Vector2(390, 26)
+	rank_progress_label.add_theme_font_size_override(
+		"font_size",
+		18
+	)
+	layer.add_child(rank_progress_label)
+
 	command_post_bar = ProgressBar.new()
 	command_post_bar.position = Vector2(440, 122)
 	command_post_bar.size = Vector2(400, 18)
@@ -3386,6 +3475,9 @@ func _update_hud() -> void:
 		command_post_bar.value = float(
 			main.get("command_post_progress")
 		)
+
+	if rank_progress_label != null:
+		rank_progress_label.text = rank_progress_text()
 
 	if mission_banner != null and main != null:
 		var banner_until: int = int(

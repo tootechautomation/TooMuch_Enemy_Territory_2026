@@ -11,7 +11,7 @@ const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const RallyPointScript = preload("res://scripts/rally_point.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.7.1"
+const BUILD_VERSION := "3.8.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -2447,7 +2447,7 @@ func _end_match(message: String) -> void:
 	announce.rpc(message)
 	show_round_results.rpc(
 		message,
-		scoreboard_text(),
+		scoreboard_text() + "\n\n" + round_awards_text(),
 		ROUND_RESTART_SECONDS
 	)
 	print(message)
@@ -2865,6 +2865,113 @@ func objective_status_text() -> String:
 		]
 	)
 
+func round_awards_text() -> String:
+	if players.is_empty():
+		return "ROUND AWARDS\nNo eligible players"
+
+	var mvp: Node3D = null
+	var top_fragger: Node3D = null
+	var top_support: Node3D = null
+	var top_objective: Node3D = null
+	var survivor: Node3D = null
+
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+
+		if (
+			mvp == null
+			or int(player.get("round_xp"))
+			> int(mvp.get("round_xp"))
+		):
+			mvp = player
+
+		if (
+			top_fragger == null
+			or int(player.get("kills"))
+			> int(top_fragger.get("kills"))
+		):
+			top_fragger = player
+
+		if (
+			top_support == null
+			or int(player.get("assists"))
+			> int(top_support.get("assists"))
+		):
+			top_support = player
+
+		if (
+			top_objective == null
+			or int(player.get("objective_points"))
+			> int(top_objective.get("objective_points"))
+		):
+			top_objective = player
+
+		if survivor == null:
+			survivor = player
+		else:
+			var player_deaths: int = int(player.get("deaths"))
+			var survivor_deaths: int = int(survivor.get("deaths"))
+			if (
+				player_deaths < survivor_deaths
+				or (
+					player_deaths == survivor_deaths
+					and int(player.get("kills"))
+					> int(survivor.get("kills"))
+				)
+			):
+				survivor = player
+
+	var lines: Array[String] = ["ROUND AWARDS"]
+
+	if mvp != null:
+		lines.append(
+			"MVP: %s · %d round XP"
+			% [
+				str(mvp.get("player_name")),
+				int(mvp.get("round_xp"))
+			]
+		)
+
+	if top_fragger != null:
+		lines.append(
+			"Top Fragger: %s · %d eliminations"
+			% [
+				str(top_fragger.get("player_name")),
+				int(top_fragger.get("kills"))
+			]
+		)
+
+	if top_support != null:
+		lines.append(
+			"Support: %s · %d assists"
+			% [
+				str(top_support.get("player_name")),
+				int(top_support.get("assists"))
+			]
+		)
+
+	if top_objective != null:
+		lines.append(
+			"Objective Specialist: %s · %d objective score"
+			% [
+				str(top_objective.get("player_name")),
+				int(top_objective.get("objective_points"))
+			]
+		)
+
+	if survivor != null:
+		lines.append(
+			"Survivor: %s · %d deaths"
+			% [
+				str(survivor.get("player_name")),
+				int(survivor.get("deaths"))
+			]
+		)
+
+	return "\n".join(lines)
+
 func scoreboard_text() -> String:
 	var class_names: Array[String] = [
 		"Soldier",
@@ -2873,8 +2980,18 @@ func scoreboard_text() -> String:
 		"FieldOps",
 		"Scout"
 	]
+	var depot_text := "Neutral"
+	if supply_depot_control == 0:
+		depot_text = "Attackers"
+	elif supply_depot_control == 1:
+		depot_text = "Defenders"
+
 	var lines: Array[String] = [
-		"SCOREBOARD · Tickets ATK %d / DEF %d · Command Post %s" % [
+		(
+			"SCOREBOARD · Tickets ATK %d / DEF %d · "
+			+ "Command Post %s · Supply Depot %s"
+		)
+		% [
 			attacker_tickets,
 			defender_tickets,
 			(
@@ -2885,9 +3002,13 @@ func scoreboard_text() -> String:
 					if command_post_control == 0
 					else "Defenders"
 				)
-			)
+			),
+			depot_text
 		],
-		"Player          Team  Class      K   D   XP   Rank       Type   State"
+		(
+			"Player          Team Class      K  D  A  OBJ "
+			+ "RXP  XP   Rank       Type"
+		)
 	]
 
 	var sorted_players: Array = players.values()
@@ -2895,9 +3016,12 @@ func scoreboard_text() -> String:
 		func(a: Node3D, b: Node3D) -> bool:
 			if int(a.get("team")) != int(b.get("team")):
 				return int(a.get("team")) < int(b.get("team"))
-			if int(a.get("kills")) != int(b.get("kills")):
-				return int(a.get("kills")) > int(b.get("kills"))
-			return int(a.get("xp")) > int(b.get("xp"))
+			if int(a.get("round_xp")) != int(b.get("round_xp")):
+				return (
+					int(a.get("round_xp"))
+					> int(b.get("round_xp"))
+				)
+			return int(a.get("kills")) > int(b.get("kills"))
 	)
 
 	for player_value in sorted_players:
@@ -2905,20 +3029,12 @@ func scoreboard_text() -> String:
 		if player == null:
 			continue
 
-		var is_alive: bool = bool(player.get("alive"))
-		var is_downed: bool = bool(player.get("downed"))
-		var state: String = (
-			"Down"
-			if is_downed
-			else ("Alive" if is_alive else "Dead")
-		)
 		var player_team: int = int(player.get("team"))
 		var class_id: int = clampi(
 			int(player.get("player_class")),
 			0,
 			class_names.size() - 1
 		)
-		var rank: String = str(player.call("rank_name"))
 		var actor_type := (
 			"BOT"
 			if bool(player.get("is_bot"))
@@ -2926,17 +3042,22 @@ func scoreboard_text() -> String:
 		)
 
 		lines.append(
-			"%-15s %-5s %-10s %2d  %2d  %3d  %-10s %-6s %s"
+			(
+				"%-15s %-4s %-10s %2d %2d %2d %4d "
+				+ "%4d %4d %-10s %s"
+			)
 			% [
 				str(player.get("player_name")),
 				"ATK" if player_team == 0 else "DEF",
 				class_names[class_id],
 				int(player.get("kills")),
 				int(player.get("deaths")),
+				int(player.get("assists")),
+				int(player.get("objective_points")),
+				int(player.get("round_xp")),
 				int(player.get("xp")),
-				rank,
-				actor_type,
-				state
+				str(player.call("rank_name")),
+				actor_type
 			]
 		)
 
@@ -3168,6 +3289,9 @@ func _reset_round() -> void:
 			continue
 		player.set("kills", 0)
 		player.set("deaths", 0)
+		player.set("assists", 0)
+		player.set("objective_points", 0)
+		player.set("round_xp", 0)
 		player.call(
 			"server_force_respawn",
 			_get_spawn(

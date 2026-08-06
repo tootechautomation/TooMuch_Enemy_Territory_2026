@@ -1,18 +1,45 @@
 # Frontline: Objective
 
-## Version 3.7.1 Tactical Operations declaration fix
+## Version 3.8.0 Match Flow & Progression
 
-Fixed the parser errors introduced in v3.7.0:
+### Session progression
+- XP and rank now persist between rounds during the current server session.
+- Added Major rank at 600 XP.
+- The HUD displays current rank and progress toward the next rank.
+- Each rank grants +2 maximum health and +8 reserve ammunition.
+- Bonuses remain server-authoritative.
 
-- Declared `rally_cooldown_until_ms`.
-- Declared `mission_banner`.
-- Preserved the explicit `+` in the connection failure message.
-- Preserved all supply-depot, rally-point, tactical AI, and mission-banner
-  features.
-- Preserved network protocol 341.
+### Expanded combat statistics
+- Added assist tracking.
+- Added objective-score tracking.
+- Added round XP separate from total session XP.
+- Objective score is earned from revives, fortification, rally deployment,
+  artillery, bridge work, command-post actions, and supply-depot actions.
 
-Expected status:
+### Round awards
+The end-of-round screen now calculates:
+- MVP
+- Top Fragger
+- Support award
+- Objective Specialist
+- Survivor
 
-```text
-Connected: v3.7.1 protocol 341
-```
+### Scoreboard
+The scoreboard now includes:
+- Kills
+- Deaths
+- Assists
+- Objective score
+- Round XP
+- Total XP
+- Rank
+- Human/bot status
+- Command-post and supply-depot ownership
+
+### Match flow
+- Per-round combat statistics reset between rounds.
+- Session XP and rank remain.
+- Network protocol remains 341.
+- The connection error string retains explicit `+` concatenation.
+
+Expected status: `Connected: v3.8.0 protocol 341`
