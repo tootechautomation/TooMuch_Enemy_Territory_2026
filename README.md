@@ -1,34 +1,25 @@
 # Frontline: Objective
 
-## Version 7.7.2 Weapon Dimension Syntax Hotfix
+## Version 7.7.3 Duplicate Weapon Block Removal
 
-Version 7.7.1 accidentally produced invalid statements such as:
+The stock, handguard, and sight block had been inserted into the imported GLB
+helper. That helper does not declare the procedural dimensions or materials,
+which caused `receiver_length` scope errors near the beginning of player.gd.
 
-```gdscript
-receiver_length = float = 0.62
-barrel_length = float = 0.34
-```
+The imported helper now performs only:
+- GLB instantiation
+- Imported material processing
+- Imported muzzle-flash setup
 
-The first-person weapon function now uses clean shared defaults:
+The procedural rebuild function now owns:
+- Receiver and barrel dimensions
+- Metal and wood materials
+- Buttstock
+- Handguard
+- Rear sight
+- Front sight
+- First-person arms
+- Procedural muzzle flash
 
-```gdscript
-var is_pistol: bool = current_weapon_index == 1
-var receiver_length: float = 0.72
-var barrel_length: float = 0.55
-```
-
-The pistol branch then uses ordinary assignments:
-
-```gdscript
-if is_pistol:
-    receiver_length = 0.34
-    barrel_length = 0.28
-```
-
-All v7.7 realism improvements remain enabled.
-
-Compatibility:
-
-- Build: v7.7.2
-- Protocol: 341
-- Explicit connection-message `+` retained
+Build: v7.7.3
+Protocol: 341
