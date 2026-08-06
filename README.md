@@ -1,18 +1,37 @@
 # Frontline: Objective
 
-## Version 3.6.0 Battlefield Animation & Immersion
+## Version 3.7.0 Tactical Operations
 
-- Added walking/sprinting weapon bob.
-- Sprinting lowers and angles the weapon.
-- ADS steadies the weapon; idle breathing adds subtle sway.
-- Player class accents animate with movement.
-- Bridge and bunker objectives use pulsing lights.
-- Team spawn points use animated blue/red beams.
-- Smoke now uses seven layered moving puffs.
-- Destroyed cover creates procedural debris.
-- Added original low-volume battlefield ambience.
-- Visual/audio additions remain headless-safe.
-- Network protocol remains 341.
+### Supply depot side objective
+- A new supply depot is located on the western flank.
+- Players capture it by occupying its radius.
+- Multiple teammates accelerate capture.
+- Enemy presence makes it contested.
+- Capturing the depot immediately restores four tickets.
+- The controlling team gains one ticket every twelve seconds.
+- World labels, lighting, mission banners, and the operations HUD show its state.
 
-Expected build: `v3.6.0`
-Compatible protocol: `341`
+### Team rally points
+- Field Ops presses V to deploy a team rally point.
+- Each team may have one active rally point.
+- A new rally replaces the previous team rally.
+- Rally points last 45 seconds.
+- Enemy players within eight meters contest the rally.
+- Uncontested rally points take priority for reinforcement-wave respawns.
+- Spawn validation remains active around rally points.
+
+### Tactical AI
+- Bots detect pending artillery danger.
+- Bots inside the danger radius move away from the impact position.
+- Existing squad lanes, smoke blocking, and class behavior remain active.
+
+### Mission presentation
+- Major captures, neutralizations, and rally deployments create center-screen banners.
+- Tactical HUD now displays supply-depot ownership alongside command-post and gun status.
+
+### Compatibility
+- Build: v3.7.0
+- Protocol: 341
+- The connection-failure message uses explicit `+` string concatenation.
+
+Expected status: `Connected: v3.7.0 protocol 341`

@@ -8,9 +8,10 @@ const SmokeCloudScript = preload("res://scripts/smoke_cloud.gd")
 const SensorBeaconScript = preload("res://scripts/sensor_beacon.gd")
 const FieldEmplacementScript = preload("res://scripts/field_emplacement.gd")
 const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
+const RallyPointScript = preload("res://scripts/rally_point.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.6.0"
+const BUILD_VERSION := "3.7.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -29,6 +30,11 @@ const ARTILLERY_DAMAGE := 92
 const SENSOR_BEACON_DURATION := 18.0
 const SENSOR_BEACON_RADIUS := 24.0
 const FIELD_EMPLACEMENT_COUNT := 2
+const SUPPLY_DEPOT_CAPTURE_SECONDS := 10.0
+const SUPPLY_DEPOT_RADIUS := 5.2
+const SUPPLY_DEPOT_TICKET_INTERVAL := 12.0
+const RALLY_POINT_DURATION := 45.0
+const RALLY_POINT_CONTEST_RADIUS := 8.0
 
 var tex_metal: Texture2D
 var tex_objective: Texture2D
@@ -122,6 +128,17 @@ var ambience_player: AudioStreamPlayer
 var bridge_beacon: OmniLight3D
 var bunker_beacon: OmniLight3D
 var spawn_beams: Array[Node3D] = []
+var rally_points: Dictionary = {}
+var next_rally_id := 1
+var supply_depot_control := -1
+var supply_depot_progress := 0.0
+var supply_depot_contested := false
+var supply_depot_ticket_accumulator := 0.0
+var supply_depot_marker: Label3D
+var supply_depot_progress_label: Label3D
+var supply_depot_light: OmniLight3D
+var mission_banner_text := ""
+var mission_banner_until_ms := 0
 var forward_spawn_points := {
 	0: [
 		Vector3(3.5, 1.0, -8.5),
@@ -162,6 +179,7 @@ func _process(delta: float) -> void:
 	_update_immersive_visuals()
 	_update_objective_visuals()
 	_update_command_post_visuals()
+	_update_supply_depot_visuals()
 	_update_battlefield_atmosphere()
 
 	var active_peer: MultiplayerPeer = multiplayer.multiplayer_peer
@@ -176,6 +194,7 @@ func _process(delta: float) -> void:
 		return
 
 	_update_pending_artillery(delta)
+	_update_supply_depot(delta)
 
 	station_accumulator += delta
 	if station_accumulator >= COMMAND_POST_STATION_INTERVAL:
@@ -408,6 +427,306 @@ func emplacement_status_text() -> String:
 		if command_post_control == 0
 		else "AUTO-GUNS: DEFENDERS"
 	)
+
+func _supply_depot_node() -> Node3D:
+	return get_node_or_null("SupplyDepot") as Node3D
+
+func _update_supply_depot(delta: float) -> void:
+	if not multiplayer.is_server() or match_over:
+		return
+
+	var depot: Node3D = _supply_depot_node()
+	if depot == null:
+		return
+
+	var attackers := 0
+	var defenders := 0
+
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+		if not bool(player.get("alive")) or bool(player.get("downed")):
+			continue
+		if player.global_position.distance_to(
+			depot.global_position
+		) > SUPPLY_DEPOT_RADIUS:
+			continue
+
+		if int(player.get("team")) == 0:
+			attackers += 1
+		else:
+			defenders += 1
+
+	supply_depot_contested = attackers > 0 and defenders > 0
+
+	if attackers != defenders:
+		var advantage: int = clampi(
+			abs(attackers - defenders),
+			1,
+			3
+		)
+		var rate: float = (
+			100.0 / SUPPLY_DEPOT_CAPTURE_SECONDS
+		) * float(advantage)
+
+		if attackers > defenders:
+			supply_depot_progress = minf(
+				100.0,
+				supply_depot_progress + rate * delta
+			)
+		else:
+			supply_depot_progress = maxf(
+				-100.0,
+				supply_depot_progress - rate * delta
+			)
+
+	var new_control := supply_depot_control
+	if supply_depot_progress >= 100.0:
+		new_control = 0
+	elif supply_depot_progress <= -100.0:
+		new_control = 1
+	elif absf(supply_depot_progress) < 5.0:
+		new_control = -1
+
+	if new_control != supply_depot_control:
+		supply_depot_control = new_control
+		supply_depot_ticket_accumulator = 0.0
+
+		if new_control == 0:
+			attacker_tickets = mini(
+				INITIAL_TEAM_TICKETS,
+				attacker_tickets + 4
+			)
+			show_mission_event.rpc(
+				"ATTACKERS SECURED THE SUPPLY DEPOT"
+			)
+		elif new_control == 1:
+			defender_tickets = mini(
+				INITIAL_TEAM_TICKETS,
+				defender_tickets + 4
+			)
+			show_mission_event.rpc(
+				"DEFENDERS SECURED THE SUPPLY DEPOT"
+			)
+		else:
+			show_mission_event.rpc("SUPPLY DEPOT NEUTRALIZED")
+
+	if supply_depot_control >= 0:
+		supply_depot_ticket_accumulator += delta
+		if (
+			supply_depot_ticket_accumulator
+			>= SUPPLY_DEPOT_TICKET_INTERVAL
+		):
+			supply_depot_ticket_accumulator = 0.0
+			if supply_depot_control == 0:
+				attacker_tickets = mini(
+					INITIAL_TEAM_TICKETS,
+					attacker_tickets + 1
+				)
+			else:
+				defender_tickets = mini(
+					INITIAL_TEAM_TICKETS,
+					defender_tickets + 1
+				)
+
+func _update_supply_depot_visuals() -> void:
+	if (
+		supply_depot_marker == null
+		or supply_depot_progress_label == null
+		or supply_depot_light == null
+	):
+		return
+
+	var state_text := "SUPPLY DEPOT NEUTRAL"
+	var state_color := Color(0.72, 0.72, 0.72)
+
+	if supply_depot_control == 0:
+		state_text = "ATTACKER SUPPLY DEPOT"
+		state_color = Color(0.20, 0.55, 1.0)
+	elif supply_depot_control == 1:
+		state_text = "DEFENDER SUPPLY DEPOT"
+		state_color = Color(1.0, 0.24, 0.16)
+
+	if supply_depot_contested:
+		state_text = "SUPPLY DEPOT CONTESTED"
+		state_color = Color(1.0, 0.72, 0.10)
+
+	supply_depot_marker.text = state_text
+	supply_depot_marker.modulate = state_color
+	supply_depot_progress_label.text = (
+		"Capture %+d%%" % int(round(supply_depot_progress))
+	)
+	supply_depot_progress_label.modulate = state_color.lightened(0.2)
+	supply_depot_light.light_color = state_color
+	supply_depot_light.light_energy = (
+		2.7 if supply_depot_contested else 1.6
+	)
+
+@rpc("authority", "call_local", "reliable")
+func show_mission_event(message: String) -> void:
+	mission_banner_text = message
+	mission_banner_until_ms = Time.get_ticks_msec() + 3500
+	push_kill_feed.rpc(message)
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_rally_point(
+	requested_peer_id: int,
+	position_hint: Vector3
+) -> void:
+	var player: Node3D = _player_from_remote_sender()
+	if player == null:
+		return
+	if int(player.get("player_class")) != 3:
+		return
+	if not bool(player.get("alive")) or bool(player.get("downed")):
+		return
+
+	var team_id: int = int(player.get("team"))
+	var deploy_position: Vector3 = (
+		player.global_position
+		+ (-player.global_transform.basis.z * 2.2)
+	)
+	deploy_position.y = 0.0
+
+	if deploy_position.distance_to(position_hint) <= 4.0:
+		deploy_position = position_hint
+		deploy_position.y = 0.0
+
+	server_remove_rally_point(team_id)
+
+	var rally_id: int = next_rally_id
+	next_rally_id += 1
+	spawn_rally_point.rpc(
+		rally_id,
+		team_id,
+		int(player.get("peer_id")),
+		deploy_position,
+		RALLY_POINT_DURATION
+	)
+	player.call("add_xp", 6, "rally deployed")
+	show_mission_event.rpc(
+		"%s DEPLOYED A TEAM RALLY"
+		% str(player.get("player_name"))
+	)
+
+@rpc("authority", "call_local", "reliable")
+func spawn_rally_point(
+	rally_id: int,
+	team_id: int,
+	owner_id: int,
+	position: Vector3,
+	duration: float
+) -> void:
+	if rally_points.has(team_id):
+		var old_value: Variant = rally_points.get(team_id)
+		rally_points.erase(team_id)
+		if old_value != null and is_instance_valid(old_value):
+			var old_rally: Node = old_value as Node
+			if old_rally != null:
+				old_rally.queue_free()
+
+	var rally := Node3D.new()
+	rally.name = "RallyPoint_%d" % team_id
+	rally.set_script(RallyPointScript)
+	add_child(rally)
+	rally.call(
+		"configure",
+		rally_id,
+		team_id,
+		owner_id,
+		position,
+		duration
+	)
+	rally_points[team_id] = rally
+
+func server_remove_rally_point(team_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	remove_rally_point.rpc(team_id)
+
+@rpc("authority", "call_local", "reliable")
+func remove_rally_point(team_id: int) -> void:
+	if not rally_points.has(team_id):
+		return
+
+	var rally_value: Variant = rally_points.get(team_id)
+	rally_points.erase(team_id)
+
+	if rally_value == null or not is_instance_valid(rally_value):
+		return
+
+	var rally: Node = rally_value as Node
+	if rally != null and not rally.is_queued_for_deletion():
+		rally.queue_free()
+
+func is_rally_contested(
+	team_id: int,
+	position: Vector3
+) -> bool:
+	for player_value in players.values():
+		var player: Node3D = player_value as Node3D
+		if player == null:
+			continue
+		if not bool(player.get("alive")):
+			continue
+		if int(player.get("team")) == team_id:
+			continue
+		if player.global_position.distance_to(
+			position
+		) <= RALLY_POINT_CONTEST_RADIUS:
+			return true
+	return false
+
+func _rally_spawn_position(
+	team_id: int,
+	peer_id: int
+) -> Variant:
+	if not rally_points.has(team_id):
+		return null
+
+	var rally_value: Variant = rally_points.get(team_id)
+	if rally_value == null or not is_instance_valid(rally_value):
+		rally_points.erase(team_id)
+		return null
+
+	var rally: Node3D = rally_value as Node3D
+	if rally == null or bool(rally.get("contested")):
+		return null
+
+	var candidates: Array[Vector3] = [
+		rally.global_position + Vector3(1.5, 1.0, 0.0),
+		rally.global_position + Vector3(-1.5, 1.0, 0.0),
+		rally.global_position + Vector3(0.0, 1.0, 1.5),
+		rally.global_position + Vector3(0.0, 1.0, -1.5)
+	]
+
+	for candidate in candidates:
+		var result: Dictionary = _validate_spawn_candidate(
+			candidate,
+			peer_id
+		)
+		if bool(result.get("valid", false)):
+			return Vector3(result.get("position"))
+
+	return null
+
+func _artillery_danger_position() -> Variant:
+	if pending_artillery.is_empty():
+		return null
+
+	var closest_remaining := 999.0
+	var danger_position: Variant = null
+	for strike in pending_artillery:
+		var remaining: float = float(
+			strike.get("remaining", 999.0)
+		)
+		if remaining < closest_remaining:
+			closest_remaining = remaining
+			danger_position = Vector3(
+				strike.get("position", Vector3.ZERO)
+			)
+	return danger_position
 
 func _command_post_node() -> Node3D:
 	return get_node_or_null("CommandPost") as Node3D
@@ -722,7 +1041,7 @@ func _on_connection_failed() -> void:
 		connection_join_button.disabled = false
 	if status_label != null:
 		status_label.text = (
-			"Connection failed. Check the VPS IP, port 27960, "+
+			"Connection failed. Check the VPS IP, port 27960, " +
 			"firewall, and server process."
 	)
 
@@ -1503,6 +1822,13 @@ func remove_player(peer_id: int) -> void:
 func _get_spawn(team: int, peer_id: int) -> Vector3:
 	var safe_team: int = clampi(team, 0, 1)
 	var points: Array = spawn_points.get(safe_team, spawn_points[0])
+
+	var rally_spawn: Variant = _rally_spawn_position(
+		safe_team,
+		peer_id
+	)
+	if rally_spawn is Vector3:
+		return rally_spawn as Vector3
 
 	if (
 		objective_stage >= 1
@@ -2776,8 +3102,15 @@ func _reset_round() -> void:
 	command_post_control = -1
 	command_post_progress = 0.0
 	command_post_contested = false
+	supply_depot_control = -1
+	supply_depot_progress = 0.0
+	supply_depot_contested = false
+	supply_depot_ticket_accumulator = 0.0
 	overtime_active = false
 	atmosphere_elapsed = 0.0
+
+	for rally_team in rally_points.keys():
+		remove_rally_point(int(rally_team))
 	objective_stage = 0
 	bridge_progress = 0
 	defuse_progress = 0
@@ -3012,6 +3345,59 @@ func _build_world() -> void:
 		Vector3(7.0, 0.12, 19.0),
 		Color(0.82, 0.16, 0.12, 0.34)
 	)
+
+	var supply_depot := Node3D.new()
+	supply_depot.name = "SupplyDepot"
+	supply_depot.position = Vector3(-8.2, 0.0, 7.8)
+	add_child(supply_depot)
+
+	_make_marker(
+		supply_depot,
+		Vector3(4.8, 0.14, 4.8),
+		Color(0.52, 0.48, 0.24)
+	)
+
+	for crate_offset in [
+		Vector3(-1.2, 0.45, 0.0),
+		Vector3(1.2, 0.45, 0.0),
+		Vector3(0.0, 0.45, 1.2)
+	]:
+		var crate := MeshInstance3D.new()
+		var crate_mesh := BoxMesh.new()
+		crate_mesh.size = Vector3(0.9, 0.9, 0.9)
+		crate.mesh = crate_mesh
+		crate.position = crate_offset
+		var crate_material := StandardMaterial3D.new()
+		crate_material.albedo_color = Color(0.44, 0.34, 0.16)
+		crate_material.roughness = 0.92
+		crate.material_override = crate_material
+		supply_depot.add_child(crate)
+
+	supply_depot_marker = Label3D.new()
+	supply_depot_marker.position = Vector3(0.0, 2.7, 0.0)
+	supply_depot_marker.font_size = 28
+	supply_depot_marker.outline_size = 10
+	supply_depot_marker.billboard = (
+		BaseMaterial3D.BILLBOARD_ENABLED
+	)
+	supply_depot_marker.fixed_size = true
+	supply_depot.add_child(supply_depot_marker)
+
+	supply_depot_progress_label = Label3D.new()
+	supply_depot_progress_label.position = Vector3(0.0, 2.25, 0.0)
+	supply_depot_progress_label.font_size = 21
+	supply_depot_progress_label.outline_size = 8
+	supply_depot_progress_label.billboard = (
+		BaseMaterial3D.BILLBOARD_ENABLED
+	)
+	supply_depot_progress_label.fixed_size = true
+	supply_depot.add_child(supply_depot_progress_label)
+
+	supply_depot_light = OmniLight3D.new()
+	supply_depot_light.position = Vector3(0.0, 2.0, 0.0)
+	supply_depot_light.omni_range = 7.0
+	supply_depot_light.light_energy = 1.6
+	supply_depot.add_child(supply_depot_light)
 
 	var command_post := Node3D.new()
 	command_post.name = "CommandPost"

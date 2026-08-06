@@ -407,6 +407,26 @@ func _collect_and_send_input() -> void:
 		if smoke_camera != null and main_node != null:
 			main_node.request_player_smoke.rpc_id(1, local_peer_id, smoke_camera.global_position, -smoke_camera.global_transform.basis.z)
 
+	if (
+		not downed
+		and player_class == PlayerClass.FIELD_OPS
+		and Input.is_action_just_pressed("deploy_rally")
+		and Time.get_ticks_msec() >= rally_cooldown_until_ms
+	):
+		if main_node != null:
+			rally_cooldown_until_ms = (
+				Time.get_ticks_msec() + 8000
+			)
+			var rally_position: Vector3 = (
+				global_position
+				+ (-global_transform.basis.z * 2.2)
+			)
+			main_node.request_rally_point.rpc_id(
+				1,
+				local_peer_id,
+				rally_position
+			)
+
 	if not downed and Input.is_action_just_pressed("reload"):
 		if (
 			reload_audio != null
@@ -1854,6 +1874,24 @@ func _server_bot_tick(delta: float) -> void:
 			main.call("bot_goal_position", self)
 		)
 
+		var artillery_danger: Variant = (
+			main.call("_artillery_danger_position")
+			if main.has_method("_artillery_danger_position")
+			else null
+		)
+		if artillery_danger is Vector3:
+			var danger: Vector3 = artillery_danger as Vector3
+			if global_position.distance_to(danger) <= 10.0:
+				var escape: Vector3 = (
+					global_position - danger
+				)
+				escape.y = 0.0
+				if escape.length() > 0.01:
+					movement_goal = (
+						global_position
+						+ escape.normalized() * 9.0
+					)
+
 		# Deterministic bot squad roles spread the team across lanes.
 		match bot_squad_role:
 			0:
@@ -2959,6 +2997,14 @@ func _build_hud() -> void:
 	class_mode_label.add_theme_font_size_override("font_size", 18)
 	layer.add_child(class_mode_label)
 
+	mission_banner = Label.new()
+	mission_banner.position = Vector2(330, 238)
+	mission_banner.custom_minimum_size = Vector2(620, 42)
+	mission_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mission_banner.add_theme_font_size_override("font_size", 25)
+	mission_banner.visible = false
+	layer.add_child(mission_banner)
+
 	command_post_bar = ProgressBar.new()
 	command_post_bar.position = Vector2(440, 122)
 	command_post_bar.size = Vector2(400, 18)
@@ -3306,6 +3352,17 @@ func _update_hud() -> void:
 			if bool(main.get("overtime_active"))
 			else ""
 		)
+		var depot_control: int = int(
+			main.get("supply_depot_control")
+		)
+		var depot_status := "DEPOT N"
+		if bool(main.get("supply_depot_contested")):
+			depot_status = "DEPOT X"
+		elif depot_control == 0:
+			depot_status = "DEPOT ATK"
+		elif depot_control == 1:
+			depot_status = "DEPOT DEF"
+
 		var gun_status := "GUNS OFFLINE"
 		if post_control == 0:
 			gun_status = "GUNS ATK"
@@ -3313,11 +3370,12 @@ func _update_hud() -> void:
 			gun_status = "GUNS DEF"
 
 		operations_label.text = (
-			"ATK %d · CP %s · %s · DEF %d%s"
+			"ATK %d · CP %s · %s · %s · DEF %d%s"
 			% [
 				int(main.get("attacker_tickets")),
 				post_state,
 				gun_status,
+				depot_status,
 				int(main.get("defender_tickets")),
 				overtime_suffix
 			]
@@ -3326,6 +3384,16 @@ func _update_hud() -> void:
 		command_post_bar.value = float(
 			main.get("command_post_progress")
 		)
+
+	if mission_banner != null and main != null:
+		var banner_until: int = int(
+			main.get("mission_banner_until_ms")
+		)
+		mission_banner.visible = now < banner_until
+		if mission_banner.visible:
+			mission_banner.text = str(
+				main.get("mission_banner_text")
+			)
 
 	if class_mode_label != null:
 		var ability_state := "READY" if replicated_ability_cooldown_ms <= 0 else "%.1fs" % (float(replicated_ability_cooldown_ms) / 1000.0)
@@ -3479,7 +3547,7 @@ func _update_hud() -> void:
 		if replicated_ability_cooldown_ms <= 0
 		else "%.1fs" % cooldown
 	)
-	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  Smoke %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  MMB: ping  B: smoke  C: barricade  F: freecam\nBlue=Attackers  Red=Defenders  Accent=Class" % [
+	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  Smoke %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  MMB: ping  B: smoke  C: barricade  V: rally  F: freecam\nBlue=Attackers  Red=Defenders  Accent=Class" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],
