@@ -1,18 +1,17 @@
 # Frontline: Objective
 
-## Version 7.8.0 Material, Lighting & Battlefield Atmosphere
+## Version 7.9.0 Real Asset Integration & Character Rig Adapter
 
-Procedural geometry now receives shared textured materials for brick, plaster,
-concrete, stone, wood, metal, roads, mud, sandbags, and roofs. Deterministic
-noise breaks up flat colors while imported `External*` GLB nodes remain
-untouched.
+Imported character GLBs are automatically normalized to a human height,
+grounded, checked for a skeleton, scanned for animations, assigned a usable
+right-hand weapon socket, and given less plastic material response.
 
-The client also receives filmic tonemapping, tuned ambient light, stronger
-contact shading, longer sun shadows, low haze, airborne dust, facade grime,
-scorch marks, and non-colliding street debris.
+Imported buildings and props are grounded, optionally normalized to the target
+height configured in `asset_registry.gd`, cleaned up materially, and then sent
+through the existing collision-generation and validation pipeline.
 
-This release intentionally changes no collision, bot navigation, networking,
-objectives, or damage behavior.
+Invalid character GLBs no longer hide the procedural soldier. The game rejects
+the import and keeps the articulated WWII fallback visible.
 
-Build: v7.8.0
+Build: v7.9.0
 Protocol: 341

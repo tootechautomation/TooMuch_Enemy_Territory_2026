@@ -1,9 +1,11 @@
 # Changelog
 
-## 7.8.0
-- Added shared procedural WWII material library
-- Added surface variation for major environment categories
-- Added filmic tonemapping and lighting refinements
-- Added battlefield haze and airborne dust
-- Added facade grime, scorch marks, and road debris
-- Preserved gameplay systems, protocol 341, and connection-string `+`
+## 7.9.0
+- Added real_asset_adapter.gd
+- Added automatic character height normalization and grounding
+- Added skeleton and animation inspection
+- Added expanded weapon socket discovery
+- Added material cleanup for imported GLBs
+- Added environment target-height normalization
+- Added invalid-character rejection with procedural fallback
+- Preserved protocol 341 and explicit connection-string `+`

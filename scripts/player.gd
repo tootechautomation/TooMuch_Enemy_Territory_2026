@@ -12,6 +12,9 @@ const HumanoidAnimationControllerScript = preload(
 const ExternalAssetValidatorScript = preload(
 	"res://scripts/assets/external_asset_validator.gd"
 )
+const RealAssetAdapterScript = preload(
+	"res://scripts/assets/real_asset_adapter.gd"
+)
 
 const RadarCompassScript = preload("res://scripts/radar_compass.gd")
 
@@ -1909,6 +1912,20 @@ func _build_external_character_model() -> bool:
 	if external_character_model == null:
 		return false
 
+	var asset_adaptation: Dictionary = (
+		RealAssetAdapterScript.adapt_character(
+			external_character_model
+		)
+	)
+	if not bool(asset_adaptation.get("valid", false)):
+		print(
+			"External character rejected peer=%d %s"
+			% [peer_id, asset_adaptation]
+		)
+		external_character_model.queue_free()
+		external_character_model = null
+		return false
+
 	ExternalAssetLoaderScript.configure_character_model(
 		external_character_model
 	)
@@ -1924,14 +1941,8 @@ func _build_external_character_model() -> bool:
 		external_character_animator
 	)
 	external_weapon_socket = (
-		ExternalAssetLoaderScript.find_socket(
-			external_character_model,
-			[
-				"WeaponSocket",
-				"weapon_socket",
-				"RightHandSocket",
-				"hand_r"
-			]
+		RealAssetAdapterScript.find_character_socket(
+			external_character_model
 		)
 	)
 	external_model_loaded = true
@@ -1941,8 +1952,13 @@ func _build_external_character_model() -> bool:
 		)
 	)
 	print(
-		"External character validation peer=%d team=%d %s"
-		% [peer_id, team, character_validation]
+		"External character peer=%d team=%d adaptation=%s validation=%s"
+		% [
+			peer_id,
+			team,
+			asset_adaptation,
+			character_validation
+		]
 	)
 	var main_node: Node = get_parent()
 	if (

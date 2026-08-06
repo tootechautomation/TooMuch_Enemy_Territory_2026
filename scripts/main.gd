@@ -18,6 +18,9 @@ const WWIIMaterialLibraryScript = preload(
 const BattlefieldAtmosphereScript = preload(
 	"res://scripts/visuals/battlefield_atmosphere.gd"
 )
+const RealAssetAdapterScript = preload(
+	"res://scripts/assets/real_asset_adapter.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -51,7 +54,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.8.0"
+const BUILD_VERSION := "7.9.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -2537,6 +2540,16 @@ func _spawn_external_environment_assets() -> void:
 		if external_node == null:
 			continue
 
+		var target_height := float(
+			asset_config.get("target_height", 0.0)
+		)
+		var adaptation: Dictionary = (
+			RealAssetAdapterScript.adapt_environment(
+				external_node,
+				target_height
+			)
+		)
+
 		var collision_result: Dictionary = (
 			ExternalAssetLoaderScript.ensure_environment_collision(
 				external_node,
@@ -2567,8 +2580,13 @@ func _spawn_external_environment_assets() -> void:
 			)
 		)
 		var report_line := (
-			"%s\nvalidation=%s\ncollision=%s"
-			% [asset_id, validation, collision_result]
+			"%s\nadaptation=%s\nvalidation=%s\ncollision=%s"
+			% [
+				asset_id,
+				adaptation,
+				validation,
+				collision_result
+			]
 		)
 		external_asset_reports.append(report_line)
 		print(report_line)

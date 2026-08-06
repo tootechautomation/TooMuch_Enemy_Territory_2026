@@ -35,6 +35,7 @@ const WEAPON_PATHS := {
 
 const ENVIRONMENT_CONFIG := {
 	"village_house_a": {
+		"target_height": 10.0,
 		"offset": Vector3.ZERO,
 		"rotation_y": 0.0,
 		"scale": Vector3.ONE,
@@ -46,6 +47,7 @@ const ENVIRONMENT_CONFIG := {
 		]
 	},
 	"village_house_b": {
+		"target_height": 10.0,
 		"offset": Vector3.ZERO,
 		"rotation_y": 0.0,
 		"scale": Vector3.ONE,
@@ -57,6 +59,7 @@ const ENVIRONMENT_CONFIG := {
 		]
 	},
 	"ruined_house": {
+		"target_height": 8.0,
 		"offset": Vector3.ZERO,
 		"rotation_y": 0.0,
 		"scale": Vector3.ONE,
@@ -68,6 +71,7 @@ const ENVIRONMENT_CONFIG := {
 		]
 	},
 	"warehouse": {
+		"target_height": 9.0,
 		"offset": Vector3.ZERO,
 		"rotation_y": 0.0,
 		"scale": Vector3.ONE,
@@ -78,6 +82,7 @@ const ENVIRONMENT_CONFIG := {
 		]
 	},
 	"chainlink_fence": {
+		"target_height": 2.2,
 		"offset": Vector3.ZERO,
 		"rotation_y": 0.0,
 		"scale": Vector3.ONE,
@@ -87,6 +92,7 @@ const ENVIRONMENT_CONFIG := {
 		]
 	},
 	"military_crate": {
+		"target_height": 0.8,
 		"offset": Vector3.ZERO,
 		"rotation_y": 0.0,
 		"scale": Vector3.ONE,
