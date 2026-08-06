@@ -1,27 +1,20 @@
 # Frontline: Objective
 
-## Version 8.3.0 Combat Effects, Surface Impacts & Destruction Polish
+## Version 8.3.1 Combat Effects Type Hotfix
 
-Bullet impacts now inspect the nearby collider and select an effect for metal,
-wood, brick, concrete, stone, ground, or player hits.
+Godot returns `Variant` from `Array.pop_front()`. Because the project treats
+warnings as errors, the inferred `oldest` variables prevented
+`combat_effects_manager.gd` from parsing.
 
-Effects include:
+Both cleanup queues now use explicit casts:
 
-- impact decals,
-- sparks,
-- masonry chips,
-- wood splinters,
-- concrete dust,
-- dirt puffs,
-- short impact lights,
-- restrained player-hit particles.
+```gdscript
+var oldest: Decal = active_decals.pop_front() as Decal
+var oldest: Node = active_effect_roots.pop_front() as Node
+```
 
-Explosion polish includes a rapidly expanding fireball, flash light, smoke,
-dirt, fragments, and a ground scorch mark.
+All v8.3 surface impacts, sparks, dust, fragments, explosion smoke, fireball,
+scorch marks, and bounded cleanup behavior remain enabled.
 
-The effect manager limits active roots and decals and cleans temporary effects
-automatically. All combat effects remain client-side and are skipped on the
-headless VPS.
-
-Build: v8.3.0
+Build: v8.3.1
 Protocol: 341

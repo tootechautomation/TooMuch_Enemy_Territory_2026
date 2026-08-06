@@ -249,7 +249,9 @@ func _spawn_impact_decal(
 	active_decals.append(decal)
 
 	while active_decals.size() > MAX_ACTIVE_DECALS:
-		var oldest := active_decals.pop_front()
+		var oldest: Decal = (
+			active_decals.pop_front() as Decal
+		)
 		if oldest != null and is_instance_valid(oldest):
 			oldest.queue_free()
 
@@ -527,7 +529,9 @@ func _spawn_ground_scorch(root: Node3D) -> void:
 func _track_effect_root(root: Node) -> void:
 	active_effect_roots.append(root)
 	while active_effect_roots.size() > MAX_ACTIVE_EFFECT_ROOTS:
-		var oldest := active_effect_roots.pop_front()
+		var oldest: Node = (
+			active_effect_roots.pop_front() as Node
+		)
 		if oldest != null and is_instance_valid(oldest):
 			oldest.queue_free()
 
