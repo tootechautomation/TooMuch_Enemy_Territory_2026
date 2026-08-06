@@ -6,9 +6,10 @@ const MAX_ACTIVE_DECALS := 64
 
 var active_effect_roots: Array[Node] = []
 var active_decals: Array[Decal] = []
+var impact_texture_cache: Dictionary = {}
 
 func spawn_surface_impact(
-	world_root: Node3D,
+	world_root: Node,
 	position_value: Vector3,
 	normal: Vector3,
 	hit_player: bool
@@ -33,7 +34,12 @@ func spawn_surface_impact(
 	_track_effect_root(root)
 
 	if not hit_player:
-		_spawn_impact_decal(root, normal, category)
+		_spawn_impact_decal(position_value, normal, category)
+
+	var debris_direction := normal.normalized()
+	if debris_direction.length_squared() <= 0.001:
+		debris_direction = Vector3.UP
+	debris_direction = (debris_direction + Vector3.UP * 0.32).normalized()
 
 	match category:
 		"metal":
@@ -44,8 +50,10 @@ func spawn_surface_impact(
 				4.8,
 				Vector3(0.0, -7.0, 0.0),
 				0.035,
-				0.075
+				0.075,
+				debris_direction
 			)
+			_spawn_ricochet_streaks(root, debris_direction)
 			_spawn_flash_light(root, Color(1.0, 0.40, 0.07), 1.8, 1.8)
 		"wood":
 			_spawn_particles(
@@ -55,7 +63,8 @@ func spawn_surface_impact(
 				3.2,
 				Vector3(0.0, -5.8, 0.0),
 				0.045,
-				0.11
+				0.11,
+				debris_direction
 			)
 			_spawn_fragment_meshes(root, category, 7, 1.6)
 		"brick":
@@ -66,7 +75,8 @@ func spawn_surface_impact(
 				3.5,
 				Vector3(0.0, -6.2, 0.0),
 				0.045,
-				0.12
+				0.12,
+				debris_direction
 			)
 			_spawn_dust_puff(root, Color(0.48, 0.25, 0.15, 0.50), 0.55)
 			_spawn_fragment_meshes(root, category, 8, 1.5)
@@ -78,7 +88,8 @@ func spawn_surface_impact(
 				3.3,
 				Vector3(0.0, -6.2, 0.0),
 				0.045,
-				0.11
+				0.11,
+				debris_direction
 			)
 			_spawn_dust_puff(root, Color(0.55, 0.53, 0.47, 0.48), 0.62)
 			_spawn_fragment_meshes(root, category, 6, 1.4)
@@ -90,7 +101,8 @@ func spawn_surface_impact(
 				2.8,
 				Vector3(0.0, -5.0, 0.0),
 				0.055,
-				0.13
+				0.13,
+				debris_direction
 			)
 			_spawn_dust_puff(root, Color(0.44, 0.34, 0.22, 0.52), 0.68)
 		"flesh":
@@ -101,7 +113,8 @@ func spawn_surface_impact(
 				2.4,
 				Vector3(0.0, -5.5, 0.0),
 				0.04,
-				0.085
+				0.085,
+				debris_direction
 			)
 		_:
 			_spawn_particles(
@@ -111,7 +124,8 @@ func spawn_surface_impact(
 				3.0,
 				Vector3(0.0, -5.5, 0.0),
 				0.04,
-				0.10
+				0.10,
+				debris_direction
 			)
 
 	_cleanup_after(root, 1.45)
@@ -144,7 +158,8 @@ func spawn_explosion_polish(
 		8.0,
 		Vector3(0.0, -8.5, 0.0),
 		0.07,
-		0.18
+		0.18,
+		Vector3.UP
 	)
 	_spawn_fragment_meshes(
 		root,
@@ -156,11 +171,28 @@ func spawn_explosion_polish(
 	_cleanup_after(root, 4.2)
 
 func _surface_category(
-	world_root: Node3D,
+	world_root: Node,
 	position_value: Vector3,
 	normal: Vector3
 ) -> String:
-	if world_root == null or world_root.get_world_3d() == null:
+	if world_root == null:
+		return "generic"
+
+	var world_node := world_root as Node3D
+	if world_node == null:
+		for child in world_root.find_children(
+			"*",
+			"Node3D",
+			true
+		):
+			world_node = child as Node3D
+			if (
+				world_node != null
+				and world_node.get_world_3d() != null
+			):
+				break
+
+	if world_node == null or world_node.get_world_3d() == null:
 		return "generic"
 
 	var direction := normal.normalized()
@@ -175,7 +207,11 @@ func _surface_category(
 	query.collide_with_bodies = true
 	query.collide_with_areas = false
 
-	var hit := world_root.get_world_3d().direct_space_state.intersect_ray(query)
+	var hit: Dictionary = (
+		world_node.get_world_3d()
+		.direct_space_state
+		.intersect_ray(query)
+	)
 	if hit.is_empty():
 		return "ground" if absf(normal.y) > 0.65 else "generic"
 
@@ -232,20 +268,22 @@ func _surface_category(
 	return "ground" if absf(normal.y) > 0.65 else "generic"
 
 func _spawn_impact_decal(
-	root: Node3D,
+	world_position: Vector3,
 	normal: Vector3,
 	category: String
 ) -> void:
 	var decal := Decal.new()
-	decal.name = "ImpactDecal"
-	decal.size = Vector3(0.20, 0.20, 0.09)
-	decal.position = normal.normalized() * 0.012
-	decal.rotation = _rotation_from_normal(normal)
+	decal.name = "PersistentImpactDecal_%s" % category
+	var decal_scale := randf_range(0.16, 0.23)
+	decal.size = Vector3(decal_scale, decal_scale, 0.11)
 
 	var texture := _procedural_impact_texture(category)
 	decal.texture_albedo = texture
 	decal.modulate = Color(1.0, 1.0, 1.0, 0.86)
-	root.add_child(decal)
+	add_child(decal)
+	decal.global_position = world_position + normal.normalized() * 0.018
+	decal.rotation = _rotation_from_normal(normal)
+	decal.rotation.z += randf_range(-PI, PI)
 	active_decals.append(decal)
 
 	while active_decals.size() > MAX_ACTIVE_DECALS:
@@ -255,12 +293,20 @@ func _spawn_impact_decal(
 		if oldest != null and is_instance_valid(oldest):
 			oldest.queue_free()
 
-	var tween := create_tween()
-	tween.tween_interval(11.0)
-	tween.tween_property(decal, "modulate:a", 0.0, 3.0)
-	tween.tween_callback(decal.queue_free)
+	var tween := decal.create_tween()
+	tween.tween_interval(12.0)
+	tween.tween_property(decal, "modulate:a", 0.0, 2.5)
+	tween.tween_callback(
+		func() -> void:
+			active_decals.erase(decal)
+			if is_instance_valid(decal):
+				decal.queue_free()
+	)
 
 func _procedural_impact_texture(category: String) -> Texture2D:
+	if impact_texture_cache.has(category):
+		return impact_texture_cache[category] as Texture2D
+
 	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
 	var center := Vector2(31.5, 31.5)
 	var base_color := Color(0.035, 0.030, 0.025, 0.92)
@@ -285,6 +331,11 @@ func _procedural_impact_texture(category: String) -> Texture2D:
 				1.0
 			)
 			alpha = pow(alpha, 1.8)
+			var angle := atan2(delta.y, delta.x)
+			var crack_wave := absf(sin(angle * 7.0 + distance * 0.22))
+			var crack_mask := smoothstep(0.94, 0.995, crack_wave)
+			var crack_falloff := clampf(1.0 - distance / 31.0, 0.0, 1.0)
+			alpha = maxf(alpha, crack_mask * crack_falloff * 0.62)
 			image.set_pixel(
 				x_value,
 				y_value,
@@ -296,7 +347,9 @@ func _procedural_impact_texture(category: String) -> Texture2D:
 				)
 			)
 
-	return ImageTexture.create_from_image(image)
+	var texture := ImageTexture.create_from_image(image)
+	impact_texture_cache[category] = texture
+	return texture
 
 func _rotation_from_normal(normal: Vector3) -> Vector3:
 	var n := normal.normalized()
@@ -312,7 +365,8 @@ func _spawn_particles(
 	velocity_max: float,
 	gravity_value: Vector3,
 	scale_minimum: float,
-	scale_maximum: float
+	scale_maximum: float,
+	direction_value: Vector3 = Vector3.UP
 ) -> void:
 	var particles := GPUParticles3D.new()
 	particles.name = "ImpactParticles"
@@ -324,8 +378,8 @@ func _spawn_particles(
 	var process := ParticleProcessMaterial.new()
 	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	process.emission_sphere_radius = 0.06
-	process.direction = Vector3(0.0, 1.0, 0.0)
-	process.spread = 180.0
+	process.direction = direction_value.normalized()
+	process.spread = 72.0
 	process.initial_velocity_min = velocity_max * 0.42
 	process.initial_velocity_max = velocity_max
 	process.gravity = gravity_value
@@ -345,6 +399,40 @@ func _spawn_particles(
 	particles.draw_pass_1 = mesh
 	root.add_child(particles)
 	particles.emitting = true
+
+func _spawn_ricochet_streaks(
+	root: Node3D,
+	direction_value: Vector3
+) -> void:
+	for _streak_index in range(5):
+		var streak := MeshInstance3D.new()
+		streak.name = "RicochetStreak"
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(0.008, 0.008, randf_range(0.14, 0.30))
+		streak.mesh = mesh
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.albedo_color = Color(1.0, 0.58, 0.12, 0.92)
+		material.emission_enabled = true
+		material.emission = Color(1.0, 0.28, 0.025)
+		material.emission_energy_multiplier = 2.2
+		streak.material_override = material
+		root.add_child(streak)
+
+		var travel := (
+			direction_value
+			+ Vector3(
+				randf_range(-0.55, 0.55),
+				randf_range(-0.18, 0.65),
+				randf_range(-0.55, 0.55)
+			)
+		).normalized()
+		streak.look_at(streak.global_position + travel, Vector3.UP)
+		var tween := streak.create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(streak, "position", travel * randf_range(0.8, 1.8), 0.16)
+		tween.tween_property(material, "albedo_color:a", 0.0, 0.18)
 
 func _spawn_dust_puff(
 	root: Node3D,

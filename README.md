@@ -1,20 +1,15 @@
 # Frontline: Objective
 
-## Version 8.3.1 Combat Effects Type Hotfix
+## Version 8.4.0 Persistent Surface Impact Realism
 
-Godot returns `Variant` from `Array.pop_front()`. Because the project treats
-warnings as errors, the inferred `oldest` variables prevented
-`combat_effects_manager.gd` from parsing.
+Bullet impacts now leave independently managed decals that remain visible for
+their full lifetime instead of being removed with the short-lived particle
+root. Impact textures are cached, randomized, and include radial fracture
+detail. Debris now travels away from the struck surface, and metal hits add
+short emissive ricochet streaks.
 
-Both cleanup queues now use explicit casts:
+The effect and decal pools remain bounded for long matches. The v8.3.2
+world-root compatibility fix is preserved.
 
-```gdscript
-var oldest: Decal = active_decals.pop_front() as Decal
-var oldest: Node = active_effect_roots.pop_front() as Node
-```
-
-All v8.3 surface impacts, sparks, dust, fragments, explosion smoke, fireball,
-scorch marks, and bounded cleanup behavior remain enabled.
-
-Build: v8.3.1
+Build: v8.4.0
 Protocol: 341
