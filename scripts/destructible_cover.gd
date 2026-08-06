@@ -9,6 +9,7 @@ var body_mesh: MeshInstance3D
 var collision_shape: CollisionShape3D
 var health_label: Label3D
 var current_damage_state := -1
+var debris_spawned := false
 
 func _load_optional_texture(path: String) -> Texture2D:
 	if DisplayServer.get_name() == "headless":
@@ -88,6 +89,10 @@ func sync_cover_health(new_health: int) -> void:
 
 func reset_cover() -> void:
 	health = maximum_health
+	debris_spawned = false
+	for child in get_children():
+		if child.name.begins_with("Debris"):
+			child.queue_free()
 	sync_cover_health.rpc(health)
 
 func _apply_damage_state(force: bool) -> void:
@@ -109,6 +114,9 @@ func _apply_damage_state(force: bool) -> void:
 		body_mesh.visible = false
 		collision_shape.set_deferred("disabled", true)
 		health_label.visible = false
+		if not debris_spawned:
+			debris_spawned = true
+			_spawn_debris()
 		return
 
 	body_mesh.visible = true
@@ -146,3 +154,20 @@ func _update_label() -> void:
 		if health > maximum_health * 0.5
 		else Color(1.0, 0.42, 0.12)
 	)
+
+func _spawn_debris() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	for index in range(8):
+		var debris := MeshInstance3D.new()
+		debris.name = "Debris_%d" % index
+		var box := BoxMesh.new()
+		box.size = Vector3(randf_range(0.18,0.52),randf_range(0.12,0.38),randf_range(0.16,0.46))
+		debris.mesh = box
+		debris.position = Vector3(randf_range(-original_size.x*0.45,original_size.x*0.45),randf_range(0.05,0.45),randf_range(-original_size.z,original_size.z))
+		debris.rotation_degrees = Vector3(randf_range(0.0,180.0),randf_range(0.0,180.0),randf_range(0.0,180.0))
+		var material := StandardMaterial3D.new()
+		material.albedo_color = Color(randf_range(0.22,0.34),randf_range(0.20,0.30),randf_range(0.17,0.26))
+		material.roughness = 0.98
+		debris.material_override = material
+		add_child(debris)

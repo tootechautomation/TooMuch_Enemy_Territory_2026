@@ -186,6 +186,9 @@ var directional_damage_labels: Dictionary = {}
 var spawn_shield_icon: TextureRect
 var spawn_shield_until_ms := 0
 var muzzle_flash_sprite: TextureRect
+var visual_animation_time := 0.0
+var weapon_base_position := Vector3.ZERO
+var weapon_base_rotation := Vector3.ZERO
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -288,6 +291,8 @@ func _physics_process(delta: float) -> void:
 		_update_hud()
 		_update_identity_visibility()
 		_update_footstep_audio(delta)
+		_update_first_person_animation(delta)
+		_update_world_character_animation(delta)
 		_update_radar()
 	elif not multiplayer.is_server():
 		global_position = global_position.lerp(target_position, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
@@ -3175,6 +3180,44 @@ func _update_radar() -> void:
 		grenade_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		radar_panel.add_child(grenade_marker)
 		radar_grenade_markers.append(grenade_marker)
+
+func _update_first_person_animation(delta: float) -> void:
+	if weapon_view == null or not _is_local_player():
+		return
+	visual_animation_time += delta
+	var speed: float = Vector2(velocity.x, velocity.z).length()
+	var moving: bool = speed > 0.8 and is_on_floor()
+	var sprinting: bool = moving and sprint_requested and replicated_stamina > 1.0 and not aim_requested
+	var target_position: Vector3 = weapon_base_position
+	var target_rotation: Vector3 = weapon_base_rotation
+	if moving:
+		var frequency: float = 11.0 if sprinting else 7.5
+		var amount: float = 0.035 if sprinting else 0.020
+		target_position.x += sin(visual_animation_time * frequency) * amount
+		target_position.y += absf(cos(visual_animation_time * frequency)) * amount * 0.65
+		target_rotation.z += sin(visual_animation_time * frequency) * 0.018
+	if sprinting:
+		target_position.y -= 0.12
+		target_position.z += 0.16
+		target_rotation.x += 0.28
+		target_rotation.z -= 0.12
+	elif aim_requested:
+		target_position.y += 0.02
+		target_position.z -= 0.06
+	else:
+		target_rotation.y += sin(visual_animation_time * 1.4) * 0.008
+		target_rotation.x += cos(visual_animation_time * 1.1) * 0.006
+	weapon_view.position = weapon_view.position.lerp(target_position, clampf(delta * 10.0,0.0,1.0))
+	weapon_view.rotation = weapon_view.rotation.lerp(target_rotation, clampf(delta * 9.0,0.0,1.0))
+
+func _update_world_character_animation(delta: float) -> void:
+	if class_accent_mesh == null:
+		return
+	var speed: float = Vector2(velocity.x, velocity.z).length()
+	var target_roll := 0.0
+	if alive and speed > 0.7:
+		target_roll = sin(Time.get_ticks_msec() * 0.012) * minf(0.12, speed * 0.012)
+	class_accent_mesh.rotation.z = lerpf(class_accent_mesh.rotation.z, target_roll, clampf(delta * 10.0,0.0,1.0))
 
 func _update_hud() -> void:
 	if hud == null:

@@ -15,6 +15,7 @@ var team := 0
 var lifetime_remaining := 12.0
 var radius := 5.5
 var cloud_mesh: MeshInstance3D
+var smoke_puffs: Array[MeshInstance3D] = []
 
 func configure(new_id: int, new_team: int, spawn_position: Vector3, duration: float, new_radius: float) -> void:
 	smoke_id = new_id
@@ -27,28 +28,36 @@ func configure(new_id: int, new_team: int, spawn_position: Vector3, duration: fl
 func _build_visuals() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	cloud_mesh = MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = radius
-	sphere.height = radius * 1.4
-	cloud_mesh.mesh = sphere
-	cloud_mesh.position.y = radius * 0.45
-	var material := StandardMaterial3D.new()
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_color = Color(0.55, 0.58, 0.60, 0.62)
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	cloud_mesh.material_override = material
-	add_child(cloud_mesh)
+	for index in range(7):
+		var puff := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = radius * randf_range(0.34, 0.62)
+		sphere.height = sphere.radius * 1.65
+		puff.mesh = sphere
+		puff.position = Vector3(randf_range(-radius*0.55,radius*0.55),randf_range(radius*0.18,radius*0.72),randf_range(-radius*0.55,radius*0.55))
+		var material := StandardMaterial3D.new()
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.albedo_color = Color(randf_range(0.48,0.62),randf_range(0.50,0.64),randf_range(0.52,0.66),randf_range(0.34,0.52))
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		puff.material_override = material
+		add_child(puff)
+		smoke_puffs.append(puff)
+	if not smoke_puffs.is_empty():
+		cloud_mesh = smoke_puffs[0]
 
 func _process(delta: float) -> void:
 	if not _multiplayer_session_active():
 		return
 	lifetime_remaining = maxf(0.0, lifetime_remaining - delta)
-	if cloud_mesh != null:
-		cloud_mesh.rotation.y += delta * 0.18
-		var pulse := 1.0 + sin(Time.get_ticks_msec() * 0.002) * 0.04
-		cloud_mesh.scale = Vector3.ONE * pulse
+	for index in smoke_puffs.size():
+		var puff: MeshInstance3D = smoke_puffs[index]
+		if puff == null:
+			continue
+		puff.rotation.y += delta * (0.08 + index * 0.015)
+		puff.position.y += delta * (0.025 + index * 0.002)
+		var pulse := 1.0 + sin(Time.get_ticks_msec() * 0.0018 + index) * 0.045
+		puff.scale = Vector3.ONE * pulse
 	if lifetime_remaining <= 0.0:
 		set_process(false)
 

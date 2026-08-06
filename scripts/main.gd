@@ -10,7 +10,7 @@ const FieldEmplacementScript = preload("res://scripts/field_emplacement.gd")
 const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.5.0"
+const BUILD_VERSION := "3.6.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -118,6 +118,10 @@ var command_post_beacon: OmniLight3D
 var battlefield_environment: Environment
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
+var ambience_player: AudioStreamPlayer
+var bridge_beacon: OmniLight3D
+var bunker_beacon: OmniLight3D
+var spawn_beams: Array[Node3D] = []
 var forward_spawn_points := {
 	0: [
 		Vector3(3.5, 1.0, -8.5),
@@ -133,6 +137,7 @@ var forward_spawn_points := {
 
 func _ready() -> void:
 	if DisplayServer.get_name() != "headless":
+		_initialize_battlefield_ambience()
 		tex_metal = _load_optional_texture(
 			"res://assets/textures/metal_panel.png"
 		)
@@ -154,6 +159,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	atmosphere_elapsed += delta
+	_update_immersive_visuals()
 	_update_objective_visuals()
 	_update_command_post_visuals()
 	_update_battlefield_atmosphere()
@@ -261,6 +267,59 @@ func _process(delta: float) -> void:
 		command_post_contested,
 		overtime_active
 	)
+
+func _initialize_battlefield_ambience() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if not ResourceLoader.exists("res://audio/battlefield_ambience.wav"):
+		return
+	var resource: Resource = load("res://audio/battlefield_ambience.wav")
+	if not resource is AudioStream:
+		return
+	ambience_player = AudioStreamPlayer.new()
+	ambience_player.stream = resource as AudioStream
+	ambience_player.volume_db = -24.0
+	add_child(ambience_player)
+	ambience_player.play()
+
+func _create_spawn_beam(position: Vector3, team_id: int) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var root := Node3D.new()
+	root.position = position
+	add_child(root)
+	var beam := MeshInstance3D.new()
+	var cylinder := CylinderMesh.new()
+	cylinder.top_radius = 0.16
+	cylinder.bottom_radius = 0.42
+	cylinder.height = 5.5
+	beam.mesh = cylinder
+	beam.position.y = 2.75
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color(0.12,0.48,1.0,0.25) if team_id == 0 else Color(1.0,0.18,0.10,0.25)
+	material.emission_enabled = true
+	material.emission = material.albedo_color
+	beam.material_override = material
+	root.add_child(beam)
+	spawn_beams.append(root)
+
+func _update_immersive_visuals() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var pulse: float = 1.25 + sin(atmosphere_elapsed * 3.2) * 0.55
+	if bridge_beacon != null:
+		bridge_beacon.light_energy = pulse
+	if bunker_beacon != null:
+		bunker_beacon.light_energy = pulse
+	for index in spawn_beams.size():
+		var root: Node3D = spawn_beams[index] as Node3D
+		if root == null:
+			continue
+		root.rotation.y += 0.003
+		var p: float = 1.0 + sin(atmosphere_elapsed * 2.2 + index) * 0.06
+		root.scale = Vector3(p,1.0,p)
 
 func _load_optional_texture(path: String) -> Texture2D:
 	if DisplayServer.get_name() == "headless":
@@ -663,7 +722,7 @@ func _on_connection_failed() -> void:
 		connection_join_button.disabled = false
 	if status_label != null:
 		status_label.text = (
-			"Connection failed. Check the VPS IP, port 27960, " +
+			"Connection failed. Check the VPS IP, port 27960, "
 			"firewall, and server process."
 	)
 
@@ -2936,6 +2995,11 @@ func _build_world() -> void:
 			float(foliage_data[1])
 		)
 
+	for attacker_spawn in spawn_points[0]:
+		_create_spawn_beam(Vector3(attacker_spawn), 0)
+	for defender_spawn in spawn_points[1]:
+		_create_spawn_beam(Vector3(defender_spawn), 1)
+
 	_make_spawn_zone(
 		"AttackersSpawnZone",
 		Vector3(-15.0, 0.08, 0.0),
@@ -3029,6 +3093,12 @@ func _build_world() -> void:
 	build_site.name = "BridgeBuildSite"
 	build_site.position = Vector3(-1.2, 0.2, 0)
 	add_child(build_site)
+	bridge_beacon = OmniLight3D.new()
+	bridge_beacon.position = Vector3(0.0, 2.2, 0.0)
+	bridge_beacon.omni_range = 7.0
+	bridge_beacon.light_color = Color(1.0, 0.72, 0.12)
+	bridge_beacon.light_energy = 1.5
+	build_site.add_child(bridge_beacon)
 	_make_marker(build_site, Vector3(2.0, 0.25, 5.5), Color(0.85, 0.72, 0.18))
 
 	var bridge := StaticBody3D.new()
@@ -3068,6 +3138,12 @@ func _build_world() -> void:
 	collision.shape = shape
 	objective.add_child(collision)
 	add_child(objective)
+	bunker_beacon = OmniLight3D.new()
+	bunker_beacon.position = Vector3(0.0, 2.4, 0.0)
+	bunker_beacon.omni_range = 8.0
+	bunker_beacon.light_color = Color(1.0, 0.22, 0.08)
+	bunker_beacon.light_energy = 1.5
+	objective.add_child(bunker_beacon)
 
 	objective_marker = Label3D.new()
 	objective_marker.name = "ObjectiveMarker"

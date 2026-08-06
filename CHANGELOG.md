@@ -1,11 +1,11 @@
 # Changelog
 
-## 3.5.0
-- Added objective compass
-- Added directional damage indicators
-- Added elimination/headshot medal sprites
-- Added spawn shield presentation
-- Added muzzle-flash sprite
-- Added round-start announcement
-- Preserved headless-safe runtime image loading
+## 3.6.0
+- Added weapon movement animation
+- Added sprint lowering and ADS stabilization
+- Added character motion animation
+- Added animated objective beacons and spawn beams
+- Added layered smoke
+- Added cover debris
+- Added battlefield ambience
 - Preserved protocol 341 compatibility
