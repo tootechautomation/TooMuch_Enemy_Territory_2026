@@ -1,11 +1,9 @@
 # Changelog
 
-## 4.8.0
-- Added resolution-safe HUD scaling and recentering
-- Reduced and clipped circular compass
-- Recalibrated radar marker coordinates
-- Repositioned kill feed
-- Reduced spawn beams and hid them near the player
-- Converted world labels away from fixed screen size
-- Reduced cover-label clutter
-- Preserved protocol 341 and connection-string `+`
+## 4.8.1
+- Replaced invalid CharacterBody3D `get_viewport_rect()` call
+- Added null-safe Viewport retrieval
+- HUD scaler now uses `viewport.get_visible_rect().size`
+- Preserved all v4.8.0 features
+- Preserved protocol 341
+- Preserved explicit connection-string `+`

@@ -1,18 +1,26 @@
 # Frontline: Objective
 
-## Version 4.8.0 Resolution-Safe HUD & Visual Cleanup
+## Version 4.8.1 Viewport API Hotfix
 
-- Added viewport-responsive HUD scaling based on a 1280x720 design space.
-- Supports resizing, fullscreen, smaller windows, 1080p, and ultrawide displays.
-- Reduced the circular compass to 180px and clipped it inside its panel.
-- Recalibrated radar markers for the smaller compass.
-- Moved and reduced the kill feed.
-- Widened and simplified the top objective panel.
-- Reduced spawn beam height, width, brightness, and opacity.
-- Spawn beams disappear within eight meters of the local player.
-- World-space objective and tactical labels now scale with distance.
-- Destructible-cover labels now show compact health values.
-- Protocol remains 341.
+This hotfix corrects the resolution-safe HUD viewport lookup.
+
+### Fixed
+`CharacterBody3D` does not provide `get_viewport_rect()`. The HUD scaler now
+retrieves the active viewport and reads its visible rectangle:
+
+```gdscript
+var viewport: Viewport = get_viewport()
+if viewport == null:
+    return
+var viewport_size: Vector2 = viewport.get_visible_rect().size
+```
+
+All v4.8.0 HUD scaling, compass cleanup, world-marker cleanup, spawn-beam
+cleanup, gameplay systems, and visual assets remain included.
+
+### Compatibility
+- Build: v4.8.1
+- Protocol: 341
 - Explicit connection-message `+` retained.
 
-Expected status: `Connected: v4.8.0 protocol 341`
+Expected status: `Connected: v4.8.1 protocol 341`

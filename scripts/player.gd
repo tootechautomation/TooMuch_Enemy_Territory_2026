@@ -3282,7 +3282,10 @@ func _apply_resolution_safe_hud() -> void:
 	if hud_canvas_layer == null:
 		return
 
-	var viewport_size: Vector2 = get_viewport_rect().size
+	var viewport: Viewport = get_viewport()
+	if viewport == null:
+		return
+	var viewport_size: Vector2 = viewport.get_visible_rect().size
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
 		return
 	if viewport_size.is_equal_approx(hud_last_viewport_size):
