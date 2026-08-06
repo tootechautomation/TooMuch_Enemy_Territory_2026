@@ -1,6 +1,8 @@
 # Frontline: Objective
 
-## Version 8.19.0 — Character Skin and Modular Import Bridge
+## Version 8.19.1 — External Asset Report Hotfix
+
+This hotfix makes external-asset reporting type-aware. Boolean availability entries continue to display `READY` or `fallback`, while the new selected-path entries display the actual imported resource path or `fallback`. This removes the invalid attempt to convert character path strings with Godot's Boolean constructor.
 
 The bundled fallback soldiers now use original high-resolution olive-drab and field-gray wool albedo skins instead of the earlier schematic blue/red textures. The material response is non-metallic, highly rough cloth with no artificial uniform glow; class accents, friendly markers, and the v8.17 team HUD continue to provide clear gameplay identification.
 
@@ -20,5 +22,5 @@ Friendly world nameplates now include a diamond identifier and remain visible at
 
 All additions are client-side presentation. Team assignment, uniforms, objectives, spotting, server authority, networking, and protocol 341 remain unchanged.
 
-Build: v8.19.0
+Build: v8.19.1
 Protocol: 341

@@ -1,5 +1,10 @@
 # Changelog
 
+## 8.19.1
+- Made the external asset report formatter type-aware for Boolean availability and String path entries
+- Fixed the `Nonexistent 'bool' constructor` runtime failure when character source paths are empty or populated
+- Preserved v8.19 skins, modular import candidates, fallback behavior, networking, and protocol 341
+
 ## 8.19.0
 - Replaced schematic fallback uniform maps with original high-resolution Allied olive-drab and opposing field-gray wool textures
 - Removed artificial uniform glow and broad blue/red material tinting for more natural cloth response

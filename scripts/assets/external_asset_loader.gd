@@ -161,10 +161,19 @@ static func build_asset_report(
 ) -> String:
 	var lines: Array[String] = ["External Asset Report"]
 	for key in availability.keys():
+		var report_value: Variant = availability[key]
+		var status_text := "fallback"
+		if report_value is bool:
+			status_text = "READY" if report_value == true else "fallback"
+		elif report_value is String:
+			var path_value := String(report_value)
+			status_text = path_value if not path_value.is_empty() else "fallback"
+		elif report_value != null:
+			status_text = str(report_value)
 		lines.append(
 			"%s: %s" % [
 				str(key),
-				"READY" if bool(availability[key]) else "fallback"
+				status_text
 			]
 		)
 
