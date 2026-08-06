@@ -1,10 +1,9 @@
 # Changelog
 
-## 5.2.0
-- Added northern urban lane and southern flank lane
-- Added eight open-entry buildings
-- Added underground sewer route and access ramps
-- Added dedicated team staging zones
-- Expanded spawn candidates and safety validation
-- Added route cover and objective route hints
-- Preserved protocol 341 and explicit connection-string `+`
+## 5.2.1
+- Fixed staging-cover `offset` type inference error
+- Explicitly converted Variant array entries to Vector3
+- Added explicit types to new map-expansion helper locals
+- Preserved all v5.2.0 map expansion features
+- Preserved protocol 341
+- Preserved explicit connection-string `+`

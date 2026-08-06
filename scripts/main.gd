@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.2.0"
+const BUILD_VERSION := "5.2.1"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -482,7 +482,7 @@ func _initialize_battlefield_ambience() -> void:
 func _create_spawn_beam(position: Vector3, team_id: int) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.position = position
 	add_child(root)
 	var beam := MeshInstance3D.new()
@@ -492,7 +492,7 @@ func _create_spawn_beam(position: Vector3, team_id: int) -> void:
 	cylinder.height = 2.4
 	beam.mesh = cylinder
 	beam.position.y = 1.2
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_color = Color(0.12,0.48,1.0,0.09) if team_id == 0 else Color(1.0,0.18,0.10,0.09)
@@ -545,7 +545,7 @@ func _build_asset_based_rail_and_fort_pass() -> void:
 		var mud_plane := MeshInstance3D.new()
 		mud_plane.name = str(mud_data[0])
 		mud_plane.position = Vector3(mud_data[1])
-		var mesh := BoxMesh.new()
+		var mesh: BoxMesh = BoxMesh.new()
 		mesh.size = Vector3(mud_data[2])
 		mud_plane.mesh = mesh
 		mud_plane.material_override = mud_material
@@ -671,7 +671,7 @@ func _spawn_explosion_debris(position: Vector3) -> void:
 		return
 	for index in range(18):
 		var debris := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
+		var mesh: BoxMesh = BoxMesh.new()
 		mesh.size = Vector3(randf_range(0.06,0.22),randf_range(0.04,0.18),randf_range(0.05,0.20))
 		debris.mesh = mesh
 		debris.position = position
@@ -818,7 +818,7 @@ func _make_wooden_fence(
 	length: int,
 	rotation_y: float = 0.0
 ) -> void:
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	root.rotation.y = rotation_y
@@ -861,7 +861,7 @@ func _make_telegraph_pole(
 	if DisplayServer.get_name() == "headless":
 		return
 
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	add_child(root)
@@ -922,7 +922,7 @@ func _make_shell_crater(
 	crater.rotation_degrees.x = 90.0
 	crater.scale.y = 0.25
 
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = Color(0.16, 0.12, 0.075)
 	material.roughness = 1.0
 	crater.material_override = material
@@ -937,7 +937,7 @@ func _make_direction_sign(
 	if DisplayServer.get_name() == "headless":
 		return
 
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	root.rotation.y = rotation_y
@@ -1038,7 +1038,7 @@ func _make_road_barricade(
 	if DisplayServer.get_name() == "headless":
 		return
 
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	root.rotation.y = rotation_y
@@ -1083,7 +1083,7 @@ func _make_fire_barrel(
 	if DisplayServer.get_name() == "headless":
 		return
 
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	add_child(root)
@@ -1194,7 +1194,7 @@ func _make_smoke_column(
 
 	var quad := QuadMesh.new()
 	quad.size = Vector2(2.1, 2.1)
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.transparency = (
 		BaseMaterial3D.TRANSPARENCY_ALPHA
 	)
@@ -1279,24 +1279,24 @@ func _make_gameplay_block(
 	color: Color,
 	rotation_y: float = 0.0
 ) -> StaticBody3D:
-	var body := StaticBody3D.new()
+	var body: StaticBody3D = StaticBody3D.new()
 	body.name = node_name
 	body.position = position
 	body.rotation.y = rotation_y
 	add_child(body)
 
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
 	shape.size = size
 	collision.shape = shape
 	body.add_child(collision)
 
 	if DisplayServer.get_name() != "headless":
-		var visual := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
+		var visual: MeshInstance3D = MeshInstance3D.new()
+		var mesh: BoxMesh = BoxMesh.new()
 		mesh.size = size
 		visual.mesh = mesh
-		var material := StandardMaterial3D.new()
+		var material: StandardMaterial3D = StandardMaterial3D.new()
 		material.albedo_color = color
 		material.roughness = 0.92
 		visual.material_override = material
@@ -1312,7 +1312,7 @@ func _make_open_building(
 	rotation_y: float,
 	wall_color: Color
 ) -> Node3D:
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	root.rotation.y = rotation_y
@@ -1332,7 +1332,7 @@ func _make_open_building(
 		["Roof", Vector3(0.0,height+0.16,0.0), Vector3(width+0.35,0.32,depth+0.35), Color(0.13,0.15,0.16)]
 	]
 	for item in part_data:
-		var part := _make_gameplay_block(
+		var part: StaticBody3D = _make_gameplay_block(
 			"%s_%s" % [node_name, str(item[0])],
 			position,
 			Vector3(item[2]),
@@ -1350,7 +1350,7 @@ func _make_tunnel_segment(
 	length: float,
 	rotation_y: float
 ) -> Node3D:
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	root.rotation.y = rotation_y
@@ -1366,7 +1366,7 @@ func _make_tunnel_segment(
 		["RightWall", Vector3(width*0.5,height*0.5,0.0), Vector3(0.42,height,length)]
 	]
 	for item in tunnel_parts:
-		var part := _make_gameplay_block(
+		var part: StaticBody3D = _make_gameplay_block(
 			"%s_%s" % [node_name, str(item[0])],
 			position,
 			Vector3(item[2]),
@@ -1389,8 +1389,8 @@ func _make_tunnel_segment(
 	return root
 
 func _make_spawn_staging_area(team_id: int, position: Vector3) -> void:
-	var team_color := Color(0.15,0.30,0.42) if team_id == 0 else Color(0.40,0.16,0.12)
-	var facing := 0.0 if team_id == 0 else PI
+	var team_color: Color = Color(0.15,0.30,0.42) if team_id == 0 else Color(0.40,0.16,0.12)
+	var facing: float = 0.0 if team_id == 0 else PI
 	_make_open_building(
 		"AttackerStaging" if team_id == 0 else "DefenderStaging",
 		position, 15.0, 10.0, 4.2, facing, team_color
@@ -1400,9 +1400,16 @@ func _make_spawn_staging_area(team_id: int, position: Vector3) -> void:
 		Vector3(0.0,0.65,-6.0),
 		Vector3(5.0,0.65,-6.0)
 	]:
-		var offset := cover_data.rotated(Vector3.UP, facing)
+		var cover_position: Vector3 = Vector3(cover_data)
+		var offset: Vector3 = cover_position.rotated(
+			Vector3.UP,
+			facing
+		)
 		_make_gameplay_block(
-			"StagingCover_%d_%s" % [team_id, str(cover_data.x)],
+			"StagingCover_%d_%s" % [
+				team_id,
+				str(cover_position.x)
+			],
 			position + offset,
 			Vector3(3.0,1.3,0.75),
 			Color(0.29,0.23,0.15),
@@ -1437,7 +1444,7 @@ func _build_map_expansion_pass() -> void:
 		["SewerRampWest",Vector3(-43.0,-1.5,10.0),deg_to_rad(-16.0)],
 		["SewerRampEast",Vector3(8.0,-1.5,10.0),deg_to_rad(16.0)]
 	]:
-		var ramp := _make_gameplay_block(
+		var ramp: StaticBody3D = _make_gameplay_block(
 			str(ramp_data[0]), Vector3(ramp_data[1]),
 			Vector3(10.0,0.45,4.0), Color(0.27,0.27,0.25), PI*0.5
 		)
@@ -1478,7 +1485,7 @@ func _make_pbr_material(
 	tint: Color = Color.WHITE,
 	scale_value: float = 2.5
 ) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = tint
 	material.albedo_texture = albedo
 	material.normal_enabled = normal != null
@@ -1607,11 +1614,11 @@ func _build_asset_based_village_pass() -> void:
 		["VisualTownhouseC_Collision", Vector3(-50.0, 5.0, 13.0), Vector3(11.0, 10.0, 8.0)],
 		["VisualTownhouseD_Collision", Vector3(-49.0, 5.0, 34.0), Vector3(12.0, 10.0, 8.5)]
 	]:
-		var body := StaticBody3D.new()
+		var body: StaticBody3D = StaticBody3D.new()
 		body.name = str(collision_data[0])
 		body.position = Vector3(collision_data[1])
 		var shape_node := CollisionShape3D.new()
-		var shape := BoxShape3D.new()
+		var shape: BoxShape3D = BoxShape3D.new()
 		shape.size = Vector3(collision_data[2])
 		shape_node.shape = shape
 		body.add_child(shape_node)
@@ -1702,11 +1709,11 @@ func _make_road(
 	road.position = position
 	road.rotation.y = rotation_y
 
-	var mesh := BoxMesh.new()
+	var mesh: BoxMesh = BoxMesh.new()
 	mesh.size = size
 	road.mesh = mesh
 
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = Color(0.16, 0.17, 0.17)
 	material.roughness = 0.94
 	road.material_override = material
@@ -1719,23 +1726,23 @@ func _make_sloped_ground(
 	rotation_degrees_value: Vector3,
 	color: Color
 ) -> void:
-	var body := StaticBody3D.new()
+	var body: StaticBody3D = StaticBody3D.new()
 	body.name = node_name
 	body.position = position
 	body.rotation_degrees = rotation_degrees_value
 
 	var mesh_instance := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
+	var mesh: BoxMesh = BoxMesh.new()
 	mesh.size = size
 	mesh_instance.mesh = mesh
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = color
 	material.roughness = 0.96
 	mesh_instance.material_override = material
 	body.add_child(mesh_instance)
 
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
 	shape.size = size
 	collision.shape = shape
 	body.add_child(collision)
@@ -1748,7 +1755,7 @@ func _make_tree(
 	if DisplayServer.get_name() == "headless":
 		return
 
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.position = position
 	root.scale = Vector3.ONE * scale_value
 	add_child(root)
@@ -1793,7 +1800,7 @@ func _make_ruined_house(
 	rotation_y: float,
 	size: Vector3
 ) -> void:
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	root.rotation.y = rotation_y
@@ -1992,7 +1999,7 @@ func _make_sandbag_wall(
 	length: int,
 	rotation_y: float = 0.0
 ) -> void:
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	root.rotation.y = rotation_y
@@ -2013,7 +2020,7 @@ func _make_sandbag_wall(
 				0.26 + float(row) * 0.38,
 				0.10 if (index + row) % 2 == 0 else -0.10
 			)
-			var material := StandardMaterial3D.new()
+			var material: StandardMaterial3D = StandardMaterial3D.new()
 			material.albedo_color = Color(
 				randf_range(0.38, 0.46),
 				randf_range(0.34, 0.41),
@@ -2029,7 +2036,7 @@ func _make_street_lamp(
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.name = node_name
 	root.position = position
 	add_child(root)
@@ -3690,7 +3697,7 @@ func show_artillery_warning(target_position: Vector3, delay_seconds: float) -> v
 func show_artillery_impact(target_position: Vector3) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	var root := Node3D.new()
+	var root: Node3D = Node3D.new()
 	root.position = target_position
 	add_child(root)
 	for offset in [Vector3.ZERO, Vector3(2.2,0,1.4), Vector3(-1.8,0,-1.9), Vector3(1.3,0,-2.4)]:
@@ -3700,7 +3707,7 @@ func show_artillery_impact(target_position: Vector3) -> void:
 		sphere.height = 1.6
 		flash.mesh = sphere
 		flash.position = offset + Vector3.UP * 0.5
-		var material := StandardMaterial3D.new()
+		var material: StandardMaterial3D = StandardMaterial3D.new()
 		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		material.emission_enabled = true
 		material.albedo_color = Color(1.0, 0.32, 0.04)
@@ -4704,7 +4711,7 @@ func explode_grenade(
 	flash.mesh = flash_mesh
 	flash.global_position = explosion_position
 
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = Color(1.0, 0.42, 0.08, 0.8)
 	material.emission_enabled = true
 	material.emission = Color(1.0, 0.25, 0.02)
@@ -6316,15 +6323,15 @@ func _build_world() -> void:
 	objective.name = "Objective"
 	objective.position = Vector3(13, 1.5, 0)
 	var mesh_instance := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
+	var mesh: BoxMesh = BoxMesh.new()
 	mesh.size = Vector3(4, 3, 7)
 	mesh_instance.mesh = mesh
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.42, 0.16, 0.12)
 	mesh_instance.material_override = mat
 	objective.add_child(mesh_instance)
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
 	shape.size = Vector3(4, 3, 7)
 	collision.shape = shape
 	objective.add_child(collision)
@@ -6389,11 +6396,11 @@ func _make_spawn_zone(
 	zone.name = zone_name
 	zone.position = zone_position
 
-	var mesh := BoxMesh.new()
+	var mesh: BoxMesh = BoxMesh.new()
 	mesh.size = zone_size
 	zone.mesh = mesh
 
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = zone_color
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -6408,10 +6415,10 @@ func _make_spawn_zone(
 
 func _make_marker(parent: Node3D, size: Vector3, color: Color) -> void:
 	var marker := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
+	var mesh: BoxMesh = BoxMesh.new()
 	mesh.size = size
 	marker.mesh = mesh
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = color
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.albedo_color.a = 0.35
@@ -6426,16 +6433,16 @@ func _make_static_box(
 	size: Vector3,
 	color: Color
 ) -> void:
-	var body := StaticBody3D.new()
+	var body: StaticBody3D = StaticBody3D.new()
 	body.name = node_name
 	body.position = pos
 
 	var mesh_instance := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
+	var mesh: BoxMesh = BoxMesh.new()
 	mesh.size = size
 	mesh_instance.mesh = mesh
 
-	var material := StandardMaterial3D.new()
+	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = color
 	material.roughness = 0.88
 	if (
@@ -6448,8 +6455,8 @@ func _make_static_box(
 	mesh_instance.material_override = material
 	body.add_child(mesh_instance)
 
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
 	shape.size = size
 	collision.shape = shape
 	body.add_child(collision)
