@@ -1,44 +1,43 @@
 # Frontline: Objective
 
-## Version 5.7.0 Combat AI & Objective Behavior
+## Version 5.8.0 AI Systems Refactor & Cover Tactics
 
-### Class-aware bot tactics
-Bots now select goals according to their class and the active objective stage.
+### Parser fix
+The v5.7 cover helper was inside `main.gd`, which extends `Node`. It called
+`get_world_3d()`, a method only available on Node3D-derived objects.
 
-- Soldiers pressure contested objective lanes.
-- Medics prioritize downed teammates, then wounded teammates.
-- Engineers continue to prioritize bridge, bunker, and construction actions.
-- Field Ops move toward nearby teammate clusters and support lanes.
-- Scouts hold longer-range anchors and avoid standing directly on objectives.
+Cover evaluation now runs in `scripts/ai/tactical_director.gd` and receives the
+bot Node3D directly. It uses:
 
-### Suppression reaction
-Bots record the attacker position when damaged. While suppressed, they request
-a validated lateral cover position away from the threat instead of continuing
-to run straight forward.
+```gdscript
+var world: World3D = bot.get_world_3d()
+```
 
-### Combat spacing
-- Scouts prefer approximately 24-meter engagement spacing.
-- Field Ops prefer approximately 13 meters.
-- Other classes retain close assault spacing.
-- Scouts briefly hold position after firing.
-- Low-health medics may disengage instead of continuing to shoot.
+### AI refactor
+Moved these responsibilities out of `main.gd`:
+- Class-aware tactical anchor selection
+- Stage-aware attack and defense positions
+- Suppression cover candidate generation
+- Floor validation
+- Cover visibility scoring
 
-### Objective anchors
-Added stage-specific tactical anchors for:
-- Bridge attack and defense
-- Northern, central, southern, and sewer approaches
-- Rail yard and bunker attack
-- Bunker perimeter defense
+`main.gd` now exposes small compatibility wrappers so existing player and bot
+code continues to work.
 
-Squad-role IDs distribute bots across different anchors.
+### Improved cover tactics
+Suppressed bots now evaluate four candidate escape positions. Candidates score
+higher when:
+- A world object blocks line of sight from the threat
+- The position increases distance from the attacker
+- The travel distance is reasonable
 
-### Respawn reliability
-Bot threat memory, hold states, and route state are cleared after respawn.
+Bots cache their chosen cover briefly instead of recalculating every frame.
 
 ### Compatibility
-- Build: v5.7.0
+- Build: v5.8.0
 - Protocol: 341
-- Explicit connection-message `+` retained.
-- v5.6.1 cache-independent startup and surface-aware footsteps remain.
+- Explicit connection-message `+` retained
+- Cache-independent VPS startup retained
+- v5.7 class behavior and v5.6 surface footsteps retained
 
-Expected status: `Connected: v5.7.0 protocol 341`
+Expected status: `Connected: v5.8.0 protocol 341`

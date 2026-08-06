@@ -1,5 +1,9 @@
 extends Node
 
+const TacticalDirectorScript = preload(
+	"res://scripts/ai/tactical_director.gd"
+)
+
 const PlayerScene = preload("res://scenes/player.tscn")
 const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
@@ -12,7 +16,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.7.0"
+const BUILD_VERSION := "5.8.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -6394,116 +6398,23 @@ func bot_tactical_anchor(
 	if bot == null:
 		return Vector3.ZERO
 
-	var bot_team: int = int(bot.get("team"))
-	var stage: int = objective_stage
-	var base_goal: Vector3 = bot_goal_position(bot)
-
-	var attacker_bridge_anchors: Array[Vector3] = [
-		Vector3(-18.0, 1.0, -15.0),
-		Vector3(-12.0, 1.0, 0.0),
-		Vector3(-18.0, 1.0, 15.0),
-		Vector3(-29.0, 1.0, 10.0)
-	]
-	var defender_bridge_anchors: Array[Vector3] = [
-		Vector3(13.0, 1.0, -14.0),
-		Vector3(10.0, 1.0, 1.0),
-		Vector3(16.0, 1.0, 15.0),
-		Vector3(27.0, 1.0, 9.0)
-	]
-	var attacker_bunker_anchors: Array[Vector3] = [
-		Vector3(15.0, 1.0, -17.0),
-		Vector3(22.0, 1.0, 5.0),
-		Vector3(20.0, 1.0, 22.0),
-		Vector3(8.0, 1.0, 34.0)
-	]
-	var defender_bunker_anchors: Array[Vector3] = [
-		Vector3(31.0, 1.0, 17.0),
-		Vector3(25.0, 1.0, 28.0),
-		Vector3(38.0, 1.0, 35.0),
-		Vector3(43.0, 1.0, 19.0)
-	]
-
-	var anchors: Array[Vector3]
-	if stage == 0:
-		anchors = (
-			attacker_bridge_anchors
-			if bot_team == 0
-			else defender_bridge_anchors
-		)
-	else:
-		anchors = (
-			attacker_bunker_anchors
-			if bot_team == 0
-			else defender_bunker_anchors
-		)
-
-	var role_index: int = posmod(squad_role, anchors.size())
-	var anchor: Vector3 = anchors[role_index]
-
-	match class_id:
-		0: # Soldier: aggressive objective pressure.
-			return base_goal.lerp(anchor, 0.30)
-		1: # Medic: stay just behind the main pressure line.
-			return anchor.lerp(base_goal, 0.45)
-		2: # Engineer: prioritize exact objective interaction.
-			return base_goal
-		3: # Field Ops: support a lane rather than standing on the objective.
-			return anchor
-		4: # Scout: hold the farthest lane anchor.
-			var scout_index: int = (
-				(role_index + 2) % anchors.size()
-			)
-			return anchors[scout_index]
-		_:
-			return anchor
+	return TacticalDirectorScript.tactical_anchor(
+		bot,
+		class_id,
+		squad_role,
+		objective_stage,
+		bot_goal_position(bot)
+	)
 
 func bot_cover_position(
 	bot: Node3D,
 	threat_position: Vector3
 ) -> Vector3:
-	if bot == null:
-		return Vector3.ZERO
-
-	var origin: Vector3 = bot.global_position
-	var away: Vector3 = origin - threat_position
-	away.y = 0.0
-	if away.length() <= 0.01:
-		away = Vector3(1.0, 0.0, 0.0)
-	away = away.normalized()
-
-	var side_sign: float = (
-		-1.0
-		if posmod(int(bot.get("peer_id")), 2) == 0
-		else 1.0
+	return TacticalDirectorScript.cover_position(
+		bot,
+		threat_position
 	)
-	var lateral := Vector3(-away.z, 0.0, away.x) * side_sign
 
-	var candidates: Array[Vector3] = [
-		origin + away * 7.0 + lateral * 3.0,
-		origin + away * 5.0 - lateral * 4.0,
-		origin + lateral * 7.0,
-		origin - lateral * 7.0
-	]
-
-	var space_state := get_world_3d().direct_space_state
-	for candidate in candidates:
-		var floor_query := PhysicsRayQueryParameters3D.create(
-			candidate + Vector3.UP * 4.0,
-			candidate + Vector3.DOWN * 8.0
-		)
-		floor_query.collision_mask = 1
-		floor_query.collide_with_areas = false
-		var floor_hit: Dictionary = space_state.intersect_ray(
-			floor_query
-		)
-		if floor_hit.is_empty():
-			continue
-		var floor_position: Vector3 = Vector3(
-			floor_hit.get("position", candidate)
-		)
-		return floor_position + Vector3.UP * 1.0
-
-	return origin + away * 5.0
 
 func bot_goal_position(bot: Node3D) -> Vector3:
 	if bot == null:

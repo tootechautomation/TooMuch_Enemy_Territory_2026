@@ -110,6 +110,7 @@ var bot_waypoint_index := 0
 var bot_route: Array[Vector3] = []
 var bot_tactical_goal := Vector3.ZERO
 var bot_tactical_goal_until_ms := 0
+var bot_cover_refresh_ms := 0
 var bot_last_threat_position := Vector3.ZERO
 var bot_last_support_ms := 0
 var bot_hold_position_until_ms := 0
@@ -1615,7 +1616,9 @@ func server_respawn(spawn_position: Vector3) -> void:
 	_reset_loadout_ammo()
 	grenades_remaining = 2
 	bot_last_threat_position = Vector3.ZERO
+	bot_tactical_goal = Vector3.ZERO
 	bot_tactical_goal_until_ms = 0
+	bot_cover_refresh_ms = 0
 	bot_hold_position_until_ms = 0
 	bot_route.clear()
 	bot_waypoint_index = 0
@@ -2067,11 +2070,22 @@ func _bot_suppression_goal(main: Node) -> Variant:
 		return null
 	if main == null or not main.has_method("bot_cover_position"):
 		return null
-	return main.call(
-		"bot_cover_position",
-		self,
-		bot_last_threat_position
-	)
+
+	var now: int = Time.get_ticks_msec()
+	if (
+		now >= bot_cover_refresh_ms
+		or bot_tactical_goal == Vector3.ZERO
+	):
+		bot_tactical_goal = Vector3(
+			main.call(
+				"bot_cover_position",
+				self,
+				bot_last_threat_position
+			)
+		)
+		bot_cover_refresh_ms = now + 1400
+
+	return bot_tactical_goal
 
 func _bot_should_hold_fire(target: Node3D) -> bool:
 	if target == null:
