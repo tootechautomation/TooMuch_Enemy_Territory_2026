@@ -1,17 +1,17 @@
 # Frontline: Objective
 
-## Version 8.6.0 Forward+ PBR Battlefield Upgrade
+## Version 8.7.0 Soldier Asset-Fidelity Pass
 
-The desktop renderer now defaults to Forward+ so the existing SSAO, SSIL,
-screen-space reflections, volumetric fog, glow, and modern shadow pipeline are
-actually rendered. Four-times MSAA, screen-space antialiasing, soft directional
-shadows, and restrained cinematic color grading are enabled by default.
+The bundled fallback soldiers now have cleaner human silhouettes, rounded
+boots and packs, team-specific helmet shapes, visible webbing, shoulder straps,
+breast pockets, buttons, belt hardware, facial ears, and more detailed rifles
+with handguards, bolts, trigger guards, and canvas slings.
 
-The material library now uses the included albedo, normal, and roughness maps
-for brick, damaged plaster, concrete, limestone, wood, rusted metal,
-cobblestone, mud, gravel, and slate. Box-shaped sandbags and rubble have been
-replaced by rounded bags and irregular stones. Mobile still uses the GL
-Compatibility fallback. All v8.5 combat audio and protocol compatibility remain.
+Uniform textures are now limited to cloth instead of incorrectly covering
+faces, leather, wood, and weapon metal. Metal parts receive separate reflective
+material response. Battlefield ambience is louder and loops continuously.
+All v8.6 Forward+ PBR improvements remain enabled. Licensed external rigged
+models still override these fallbacks automatically when installed.
 
-Build: v8.6.0
+Build: v8.7.0
 Protocol: 341

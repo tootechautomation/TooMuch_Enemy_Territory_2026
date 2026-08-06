@@ -191,6 +191,42 @@ func _build_torso(skin: Resource) -> void:
 			skin.accent_color.darkened(0.12)
 		)
 
+	for x_value in [-0.23, 0.23]:
+		_add_box(
+			torso_root,
+			"CanvasShoulderStrap",
+			Vector3(x_value, 0.15, -0.285),
+			Vector3(0.075, 0.60, 0.035),
+			skin.accent_color.darkened(0.18),
+			Vector3(0.0, 0.0, -8.0 if x_value < 0.0 else 8.0)
+		)
+		_add_box(
+			torso_root,
+			"TunicBreastPocket",
+			Vector3(x_value, 0.15, -0.295),
+			Vector3(0.19, 0.17, 0.045),
+			skin.primary_color.darkened(0.08)
+		)
+
+	for button_index in range(4):
+		_add_cylinder(
+			torso_root,
+			"TunicButton",
+			Vector3(0.0, 0.25 - float(button_index) * 0.15, -0.305),
+			0.018,
+			0.018,
+			Color(0.22, 0.20, 0.14),
+			Vector3(90.0, 0.0, 0.0)
+		)
+
+	_add_box(
+		torso_root,
+		"BeltBuckle",
+		Vector3(0.0, -0.30, -0.215),
+		Vector3(0.105, 0.075, 0.025),
+		Color(0.34, 0.31, 0.21)
+	)
+
 func _build_head(skin: Resource) -> void:
 	var skin_color := (
 		Color(0.60, 0.43, 0.31)
@@ -219,6 +255,14 @@ func _build_head(skin: Resource) -> void:
 			Vector3(0.027, 0.020, 0.015),
 			Color(0.10, 0.09, 0.07)
 		)
+	for x_value in [-0.255, 0.255]:
+		_add_sphere(
+			head_root,
+			"Ear",
+			Vector3(x_value, 0.07, 0.0),
+			Vector3(0.045, 0.075, 0.030),
+			skin_color.darkened(0.03)
+		)
 
 	var helmet := _add_sphere(
 		head_root,
@@ -244,6 +288,15 @@ func _build_head(skin: Resource) -> void:
 		Vector3(0.025, 0.35, 0.025),
 		Color(0.13, 0.10, 0.06)
 	)
+	if last_team == 1:
+		_add_box(
+			head_root,
+			"HelmetNeckSkirt",
+			Vector3(0.0, 0.10, 0.13),
+			Vector3(0.50, 0.20, 0.22),
+			skin.helmet_color.darkened(0.07),
+			Vector3(-13.0, 0.0, 0.0)
+		)
 	_add_box(
 		head_root,
 		"HelmetStrapR",
@@ -325,21 +378,26 @@ func _build_leg(
 		skin.secondary_color.darkened(0.09),
 		Vector3(0.92, 1.0, 0.88)
 	)
-	_add_box(
+	_add_capsule(
 		knee,
 		"LeatherBoot",
-		Vector3(0.0, -0.49, -0.055),
-		Vector3(0.24, 0.28, 0.38),
-		Color(0.055, 0.047, 0.038)
+		Vector3(0.0, -0.49, -0.09),
+		0.13,
+		0.38,
+		Color(0.055, 0.047, 0.038),
+		Vector3(0.90, 1.0, 1.12),
+		Vector3(90.0, 0.0, 0.0)
 	)
 
 func _build_equipment(skin: Resource) -> void:
-	_add_box(
+	_add_capsule(
 		torso_root,
 		"Backpack",
 		Vector3(0.0, 0.01, 0.31),
-		Vector3(0.52, 0.60, 0.20),
-		skin.secondary_color.darkened(0.15)
+		0.27,
+		0.62,
+		skin.secondary_color.darkened(0.15),
+		Vector3(1.0, 1.0, 0.46)
 	)
 	_add_cylinder(
 		torso_root,
@@ -390,6 +448,16 @@ func _build_weapon(skin: Resource) -> void:
 		Vector3(0.18, 0.20, 0.43),
 		wood
 	)
+	_add_capsule(
+		weapon_root,
+		"WoodHandguard",
+		Vector3(0.0, 0.015, -0.30),
+		0.075,
+		0.46,
+		wood.darkened(0.03),
+		Vector3(0.82, 1.0, 0.72),
+		Vector3(90.0, 0.0, 0.0)
+	)
 	_add_box(
 		weapon_root,
 		"Magazine",
@@ -403,6 +471,31 @@ func _build_weapon(skin: Resource) -> void:
 		Vector3(0.0, -0.07, -0.82),
 		Vector3(0.025, 0.13, 0.035),
 		metal
+	)
+	_add_cylinder(
+		weapon_root,
+		"BoltHandle",
+		Vector3(0.10, -0.015, 0.02),
+		0.018,
+		0.15,
+		metal.lightened(0.08),
+		Vector3(0.0, 0.0, 90.0)
+	)
+	_add_box(
+		weapon_root,
+		"TriggerGuard",
+		Vector3(0.0, -0.12, 0.11),
+		Vector3(0.11, 0.035, 0.16),
+		metal.darkened(0.04),
+		Vector3(12.0, 0.0, 0.0)
+	)
+	_add_box(
+		weapon_root,
+		"CanvasWeaponSling",
+		Vector3(-0.10, 0.10, 0.05),
+		Vector3(0.025, 0.025, 1.12),
+		Color(0.24, 0.19, 0.10),
+		Vector3(0.0, -5.0, 0.0)
 	)
 
 func _build_class_gear(skin: Resource) -> void:
@@ -529,14 +622,37 @@ func _animate_character(delta: float) -> void:
 		else 0.0
 	)
 
-func _material(color: Color) -> StandardMaterial3D:
+func _material_for_part(
+	node_name: String,
+	color: Color
+) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
-	if uniform_texture != null:
+	var lower_name := node_name.to_lower()
+	var is_uniform := (
+		"tunic" in lower_name
+		or "sleeve" in lower_name
+		or "forearm" in lower_name
+		or "trousers" in lower_name
+		or "collar" in lower_name
+	)
+	if uniform_texture != null and is_uniform:
 		material.albedo_texture = uniform_texture
 		material.uv1_scale = Vector3(3.0, 3.0, 3.0)
-	material.roughness = 0.88
-	material.metallic = 0.02
+	if (
+		"helmet" in lower_name
+		or "receiver" in lower_name
+		or "barrel" in lower_name
+		or "sight" in lower_name
+		or "bolt" in lower_name
+		or "buckle" in lower_name
+		or "trigger" in lower_name
+	):
+		material.roughness = 0.48
+		material.metallic = 0.68
+	else:
+		material.roughness = 0.88
+		material.metallic = 0.02
 	return material
 
 func _add_box(
@@ -544,15 +660,17 @@ func _add_box(
 	node_name: String,
 	position_value: Vector3,
 	size: Vector3,
-	color: Color
+	color: Color,
+	rotation_value: Vector3 = Vector3.ZERO
 ) -> MeshInstance3D:
 	var part := MeshInstance3D.new()
 	part.name = node_name
 	part.position = position_value
+	part.rotation_degrees = rotation_value
 	var mesh := BoxMesh.new()
 	mesh.size = size
 	part.mesh = mesh
-	part.material_override = _material(color)
+	part.material_override = _material_for_part(node_name, color)
 	parent.add_child(part)
 	return part
 
@@ -563,19 +681,21 @@ func _add_capsule(
 	radius: float,
 	height: float,
 	color: Color,
-	scale_value: Vector3 = Vector3.ONE
+	scale_value: Vector3 = Vector3.ONE,
+	rotation_value: Vector3 = Vector3.ZERO
 ) -> MeshInstance3D:
 	var part := MeshInstance3D.new()
 	part.name = node_name
 	part.position = position_value
 	part.scale = scale_value
+	part.rotation_degrees = rotation_value
 	var mesh := CapsuleMesh.new()
 	mesh.radius = radius
 	mesh.height = maxf(height, radius * 2.0)
 	mesh.radial_segments = 20
 	mesh.rings = 10
 	part.mesh = mesh
-	part.material_override = _material(color)
+	part.material_override = _material_for_part(node_name, color)
 	parent.add_child(part)
 	return part
 
@@ -598,7 +718,7 @@ func _add_cylinder(
 	mesh.height = height
 	mesh.radial_segments = 20
 	part.mesh = mesh
-	part.material_override = _material(color)
+	part.material_override = _material_for_part(node_name, color)
 	parent.add_child(part)
 	return part
 
@@ -617,6 +737,6 @@ func _add_sphere(
 	mesh.radial_segments = 24
 	mesh.rings = 12
 	part.mesh = mesh
-	part.material_override = _material(color)
+	part.material_override = _material_for_part(node_name, color)
 	parent.add_child(part)
 	return part

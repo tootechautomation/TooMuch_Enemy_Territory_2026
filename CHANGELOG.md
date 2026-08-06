@@ -1,5 +1,18 @@
 # Changelog
 
+## 8.7.0
+- Improved bundled Allied and Axis fallback soldier silhouettes
+- Added team-specific helmet geometry, facial ears, and neck protection
+- Added webbing straps, breast pockets, buttons, buckle, and layered equipment
+- Replaced box-shaped boots and backpacks with rounded geometry
+- Added rifle handguard, bolt handle, trigger guard, and canvas sling details
+- Restricted uniform textures to cloth instead of skin, leather, wood, and metal
+- Added distinct metallic response for helmets, rifle parts, and belt hardware
+- Raised battlefield ambience from -24 dB to -15 dB and enabled seamless looping
+- Preserved automatic external rigged-character and weapon replacement support
+- Preserved all v8.6 Forward+ PBR rendering improvements
+- Preserved protocol 341 and explicit connection-string `+`
+
 ## 8.6.0
 - Upgraded the desktop renderer from GL Compatibility to Forward+
 - Enabled 4x MSAA, screen-space antialiasing, and soft directional shadows

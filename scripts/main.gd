@@ -66,7 +66,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.6.0"
+const BUILD_VERSION := "8.7.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -654,8 +654,13 @@ func _initialize_battlefield_ambience() -> void:
 		return
 	ambience_player = AudioStreamPlayer.new()
 	ambience_player.stream = resource as AudioStream
+	if resource is AudioStreamWAV:
+		var ambience_wav := resource as AudioStreamWAV
+		ambience_wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		ambience_wav.loop_begin = 0
+		ambience_wav.loop_end = int(ambience_wav.data.size() / 2)
 	ambience_player.bus = "Music"
-	ambience_player.volume_db = -24.0
+	ambience_player.volume_db = -15.0
 	add_child(ambience_player)
 	ambience_player.play()
 
