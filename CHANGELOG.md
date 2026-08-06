@@ -1,11 +1,13 @@
 # Changelog
 
-## 4.1.0
-- Expanded map boundaries and outskirts
-- Added procedural cobblestone streets
-- Added WWII-style apartment and barracks buildings
-- Added damaged roofs, windows, floors, street lamps, and sandbags
-- Added visible first-person arms, sleeves, hands, and fingers
-- Expanded TAB scoreboard with live results and award preview
+## 4.2.0
+- Added six original PBR material sets
+- Added six original GLB visual models
+- Added asset-based village visual pass
+- Added imported rifle/pistol first-person rigs
+- Added separate gameplay collision for visual buildings
+- Added triplanar PBR materials
+- Retained procedural fallback graphics
+- Preserved headless-safe loading
 - Preserved protocol 341
 - Preserved explicit connection-string `+`

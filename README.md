@@ -1,42 +1,51 @@
 # Frontline: Objective
 
-## Version 4.1.0 WWII Urban Frontline
+## Version 4.2.0 Asset-Based Visual Foundation
 
-This release moves the visual language closer to an original World War II
-objective shooter while retaining original maps, code, and assets.
+This release begins the transition from primitive placeholder graphics to an
+asset-based WWII visual pipeline.
 
-### Larger battlefield
-- Map boundaries expanded to approximately 124 x 104 meters.
-- Added far-west and far-east outskirts.
-- Added a larger cobblestone village square.
-- Added a paved/cobbled fort courtyard.
-- Added multi-story apartment blocks, barracks, rail offices, damaged roofs,
-  windows, floors, and interior firing positions.
-- Added street lamps and sandbag defenses.
+### PBR materials
+Included original generated texture sets:
+- Cobblestone
+- Red brick
+- Weathered plaster
+- Dark wood
+- Brushed gunmetal
+- Rubble and damaged ground
 
-### WWII-style ground and architecture
-- Procedural cobblestone streets use individually varied stone blocks.
-- Fort and urban areas use concrete, masonry, dark roofs, and window recesses.
-- Village and rail sectors now read as occupied European urban spaces.
-- All geometry is generated with Godot primitives, so the Linux server remains
-  independent of imported visual assets.
+Each set includes albedo, normal, and roughness maps. Godot materials use
+world-space triplanar mapping, reducing visible stretching on modular geometry.
 
-### First-person body
-- Added visible right and left sleeves.
-- Added rounded forearms, hands, and finger shapes.
-- Hands reposition for pistol and primary weapon profiles.
-- Sleeve color reflects the selected team.
-- Existing weapon switching, recoil, sway, sprint lowering, and ADS remain.
+### Modular 3D assets
+Included original GLB models:
+- Intact European townhouse
+- Ruined European townhouse
+- Rubble pile
+- Sandbag emplacement
+- First-person service rifle with arms and hands
+- First-person service pistol with arms and hands
 
-### TAB results
-- TAB shows the expanded scoreboard and current match results.
-- Added current objective, sector control, and round-award preview.
-- Existing K/D/A, objective score, round XP, total XP, rank, and player type
-  remain visible.
+### Village visual pass
+- Added four imported multi-story townhouses.
+- Added imported rubble and sandbag scenes.
+- Added PBR cobblestone streets and fort courtyard.
+- Added gameplay collision volumes independently of the visual models.
+- Existing procedural geometry remains as a compatibility fallback.
 
-### Compatibility
-- Build: v4.1.0
-- Protocol: 341
-- Explicit connection-message `+` retained.
+### First-person presentation
+- Rifle and pistol now use imported GLB visual rigs when available.
+- Both rigs include sleeves, forearms, hands, fingers, detailed receivers,
+  stocks, barrels, sights, and support-hand placement.
+- Existing recoil, weapon bob, sprint lowering, ADS, switching, ammunition,
+  and muzzle flash remain connected to the imported rig.
+- The old procedural weapon remains as a fallback if Godot has not imported
+  the GLB files yet.
 
-Expected status: `Connected: v4.1.0 protocol 341`
+### Headless server safety
+- The VPS never preloads GLB or PNG visual assets.
+- All optional scenes and textures load only on graphical clients.
+- Gameplay collision is generated separately from visual scenes.
+- Protocol remains 341.
+
+Expected status: `Connected: v4.2.0 protocol 341`

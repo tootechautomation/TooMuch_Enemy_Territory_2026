@@ -11,7 +11,7 @@ const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const RallyPointScript = preload("res://scripts/rally_point.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "4.1.0"
+const BUILD_VERSION := "4.2.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -44,6 +44,22 @@ const SECTOR_TICKET_INTERVAL := 18.0
 var tex_metal: Texture2D
 var tex_objective: Texture2D
 var tex_foliage: Texture2D
+var pbr_cobble_albedo: Texture2D
+var pbr_cobble_normal: Texture2D
+var pbr_cobble_roughness: Texture2D
+var pbr_brick_albedo: Texture2D
+var pbr_brick_normal: Texture2D
+var pbr_brick_roughness: Texture2D
+var pbr_plaster_albedo: Texture2D
+var pbr_plaster_normal: Texture2D
+var pbr_plaster_roughness: Texture2D
+var pbr_ground_albedo: Texture2D
+var pbr_ground_normal: Texture2D
+var pbr_ground_roughness: Texture2D
+var visual_townhouse_scene: PackedScene
+var visual_ruined_townhouse_scene: PackedScene
+var visual_rubble_scene: PackedScene
+var visual_sandbag_scene: PackedScene
 
 var players: Dictionary = {}
 var player_teams: Dictionary = {}
@@ -191,6 +207,54 @@ func _ready() -> void:
 		)
 		tex_foliage = _load_optional_texture(
 			"res://assets/textures/foliage_sprite.png"
+		)
+		pbr_cobble_albedo = _load_optional_texture(
+			"res://assets/pbr/cobblestone_albedo.png"
+		)
+		pbr_cobble_normal = _load_optional_texture(
+			"res://assets/pbr/cobblestone_normal.png"
+		)
+		pbr_cobble_roughness = _load_optional_texture(
+			"res://assets/pbr/cobblestone_roughness.png"
+		)
+		pbr_brick_albedo = _load_optional_texture(
+			"res://assets/pbr/brick_albedo.png"
+		)
+		pbr_brick_normal = _load_optional_texture(
+			"res://assets/pbr/brick_normal.png"
+		)
+		pbr_brick_roughness = _load_optional_texture(
+			"res://assets/pbr/brick_roughness.png"
+		)
+		pbr_plaster_albedo = _load_optional_texture(
+			"res://assets/pbr/plaster_albedo.png"
+		)
+		pbr_plaster_normal = _load_optional_texture(
+			"res://assets/pbr/plaster_normal.png"
+		)
+		pbr_plaster_roughness = _load_optional_texture(
+			"res://assets/pbr/plaster_roughness.png"
+		)
+		pbr_ground_albedo = _load_optional_texture(
+			"res://assets/pbr/rubble_ground_albedo.png"
+		)
+		pbr_ground_normal = _load_optional_texture(
+			"res://assets/pbr/rubble_ground_normal.png"
+		)
+		pbr_ground_roughness = _load_optional_texture(
+			"res://assets/pbr/rubble_ground_roughness.png"
+		)
+		visual_townhouse_scene = _load_optional_scene(
+			"res://assets/models/wwii_townhouse.glb"
+		)
+		visual_ruined_townhouse_scene = _load_optional_scene(
+			"res://assets/models/wwii_townhouse_ruined.glb"
+		)
+		visual_rubble_scene = _load_optional_scene(
+			"res://assets/models/rubble_pile.glb"
+		)
+		visual_sandbag_scene = _load_optional_scene(
+			"res://assets/models/sandbag_emplacement.glb"
 		)
 
 	_build_world()
@@ -369,6 +433,209 @@ func _update_immersive_visuals() -> void:
 		root.rotation.y += 0.003
 		var p: float = 1.0 + sin(atmosphere_elapsed * 2.2 + index) * 0.06
 		root.scale = Vector3(p,1.0,p)
+
+func _load_optional_scene(path: String) -> PackedScene:
+	if DisplayServer.get_name() == "headless":
+		return null
+	if not ResourceLoader.exists(path):
+		push_warning("Optional visual scene not imported: %s" % path)
+		return null
+	var resource: Resource = load(path)
+	if resource is PackedScene:
+		return resource as PackedScene
+	push_warning("Optional visual scene failed: %s" % path)
+	return null
+
+func _make_pbr_material(
+	albedo: Texture2D,
+	normal: Texture2D,
+	roughness: Texture2D,
+	tint: Color = Color.WHITE,
+	scale_value: float = 2.5
+) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = tint
+	material.albedo_texture = albedo
+	material.normal_enabled = normal != null
+	material.normal_texture = normal
+	material.roughness = 0.82
+	material.roughness_texture = roughness
+	material.uv1_triplanar = true
+	material.uv1_world_triplanar = true
+	material.uv1_scale = Vector3.ONE * scale_value
+	return material
+
+func _apply_material_recursive(
+	root: Node,
+	material: Material
+) -> void:
+	if root is MeshInstance3D:
+		var mesh_instance := root as MeshInstance3D
+		mesh_instance.material_override = material
+	for child in root.get_children():
+		_apply_material_recursive(child, material)
+
+func _spawn_visual_scene(
+	scene: PackedScene,
+	node_name: String,
+	position: Vector3,
+	rotation_y: float,
+	scale_value: Vector3,
+	material: Material = null
+) -> Node3D:
+	if DisplayServer.get_name() == "headless" or scene == null:
+		return null
+	var instance: Node = scene.instantiate()
+	if not instance is Node3D:
+		instance.queue_free()
+		return null
+	var root := instance as Node3D
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	root.scale = scale_value
+	if material != null:
+		_apply_material_recursive(root, material)
+	add_child(root)
+	return root
+
+func _build_asset_based_village_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var plaster_material := _make_pbr_material(
+		pbr_plaster_albedo,
+		pbr_plaster_normal,
+		pbr_plaster_roughness,
+		Color(0.96, 0.92, 0.84),
+		1.7
+	)
+	var brick_material := _make_pbr_material(
+		pbr_brick_albedo,
+		pbr_brick_normal,
+		pbr_brick_roughness,
+		Color(0.90, 0.84, 0.80),
+		2.2
+	)
+	var cobble_material := _make_pbr_material(
+		pbr_cobble_albedo,
+		pbr_cobble_normal,
+		pbr_cobble_roughness,
+		Color(0.88, 0.90, 0.92),
+		3.8
+	)
+	var rubble_material := _make_pbr_material(
+		pbr_ground_albedo,
+		pbr_ground_normal,
+		pbr_ground_roughness,
+		Color(0.92, 0.88, 0.82),
+		2.8
+	)
+
+	for building_data in [
+		[
+			visual_ruined_townhouse_scene,
+			"VisualTownhouseA",
+			Vector3(-51.0, 0.0, -27.0),
+			deg_to_rad(8.0),
+			Vector3(1.05, 1.05, 1.05),
+			brick_material
+		],
+		[
+			visual_townhouse_scene,
+			"VisualTownhouseB",
+			Vector3(-52.0, 0.0, -8.0),
+			deg_to_rad(-4.0),
+			Vector3(1.15, 1.10, 1.10),
+			plaster_material
+		],
+		[
+			visual_ruined_townhouse_scene,
+			"VisualTownhouseC",
+			Vector3(-50.0, 0.0, 13.0),
+			deg_to_rad(7.0),
+			Vector3(1.05, 1.05, 1.05),
+			plaster_material
+		],
+		[
+			visual_townhouse_scene,
+			"VisualTownhouseD",
+			Vector3(-49.0, 0.0, 34.0),
+			deg_to_rad(-9.0),
+			Vector3(1.10, 1.12, 1.10),
+			brick_material
+		]
+	]:
+		_spawn_visual_scene(
+			building_data[0] as PackedScene,
+			str(building_data[1]),
+			Vector3(building_data[2]),
+			float(building_data[3]),
+			Vector3(building_data[4]),
+			building_data[5] as Material
+		)
+
+	# Collision volumes for the imported visual buildings.
+	for collision_data in [
+		["VisualTownhouseA_Collision", Vector3(-51.0, 5.0, -27.0), Vector3(11.0, 10.0, 8.0)],
+		["VisualTownhouseB_Collision", Vector3(-52.0, 5.0, -8.0), Vector3(12.0, 10.0, 8.5)],
+		["VisualTownhouseC_Collision", Vector3(-50.0, 5.0, 13.0), Vector3(11.0, 10.0, 8.0)],
+		["VisualTownhouseD_Collision", Vector3(-49.0, 5.0, 34.0), Vector3(12.0, 10.0, 8.5)]
+	]:
+		var body := StaticBody3D.new()
+		body.name = str(collision_data[0])
+		body.position = Vector3(collision_data[1])
+		var shape_node := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(collision_data[2])
+		shape_node.shape = shape
+		body.add_child(shape_node)
+		add_child(body)
+
+	for rubble_position in [
+		Vector3(-45.0, 0.0, -22.0),
+		Vector3(-43.0, 0.0, 5.0),
+		Vector3(-46.0, 0.0, 27.0),
+		Vector3(41.0, 0.0, -14.0)
+	]:
+		_spawn_visual_scene(
+			visual_rubble_scene,
+			"RubbleVisual_%s" % str(rubble_position),
+			rubble_position,
+			randf_range(-0.6, 0.6),
+			Vector3.ONE * randf_range(0.8, 1.25),
+			rubble_material
+		)
+
+	for sandbag_position in [
+		Vector3(-35.0, 0.0, -17.0),
+		Vector3(-31.0, 0.0, 19.0),
+		Vector3(27.0, 0.0, -12.0),
+		Vector3(34.0, 0.0, 18.0)
+	]:
+		_spawn_visual_scene(
+			visual_sandbag_scene,
+			"SandbagVisual_%s" % str(sandbag_position),
+			sandbag_position,
+			randf_range(-0.3, 0.3),
+			Vector3.ONE,
+			rubble_material
+		)
+
+	# PBR ground overlays that sit just above gameplay collision ground.
+	for ground_data in [
+		["PBRVillageStreet", Vector3(-47.0, 0.08, 3.0), Vector3(23.0, 0.10, 88.0), cobble_material],
+		["PBRRailStreet", Vector3(39.0, 0.08, -18.0), Vector3(29.0, 0.10, 25.0), rubble_material],
+		["PBRFortCourtyard", Vector3(34.0, 0.08, 27.0), Vector3(28.0, 0.10, 22.0), cobble_material]
+	]:
+		var visual_ground := MeshInstance3D.new()
+		visual_ground.name = str(ground_data[0])
+		visual_ground.position = Vector3(ground_data[1])
+		var ground_mesh := BoxMesh.new()
+		ground_mesh.size = Vector3(ground_data[2])
+		visual_ground.mesh = ground_mesh
+		visual_ground.material_override = ground_data[3] as Material
+		add_child(visual_ground)
 
 func _load_optional_texture(path: String) -> Texture2D:
 	if DisplayServer.get_name() == "headless":
@@ -4436,6 +4703,7 @@ func _build_world() -> void:
 	)
 
 	_build_operation_black_river_expansion()
+	_build_asset_based_village_pass()
 
 	for sector_name_value in sector_positions.keys():
 		var sector_name: String = str(sector_name_value)

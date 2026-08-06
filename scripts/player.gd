@@ -56,6 +56,8 @@ var tex_medal_headshot: Texture2D
 var tex_objective_marker: Texture2D
 var tex_spawn_shield: Texture2D
 var tex_muzzle_flash_ui: Texture2D
+var fp_rifle_scene: PackedScene
+var fp_pistol_scene: PackedScene
 
 var health := 100
 var ammo_in_mag := 30
@@ -211,6 +213,64 @@ var weapon_kick_offset := 0.0
 
 var server_logged_first_input := false
 
+func _load_optional_scene(path: String) -> PackedScene:
+	if DisplayServer.get_name() == "headless":
+		return null
+	if not ResourceLoader.exists(path):
+		push_warning("Optional first-person model not imported: %s" % path)
+		return null
+	var resource: Resource = load(path)
+	if resource is PackedScene:
+		return resource as PackedScene
+	return null
+
+func _build_imported_first_person_weapon(
+	is_pistol: bool
+) -> bool:
+	var selected_scene: PackedScene = (
+		fp_pistol_scene if is_pistol else fp_rifle_scene
+	)
+	if selected_scene == null:
+		return false
+
+	var instance: Node = selected_scene.instantiate()
+	if not instance is Node3D:
+		instance.queue_free()
+		return false
+
+	var imported_root := instance as Node3D
+	imported_root.name = "ImportedFirstPersonRig"
+	imported_root.position = (
+		Vector3(0.0, 0.0, 0.06)
+		if is_pistol
+		else Vector3(0.0, 0.02, 0.12)
+	)
+	imported_root.scale = (
+		Vector3.ONE * 0.95
+		if is_pistol
+		else Vector3.ONE * 0.88
+	)
+	weapon_view.add_child(imported_root)
+
+	muzzle_flash = MeshInstance3D.new()
+	var flash_mesh := SphereMesh.new()
+	flash_mesh.radius = 0.045 if is_pistol else 0.065
+	flash_mesh.height = 0.10 if is_pistol else 0.14
+	muzzle_flash.mesh = flash_mesh
+	muzzle_flash.position = (
+		Vector3(0.02, 0.01, -0.65)
+		if is_pistol
+		else Vector3(0.04, 0.02, -2.02)
+	)
+	var flash_material := StandardMaterial3D.new()
+	flash_material.albedo_color = Color(1.0, 0.70, 0.14)
+	flash_material.emission_enabled = true
+	flash_material.emission = Color(1.0, 0.38, 0.03)
+	muzzle_flash.material_override = flash_material
+	muzzle_flash.visible = false
+	weapon_view.add_child(muzzle_flash)
+	return true
+
 func _load_optional_texture(path: String) -> Texture2D:
 	if DisplayServer.get_name() == "headless":
 		return null
@@ -253,6 +313,12 @@ func _ready() -> void:
 		)
 		tex_muzzle_flash_ui = _load_optional_texture(
 			"res://assets/textures/muzzle_flash.png"
+		)
+		fp_rifle_scene = _load_optional_scene(
+			"res://assets/models/fp_service_rifle.glb"
+		)
+		fp_pistol_scene = _load_optional_scene(
+			"res://assets/models/fp_service_pistol.glb"
 		)
 
 	_initialize_loadout()
@@ -2838,6 +2904,9 @@ func _rebuild_first_person_weapon() -> void:
 	var is_pistol: bool = current_weapon_index == 1
 	var primary_profile: int = player_class
 	weapon_view.position = _base_weapon_position()
+
+	if _build_imported_first_person_weapon(is_pistol):
+		return
 
 	var receiver_length: float = 0.72
 	var barrel_length: float = 0.55
