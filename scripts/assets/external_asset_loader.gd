@@ -58,3 +58,37 @@ static func play_first_available(
 				player.play(candidate, blend_time)
 			return candidate
 	return &""
+
+static func apply_world_collision_contract(model: Node3D) -> int:
+	if model == null:
+		return 0
+	var bodies := 0
+	for child in model.find_children("*", "StaticBody3D", true):
+		var body := child as StaticBody3D
+		body.collision_layer = 1
+		body.collision_mask = 1
+		bodies += 1
+	return bodies
+
+static func find_socket(
+	model: Node3D,
+	names: Array[String]
+) -> Node3D:
+	if model == null:
+		return null
+	for socket_name in names:
+		var exact := model.find_child(socket_name, true, false)
+		if exact is Node3D:
+			return exact as Node3D
+	return null
+
+static func hide_named_nodes(
+	root: Node,
+	names: Array[String]
+) -> void:
+	if root == null:
+		return
+	for node_name in names:
+		var found := root.find_child(node_name, true, false)
+		if found is Node3D:
+			(found as Node3D).visible = false

@@ -8,6 +8,19 @@ const CHARACTER_AXIS := (
 	"res://assets/external/characters/axis_soldier.glb"
 )
 
+const CHARACTER_CONFIG := {
+	0: {
+		"scale": Vector3.ONE,
+		"rotation_y": 0.0,
+		"offset": Vector3(0.0, -1.0, 0.0)
+	},
+	1: {
+		"scale": Vector3.ONE,
+		"rotation_y": 0.0,
+		"offset": Vector3(0.0, -1.0, 0.0)
+	}
+}
+
 const ENVIRONMENT_PATHS := {
 	"village_house_a": (
 		"res://assets/external/environment/village_house_a.glb"
@@ -63,3 +76,8 @@ static func availability_report() -> Dictionary:
 			str(ENVIRONMENT_PATHS[asset_id])
 		)
 	return report
+
+static func character_config(team_id: int) -> Dictionary:
+	return Dictionary(
+		CHARACTER_CONFIG.get(team_id, CHARACTER_CONFIG[0])
+	)

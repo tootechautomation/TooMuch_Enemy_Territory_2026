@@ -1,0 +1,46 @@
+{
+  "allied": {
+    "offset": [
+      0,
+      -1,
+      0
+    ],
+    "rotation_y": 0.0,
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  },
+  "axis": {
+    "offset": [
+      0,
+      -1,
+      0
+    ],
+    "rotation_y": 0.0,
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  },
+  "weapon_sockets": [
+    "WeaponSocket",
+    "weapon_socket",
+    "RightHandSocket",
+    "hand_r"
+  ],
+  "animation_aliases": [
+    "idle",
+    "walk",
+    "run",
+    "crouch_idle",
+    "crouch_walk",
+    "fire",
+    "reload",
+    "death",
+    "revive",
+    "build"
+  ]
+}

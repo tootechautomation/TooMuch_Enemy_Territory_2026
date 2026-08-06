@@ -26,7 +26,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.0.0"
+const BUILD_VERSION := "7.1.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -357,6 +357,7 @@ func _ready() -> void:
 
 	_build_world()
 	_spawn_external_environment_assets()
+	_apply_high_visual_quality()
 	_build_round_results_ui()
 	_update_objective_visuals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -2188,6 +2189,38 @@ func server_recover_out_of_bounds_player(
 		current_position
 	)
 
+func _apply_high_visual_quality() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var viewport := get_viewport()
+	if viewport != null:
+		viewport.msaa_3d = Viewport.MSAA_4X
+		viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
+		viewport.use_taa = true
+
+	var environment_nodes := find_children(
+		"*",
+		"WorldEnvironment",
+		true
+	)
+	for value in environment_nodes:
+		var world_environment := value as WorldEnvironment
+		if (
+			world_environment != null
+			and world_environment.environment != null
+		):
+			var environment := world_environment.environment
+			environment.ssao_enabled = true
+			environment.ssao_radius = 2.2
+			environment.ssao_intensity = 1.7
+			environment.glow_enabled = true
+			environment.fog_enabled = true
+			environment.fog_density = minf(
+				environment.fog_density,
+				0.012
+			)
+
 func _spawn_external_environment_assets() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -2245,14 +2278,20 @@ func _spawn_external_environment_assets() -> void:
 		)
 		if scene == null:
 			continue
-		ExternalAssetLoaderScript.instantiate_scene(
-			self,
-			scene,
-			str(placement[1]),
-			Vector3(placement[2]),
-			float(placement[3]),
-			Vector3(placement[4])
+		var external_node: Node3D = (
+			ExternalAssetLoaderScript.instantiate_scene(
+				self,
+				scene,
+				str(placement[1]),
+				Vector3(placement[2]),
+				float(placement[3]),
+				Vector3(placement[4])
+			)
 		)
+		if external_node != null:
+			ExternalAssetLoaderScript.apply_world_collision_contract(
+				external_node
+			)
 
 	print(
 		"External asset availability: %s"

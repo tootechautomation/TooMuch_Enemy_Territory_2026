@@ -6,6 +6,9 @@ const ExternalAssetRegistryScript = preload(
 const ExternalAssetLoaderScript = preload(
 	"res://scripts/assets/external_asset_loader.gd"
 )
+const HumanoidAnimationControllerScript = preload(
+	"res://scripts/characters/humanoid_animation_controller.gd"
+)
 
 const RadarCompassScript = preload("res://scripts/radar_compass.gd")
 
@@ -72,6 +75,9 @@ var axis_character_scene: PackedScene
 var external_character_model: Node3D
 var external_character_animator: AnimationPlayer
 var external_character_animation: StringName = &""
+var external_animation_controller
+var external_weapon_socket: Node3D
+var external_model_loaded := false
 var fp_gunmetal_albedo: Texture2D
 var fp_gunmetal_normal: Texture2D
 var fp_gunmetal_roughness: Texture2D
@@ -1794,14 +1800,20 @@ func _build_external_character_model() -> bool:
 	if external_character_model != null:
 		external_character_model.queue_free()
 
+	var model_config: Dictionary = (
+		ExternalAssetRegistryScript.character_config(team)
+	)
 	external_character_model = (
 		ExternalAssetLoaderScript.instantiate_scene(
 			self,
 			scene,
 			"ExternalCharacterModel",
-			Vector3(0.0, -1.0, 0.0),
-			0.0,
-			Vector3.ONE
+			Vector3(model_config.get(
+				"offset",
+				Vector3(0.0, -1.0, 0.0)
+			)),
+			float(model_config.get("rotation_y", 0.0)),
+			Vector3(model_config.get("scale", Vector3.ONE))
 		)
 	)
 	if external_character_model == null:
@@ -1815,6 +1827,24 @@ func _build_external_character_model() -> bool:
 			external_character_model
 		)
 	)
+	external_animation_controller = (
+		HumanoidAnimationControllerScript.new()
+	)
+	external_animation_controller.configure(
+		external_character_animator
+	)
+	external_weapon_socket = (
+		ExternalAssetLoaderScript.find_socket(
+			external_character_model,
+			[
+				"WeaponSocket",
+				"weapon_socket",
+				"RightHandSocket",
+				"hand_r"
+			]
+		)
+	)
+	external_model_loaded = true
 
 	var fallback_body: Node3D = get_node_or_null("Body") as Node3D
 	var fallback_character: Node3D = (
@@ -1834,57 +1864,28 @@ func _update_external_character_animation() -> void:
 		not _is_local_player()
 		and alive
 	)
+	if external_animation_controller == null:
+		return
 
-	var candidates: Array[StringName]
-	if not alive or downed:
-		candidates = [
-			&"death",
-			&"Death",
-			&"downed",
-			&"Downed"
-		]
-	elif is_reloading:
-		candidates = [
-			&"reload",
-			&"Reload",
-			&"rifle_reload"
-		]
-	elif is_crouching:
-		candidates = [
-			&"crouch_walk",
-			&"Crouch_Walk",
-			&"crouch_idle",
-			&"Crouch_Idle"
-		]
-	else:
-		var speed: float = Vector2(
-			velocity.x,
-			velocity.z
-		).length()
-		if speed > WALK_SPEED * 1.25:
-			candidates = [
-				&"run",
-				&"Run",
-				&"sprint",
-				&"Sprint"
-			]
-		elif speed > 0.25:
-			candidates = [
-				&"walk",
-				&"Walk",
-				&"rifle_walk"
-			]
-		else:
-			candidates = [
-				&"idle",
-				&"Idle",
-				&"rifle_idle"
-			]
-
+	var speed: float = Vector2(
+		velocity.x,
+		velocity.z
+	).length()
+	var animation_state: String = (
+		external_animation_controller.resolve_state(
+			alive,
+			downed,
+			is_reloading,
+			is_crouching,
+			speed,
+			Time.get_ticks_msec() < muzzle_flash_until_ms,
+			player_class == PlayerClass.ENGINEER
+			and aim_requested
+		)
+	)
 	external_character_animation = (
-		ExternalAssetLoaderScript.play_first_available(
-			external_character_animator,
-			candidates
+		external_animation_controller.set_state(
+			animation_state
 		)
 	)
 
