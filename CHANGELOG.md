@@ -1,9 +1,10 @@
 # Changelog
 
-## 5.2.1
-- Fixed staging-cover `offset` type inference error
-- Explicitly converted Variant array entries to Vector3
-- Added explicit types to new map-expansion helper locals
-- Preserved all v5.2.0 map expansion features
-- Preserved protocol 341
-- Preserved explicit connection-string `+`
+## 5.3.0
+- Moved imported-structure collision out of visual-only functions
+- Added server/client shared collision pass
+- Added doorway-aware collision shells
+- Added collision for church, warehouse, bunker, rail cars, and half-tracks
+- Added interior combat cover to expanded buildings
+- Added startup collision validation
+- Preserved protocol 341 and explicit connection-string `+`

@@ -222,6 +222,7 @@ var et_compass_label: Label
 var et_objective_distance_label: Label
 var et_objective_arrow_label: Label
 var et_route_hint_label: Label
+var collision_debug_notice_until_ms := 0
 var visual_stride_phase := 0.0
 var visual_last_speed := 0.0
 var bot_route_index := 0
@@ -3649,11 +3650,16 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 		grenades_remaining,
 		replicated_smoke_grenades
 	]
-	et_status_label.text = "%s · %s · Q %s" % [
-		life_name,
-		str(main.call("sector_status_text")),
-		_ability_name()
-	]
+	if Time.get_ticks_msec() < collision_debug_notice_until_ms:
+		et_status_label.text = (
+			"COLLISION DEBUG CHANGED · RESTART TO REBUILD PROXIES"
+		)
+	else:
+		et_status_label.text = "%s · %s · Q %s" % [
+			life_name,
+			str(main.call("sector_status_text")),
+			_ability_name()
+		]
 
 	var round_results_open := false
 	if main.has_method("get"):

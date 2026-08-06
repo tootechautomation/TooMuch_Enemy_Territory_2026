@@ -1,28 +1,44 @@
 # Frontline: Objective
 
-## Version 5.2.1 Map Expansion Type-Inference Hotfix
+## Version 5.3.0 Collision Integrity & Interior Combat
 
-### Fixed
-Godot could not infer the type returned by `cover_data.rotated(...)` because
-`cover_data` comes from a heterogeneous Array and is treated as a Variant.
+### Critical collision fix
+Several imported visual buildings previously created collision only inside
+graphical-client functions. The headless authoritative server therefore treated
+those structures as empty space.
 
-The staging-cover loop now explicitly converts and types the value:
+All major collision now builds in a shared server/client pass.
 
-```gdscript
-var cover_position: Vector3 = Vector3(cover_data)
-var offset: Vector3 = cover_position.rotated(
-    Vector3.UP,
-    facing
-)
-```
+### Collision coverage
+- Four imported village townhouses
+- Stone church
+- Rail warehouse
+- Fort bunker
+- Three rail cars
+- Two half-tracks
+- All v5.2 open-entry buildings and tunnels remain collision-enabled
 
-Additional local variables introduced by the v5.2 map expansion are now
-explicitly typed to reduce strict parser and inference errors.
+### Interior-ready shells
+Imported buildings now use wall, floor, roof, lintel, and doorway collision
+pieces rather than one solid invisible box. Doorways remain traversable while
+brick and plaster walls block players and bullets.
+
+### Interior combat
+- Added server-authoritative crate and barrier cover inside eight expanded-map
+  buildings.
+- Cover breaks direct interior sightlines.
+- Collision exists identically on the VPS and local client.
+
+### Validation
+A startup validation pass checks every registered structure proxy and reports
+any structure that contains no CollisionShape3D.
+
+Set `collision_debug_enabled = true` before startup to display translucent green
+collision proxies on graphical clients.
 
 ### Compatibility
-- Build: v5.2.1
+- Build: v5.3.0
 - Protocol: 341
 - Explicit connection-message `+` retained.
-- All v5.2.0 map expansion, staging, sewer, route, and spawn features remain.
 
-Expected status: `Connected: v5.2.1 protocol 341`
+Expected status: `Connected: v5.3.0 protocol 341`

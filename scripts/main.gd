@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.2.1"
+const BUILD_VERSION := "5.3.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -80,6 +80,8 @@ var muzzle_smoke_texture: Texture2D
 var glass_crack_texture: Texture2D
 var breakable_props: Dictionary = {}
 var next_breakable_prop_id := 1
+var structure_collision_roots: Array[Node3D] = []
+var collision_debug_enabled := false
 var pbr_limestone_albedo: Texture2D
 var pbr_limestone_normal: Texture2D
 var pbr_limestone_roughness: Texture2D
@@ -1466,6 +1468,324 @@ func _build_map_expansion_pass() -> void:
 			Color(0.31,0.24,0.15), float(cover_data[1])
 		)
 
+func _collision_box(
+	parent: Node3D,
+	node_name: String,
+	local_position: Vector3,
+	size: Vector3,
+	rotation_y: float = 0.0
+) -> StaticBody3D:
+	var body: StaticBody3D = StaticBody3D.new()
+	body.name = node_name
+	body.position = local_position
+	body.rotation.y = rotation_y
+
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
+	shape.size = size
+	collision.shape = shape
+	body.add_child(collision)
+	parent.add_child(body)
+
+	if collision_debug_enabled and DisplayServer.get_name() != "headless":
+		var visual: MeshInstance3D = MeshInstance3D.new()
+		var mesh: BoxMesh = BoxMesh.new()
+		mesh.size = size
+		visual.mesh = mesh
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.albedo_color = Color(0.1, 0.95, 0.25, 0.18)
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		visual.material_override = material
+		body.add_child(visual)
+
+	return body
+
+func _create_collision_shell(
+	node_name: String,
+	position: Vector3,
+	size: Vector3,
+	rotation_y: float = 0.0,
+	door_width: float = 2.2,
+	door_height: float = 2.8,
+	front_open: bool = true,
+	back_open: bool = false
+) -> Node3D:
+	var root: Node3D = Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+	structure_collision_roots.append(root)
+
+	var thickness := 0.40
+	var half_width: float = size.x * 0.5
+	var half_depth: float = size.z * 0.5
+	var wall_height: float = size.y
+	var side_width: float = maxf(
+		0.25,
+		(size.x - door_width) * 0.5
+	)
+
+	_collision_box(
+		root,
+		"Floor",
+		Vector3(0.0, 0.10, 0.0),
+		Vector3(size.x, 0.20, size.z)
+	)
+	_collision_box(
+		root,
+		"Roof",
+		Vector3(0.0, wall_height + 0.16, 0.0),
+		Vector3(size.x, 0.32, size.z)
+	)
+	_collision_box(
+		root,
+		"LeftWall",
+		Vector3(-half_width, wall_height * 0.5, 0.0),
+		Vector3(thickness, wall_height, size.z)
+	)
+	_collision_box(
+		root,
+		"RightWall",
+		Vector3(half_width, wall_height * 0.5, 0.0),
+		Vector3(thickness, wall_height, size.z)
+	)
+
+	if front_open:
+		_collision_box(
+			root,
+			"FrontLeft",
+			Vector3(
+				-(door_width + side_width) * 0.5,
+				wall_height * 0.5,
+				-half_depth
+			),
+			Vector3(side_width, wall_height, thickness)
+		)
+		_collision_box(
+			root,
+			"FrontRight",
+			Vector3(
+				(door_width + side_width) * 0.5,
+				wall_height * 0.5,
+				-half_depth
+			),
+			Vector3(side_width, wall_height, thickness)
+		)
+		if wall_height > door_height:
+			_collision_box(
+				root,
+				"FrontLintel",
+				Vector3(
+					0.0,
+					door_height + (
+						wall_height - door_height
+					) * 0.5,
+					-half_depth
+				),
+				Vector3(
+					door_width,
+					wall_height - door_height,
+					thickness
+				)
+			)
+	else:
+		_collision_box(
+			root,
+			"FrontWall",
+			Vector3(0.0, wall_height * 0.5, -half_depth),
+			Vector3(size.x, wall_height, thickness)
+		)
+
+	if back_open:
+		_collision_box(
+			root,
+			"BackLeft",
+			Vector3(
+				-(door_width + side_width) * 0.5,
+				wall_height * 0.5,
+				half_depth
+			),
+			Vector3(side_width, wall_height, thickness)
+		)
+		_collision_box(
+			root,
+			"BackRight",
+			Vector3(
+				(door_width + side_width) * 0.5,
+				wall_height * 0.5,
+				half_depth
+			),
+			Vector3(side_width, wall_height, thickness)
+		)
+	else:
+		_collision_box(
+			root,
+			"BackWall",
+			Vector3(0.0, wall_height * 0.5, half_depth),
+			Vector3(size.x, wall_height, thickness)
+		)
+
+	return root
+
+func _create_solid_collision_proxy(
+	node_name: String,
+	position: Vector3,
+	size: Vector3,
+	rotation_y: float = 0.0
+) -> Node3D:
+	var root: Node3D = Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+	structure_collision_roots.append(root)
+	_collision_box(
+		root,
+		"Solid",
+		Vector3(0.0, size.y * 0.5, 0.0),
+		size
+	)
+	return root
+
+func _add_interior_cover(
+	parent_position: Vector3,
+	rotation_y: float,
+	prefix: String
+) -> void:
+	for cover_data in [
+		[Vector3(-2.8,0.55,1.2),Vector3(2.4,1.1,0.65)],
+		[Vector3(2.7,0.55,-1.4),Vector3(2.2,1.1,0.65)],
+		[Vector3(0.0,0.45,3.0),Vector3(1.6,0.9,1.2)]
+	]:
+		var local_position: Vector3 = Vector3(cover_data[0])
+		var world_offset: Vector3 = local_position.rotated(
+			Vector3.UP,
+			rotation_y
+		)
+		_make_gameplay_block(
+			"%s_%s" % [prefix, str(local_position)],
+			parent_position + world_offset,
+			Vector3(cover_data[1]),
+			Color(0.28,0.21,0.13),
+			rotation_y
+		)
+
+func _build_structure_collision_pass() -> void:
+	# Imported village buildings. These must exist on the headless server.
+	for building_data in [
+		["TownhouseA_ServerCollision",Vector3(-51.0,0.0,-27.0),Vector3(11.0,8.2,8.0),deg_to_rad(8.0)],
+		["TownhouseB_ServerCollision",Vector3(-52.0,0.0,-8.0),Vector3(12.0,8.2,8.5),deg_to_rad(-4.0)],
+		["TownhouseC_ServerCollision",Vector3(-50.0,0.0,13.0),Vector3(11.0,8.2,8.0),deg_to_rad(7.0)],
+		["TownhouseD_ServerCollision",Vector3(-49.0,0.0,34.0),Vector3(12.0,8.2,8.5),deg_to_rad(-9.0)]
+	]:
+		_create_collision_shell(
+			str(building_data[0]),
+			Vector3(building_data[1]),
+			Vector3(building_data[2]),
+			float(building_data[3]),
+			2.3,
+			2.9,
+			true,
+			false
+		)
+
+	# Large imported landmarks.
+	_create_collision_shell(
+		"Church_ServerCollision",
+		Vector3(-42.0,0.0,9.0),
+		Vector3(10.0,9.0,18.0),
+		deg_to_rad(7.0),
+		2.2,
+		3.4,
+		true,
+		false
+	)
+	_create_collision_shell(
+		"Warehouse_ServerCollision",
+		Vector3(47.0,0.0,-18.0),
+		Vector3(18.0,7.2,10.0),
+		deg_to_rad(-2.0),
+		5.0,
+		4.4,
+		true,
+		false
+	)
+	_create_collision_shell(
+		"FortBunker_ServerCollision",
+		Vector3(33.0,0.0,28.0),
+		Vector3(8.2,4.7,6.3),
+		PI,
+		1.5,
+		2.3,
+		true,
+		false
+	)
+
+	# Rail cars and vehicle props.
+	for car_position in [
+		Vector3(19.0,0.0,-20.5),
+		Vector3(29.0,0.0,-20.5),
+		Vector3(39.0,0.0,-20.5)
+	]:
+		_create_solid_collision_proxy(
+			"RailCarCollision_%s" % str(car_position),
+			car_position,
+			Vector3(8.2,3.6,3.2),
+			0.0
+		)
+
+	_create_solid_collision_proxy(
+		"HalftrackVillageCollision",
+		Vector3(-25.0,0.0,-8.0),
+		Vector3(6.0,3.0,2.6),
+		deg_to_rad(14.0)
+	)
+	_create_solid_collision_proxy(
+		"HalftrackFortCollision",
+		Vector3(25.0,0.0,14.0),
+		Vector3(5.7,2.9,2.5),
+		deg_to_rad(-32.0)
+	)
+
+	# Interior fighting cover for the new open buildings.
+	for interior_data in [
+		[Vector3(-31.0,0.0,-50.0),0.0,"NorthApartmentAInterior"],
+		[Vector3(-12.0,0.0,-50.0),0.04,"NorthApartmentBInterior"],
+		[Vector3(10.0,0.0,-50.0),-0.03,"NorthWorkshopInterior"],
+		[Vector3(34.0,0.0,-49.0),0.02,"NorthWarehouseInterior"],
+		[Vector3(-34.0,0.0,51.0),PI,"SouthFarmhouseInterior"],
+		[Vector3(-10.0,0.0,51.0),PI,"SouthMachineShopInterior"],
+		[Vector3(18.0,0.0,51.0),PI,"SouthBarracksInterior"],
+		[Vector3(42.0,0.0,50.0),PI,"SouthFortAnnexInterior"]
+	]:
+		_add_interior_cover(
+			Vector3(interior_data[0]),
+			float(interior_data[1]),
+			str(interior_data[2])
+		)
+
+func _validate_structure_collision_layout() -> void:
+	# Lightweight startup validation; logs missing/invalid proxies.
+	for collision_root in structure_collision_roots:
+		if collision_root == null or not is_instance_valid(collision_root):
+			push_error("Invalid structure collision root")
+			continue
+		var shape_count := 0
+		for child in collision_root.get_children():
+			if child is StaticBody3D:
+				for body_child in child.get_children():
+					if body_child is CollisionShape3D:
+						var shape_node := body_child as CollisionShape3D
+						if shape_node.shape != null:
+							shape_count += 1
+		if shape_count == 0:
+			push_error(
+				"Structure collision has no shapes: %s"
+				% collision_root.name
+			)
+
 func _load_optional_scene(path: String) -> PackedScene:
 	if DisplayServer.get_name() == "headless":
 		return null
@@ -1607,22 +1927,6 @@ func _build_asset_based_village_pass() -> void:
 			building_data[5] as Material
 		)
 
-	# Collision volumes for the imported visual buildings.
-	for collision_data in [
-		["VisualTownhouseA_Collision", Vector3(-51.0, 5.0, -27.0), Vector3(11.0, 10.0, 8.0)],
-		["VisualTownhouseB_Collision", Vector3(-52.0, 5.0, -8.0), Vector3(12.0, 10.0, 8.5)],
-		["VisualTownhouseC_Collision", Vector3(-50.0, 5.0, 13.0), Vector3(11.0, 10.0, 8.0)],
-		["VisualTownhouseD_Collision", Vector3(-49.0, 5.0, 34.0), Vector3(12.0, 10.0, 8.5)]
-	]:
-		var body: StaticBody3D = StaticBody3D.new()
-		body.name = str(collision_data[0])
-		body.position = Vector3(collision_data[1])
-		var shape_node := CollisionShape3D.new()
-		var shape: BoxShape3D = BoxShape3D.new()
-		shape.size = Vector3(collision_data[2])
-		shape_node.shape = shape
-		body.add_child(shape_node)
-		add_child(body)
 
 	for rubble_position in [
 		Vector3(-45.0, 0.0, -22.0),
@@ -6066,6 +6370,8 @@ func _build_world() -> void:
 	_build_battlefield_dressing_pass()
 	_build_combat_atmosphere_pass()
 	_build_map_expansion_pass()
+	_build_structure_collision_pass()
+	_validate_structure_collision_layout()
 
 	# Combined-arms battlefield expansion.
 	_make_static_box(
