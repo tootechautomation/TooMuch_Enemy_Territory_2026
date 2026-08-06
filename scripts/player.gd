@@ -888,8 +888,16 @@ func _server_forward_wall_probe(
 	var space_state := get_world_3d().direct_space_state
 	var minimum_fraction := 1.0
 
-	for probe_height in [0.35, 0.95, 1.45]:
-		var origin := global_position + Vector3.UP * probe_height
+	var probe_heights: Array[float] = [
+		0.35,
+		0.95,
+		1.45
+	]
+	for probe_height: float in probe_heights:
+		var origin: Vector3 = (
+			global_position
+			+ Vector3.UP * float(probe_height)
+		)
 		var query := PhysicsRayQueryParameters3D.create(
 			origin,
 			origin + direction * probe_distance
@@ -906,7 +914,9 @@ func _server_forward_wall_probe(
 		var hit_position := Vector3(
 			hit.get("position", origin)
 		)
-		var distance := origin.distance_to(hit_position)
+		var distance: float = origin.distance_to(
+			hit_position
+		)
 		var safe_distance := maxf(0.0, distance - 0.38)
 		minimum_fraction = minf(
 			minimum_fraction,

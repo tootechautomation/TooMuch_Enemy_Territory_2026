@@ -1,41 +1,26 @@
 # Frontline: Objective
 
-## Version 8.2.0 Server Structural Asset Authority & Alley Detail
+## Version 8.2.1 Wall Probe Type Hotfix
 
-### Root collision fix
-The townhouse, ruined-townhouse, church, warehouse, and bunker scenes are now
-loaded before the graphical/headless split in `_ready()`.
+The three-height server wall probe used inferred local variables. Godot could
+not infer the type of `origin` from the loop value.
 
-Previously the client displayed the townhouses while a remote headless server
-had `null` structure scenes. The VPS therefore had no matching wall meshes from
-which to generate collision.
+The probe now uses:
 
-The server and client now instantiate the same structural scenes and generate
-collision directly from those meshes.
+```gdscript
+var probe_heights: Array[float] = [0.35, 0.95, 1.45]
 
-### Missing asset protection
-When a required townhouse model is genuinely unavailable, the server creates a
-thin, doorway-aware perimeter shell. It does not create a broad solid building
-box and does not cover the intended doorway.
+for probe_height: float in probe_heights:
+    var origin: Vector3 = (
+        global_position
+        + Vector3.UP * float(probe_height)
+    )
+```
 
-The console reports both asset availability and any fallback use.
+The hit distance is also explicitly typed as `float`.
 
-### Movement safeguards
-The existing server capsule motion sweep remains. A three-height forward wall
-probe now checks ankle, chest, and head height before movement, reducing
-tunneling through thin or imperfect trimesh walls.
+All v8.2 structural authority, fallback collision, wall sweep, and alley-detail
+changes remain enabled.
 
-### Ongoing visual improvements
-The village alley receives:
-
-- metal drainpipes,
-- overhead utility cables,
-- aged wall posters,
-- masonry wall caps,
-- wooden crates,
-- metal bins.
-
-These are visual-only and do not add invisible collision.
-
-Build: v8.2.0
+Build: v8.2.1
 Protocol: 341
