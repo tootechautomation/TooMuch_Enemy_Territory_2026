@@ -67,10 +67,10 @@ func _build_visuals() -> void:
 
 	health_label = Label3D.new()
 	health_label.position = Vector3(0.0, original_size.y + 0.45, 0.0)
-	health_label.font_size = 20
-	health_label.outline_size = 7
+	health_label.font_size = 14
+	health_label.outline_size = 4
 	health_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	health_label.fixed_size = true
+	health_label.fixed_size = false
 	add_child(health_label)
 
 func server_take_damage(amount: int, attacker_id: int) -> void:
@@ -148,7 +148,7 @@ func _apply_damage_state(force: bool) -> void:
 func _update_label() -> void:
 	if health_label == null:
 		return
-	health_label.text = "COVER %d/%d" % [health, maximum_health]
+	health_label.text = "%d/%d" % [health, maximum_health]
 	health_label.modulate = (
 		Color(0.36, 1.0, 0.42)
 		if health > maximum_health * 0.5

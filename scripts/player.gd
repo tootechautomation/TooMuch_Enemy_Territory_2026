@@ -210,6 +210,9 @@ var et_timer_label: Label
 var et_team_label: Label
 var et_crosshair_ring: Label
 var scoreboard_panel: PanelContainer
+var hud_canvas_layer: CanvasLayer
+var hud_base_resolution := Vector2(1280.0, 720.0)
+var hud_last_viewport_size := Vector2.ZERO
 var radar_frame_texture: Texture2D
 var radar_frame_rect: TextureRect
 var et_compass_label: Label
@@ -3275,6 +3278,31 @@ func _play_confirm_sound(headshot: bool) -> void:
 	confirm_audio.stream = selected_stream
 	confirm_audio.play()
 
+func _apply_resolution_safe_hud() -> void:
+	if hud_canvas_layer == null:
+		return
+
+	var viewport_size: Vector2 = get_viewport_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		return
+	if viewport_size.is_equal_approx(hud_last_viewport_size):
+		return
+
+	hud_last_viewport_size = viewport_size
+	var scale_factor: float = minf(
+		viewport_size.x / hud_base_resolution.x,
+		viewport_size.y / hud_base_resolution.y
+	)
+	scale_factor = clampf(scale_factor, 0.58, 1.55)
+	var rendered_size: Vector2 = hud_base_resolution * scale_factor
+	var offset: Vector2 = (viewport_size - rendered_size) * 0.5
+
+	hud_canvas_layer.transform = Transform2D(
+		Vector2(scale_factor, 0.0),
+		Vector2(0.0, scale_factor),
+		offset
+	)
+
 func _hud_panel_style(
 	background: Color,
 	border: Color,
@@ -3345,8 +3373,8 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 
 	var top_box := _make_et_panel(
 		et_hud_root,
-		Vector2(420, 14),
-		Vector2(440, 82),
+		Vector2(390, 14),
+		Vector2(500, 82),
 		dark_panel,
 		olive_border
 	)
@@ -3359,7 +3387,7 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 	et_objective_label = _make_et_label(
 		top_box,
 		"FOLLOW THE ACTIVE OBJECTIVE",
-		18,
+		16,
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
 	et_objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -3548,9 +3576,13 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 		and not spawn_menu_open
 	)
 	et_hud_root.visible = hud_visible
+	if radar_panel != null:
+		radar_panel.visible = hud_visible
 
 func _build_hud() -> void:
-	var layer := CanvasLayer.new(); add_child(layer)
+	var layer := CanvasLayer.new()
+	hud_canvas_layer = layer
+	add_child(layer)
 	hud = Label.new(); hud.position = Vector2(18, 18); hud.add_theme_font_size_override("font_size", 18); layer.add_child(hud)
 	crosshair = Label.new()
 	crosshair.text = "+"
@@ -3802,15 +3834,16 @@ func _build_hud() -> void:
 
 	radar_panel = Control.new()
 	radar_panel.name = "TacticalRadar"
-	radar_panel.position = Vector2(1038, 18)
-	radar_panel.size = Vector2(220, 220)
+	radar_panel.position = Vector2(1082, 18)
+	radar_panel.size = Vector2(180, 180)
+	radar_panel.clip_contents = true
 	radar_panel.visible = false
 	layer.add_child(radar_panel)
 
 	radar_frame_rect = TextureRect.new()
 	radar_frame_rect.texture = radar_frame_texture
-	radar_frame_rect.position = Vector2(-8, -8)
-	radar_frame_rect.size = Vector2(236, 236)
+	radar_frame_rect.position = Vector2(0, 0)
+	radar_frame_rect.size = Vector2(180, 180)
 	radar_frame_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	radar_frame_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	radar_frame_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -3818,10 +3851,10 @@ func _build_hud() -> void:
 
 	var radar_title := Label.new()
 	radar_title.text = "FIELD COMPASS"
-	radar_title.position = Vector2(48, 4)
-	radar_title.custom_minimum_size = Vector2(125, 22)
+	radar_title.position = Vector2(28, 5)
+	radar_title.custom_minimum_size = Vector2(124, 20)
 	radar_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	radar_title.add_theme_font_size_override("font_size", 13)
+	radar_title.add_theme_font_size_override("font_size", 11)
 	radar_title.add_theme_color_override(
 		"font_color",
 		Color(0.90, 0.86, 0.68)
@@ -3841,10 +3874,10 @@ func _build_hud() -> void:
 	scoreboard.visible = false
 	layer.add_child(scoreboard)
 	feed = Label.new()
-	feed.position = Vector2(815, 265)
+	feed.position = Vector2(805, 205)
 	feed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	feed.custom_minimum_size = Vector2(445, 160)
-	feed.add_theme_font_size_override("font_size", 17)
+	feed.custom_minimum_size = Vector2(455, 150)
+	feed.add_theme_font_size_override("font_size", 15)
 	feed.add_theme_color_override(
 		"font_color",
 		Color(0.95, 0.93, 0.84)
@@ -3888,16 +3921,17 @@ func _build_hud() -> void:
 	scoreboard.add_theme_constant_override("shadow_offset_y", 2)
 
 	_build_et_style_hud(layer)
+	_apply_resolution_safe_hud()
 
 func _radar_position(world_position: Vector3, radius_meters: float = 42.0) -> Vector2:
 	var relative: Vector3 = world_position - global_position
 	relative.y = 0.0
 	var local_x: float = relative.dot(global_transform.basis.x)
 	var local_forward: float = relative.dot(-global_transform.basis.z)
-	var scale_factor: float = 88.0 / radius_meters
+	var scale_factor: float = 68.0 / radius_meters
 	return Vector2(
-		110.0 + clampf(local_x * scale_factor, -88.0, 88.0),
-		110.0 - clampf(local_forward * scale_factor, -88.0, 88.0)
+		90.0 + clampf(local_x * scale_factor, -68.0, 68.0),
+		90.0 - clampf(local_forward * scale_factor, -68.0, 68.0)
 	)
 
 func _get_or_create_radar_actor(actor_id: int) -> Label:
@@ -4173,6 +4207,7 @@ func _update_hud() -> void:
 	if hud == null:
 		return
 
+	_apply_resolution_safe_hud()
 	var now: int = Time.get_ticks_msec()
 	_update_objective_compass()
 

@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "4.7.0"
+const BUILD_VERSION := "4.8.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -470,15 +470,15 @@ func _create_spawn_beam(position: Vector3, team_id: int) -> void:
 	add_child(root)
 	var beam := MeshInstance3D.new()
 	var cylinder := CylinderMesh.new()
-	cylinder.top_radius = 0.16
-	cylinder.bottom_radius = 0.42
-	cylinder.height = 5.5
+	cylinder.top_radius = 0.07
+	cylinder.bottom_radius = 0.18
+	cylinder.height = 2.4
 	beam.mesh = cylinder
-	beam.position.y = 2.75
+	beam.position.y = 1.2
 	var material := StandardMaterial3D.new()
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color(0.12,0.48,1.0,0.25) if team_id == 0 else Color(1.0,0.18,0.10,0.25)
+	material.albedo_color = Color(0.12,0.48,1.0,0.09) if team_id == 0 else Color(1.0,0.18,0.10,0.09)
 	material.emission_enabled = true
 	material.emission = material.albedo_color
 	beam.material_override = material
@@ -493,10 +493,22 @@ func _update_immersive_visuals() -> void:
 		bridge_beacon.light_energy = pulse
 	if bunker_beacon != null:
 		bunker_beacon.light_energy = pulse
+	var local_player: Node3D = null
+	if multiplayer.has_multiplayer_peer():
+		var local_id: int = multiplayer.get_unique_id()
+		if players.has(local_id):
+			local_player = players[local_id] as Node3D
+
 	for index in spawn_beams.size():
 		var root: Node3D = spawn_beams[index] as Node3D
 		if root == null:
 			continue
+		if local_player != null:
+			root.visible = (
+				local_player.global_position.distance_to(
+					root.global_position
+				) > 8.0
+			)
 		root.rotation.y += 0.003
 		var p: float = 1.0 + sin(atmosphere_elapsed * 2.2 + index) * 0.06
 		root.scale = Vector3(p,1.0,p)
@@ -2922,7 +2934,7 @@ func show_squad_ping(
 	marker.font_size = 30
 	marker.outline_size = 10
 	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	marker.fixed_size = true
+	marker.fixed_size = false
 	marker.modulate = Color(0.22, 0.88, 1.0)
 	add_child(marker)
 
@@ -3000,7 +3012,7 @@ func show_artillery_warning(target_position: Vector3, delay_seconds: float) -> v
 	marker.font_size = 34
 	marker.outline_size = 12
 	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	marker.fixed_size = true
+	marker.fixed_size = false
 	marker.modulate = Color(1.0, 0.24, 0.08)
 	add_child(marker)
 	var timer := Timer.new()
@@ -5140,7 +5152,7 @@ func _build_world() -> void:
 		marker.font_size = 26
 		marker.outline_size = 10
 		marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		marker.fixed_size = true
+		marker.fixed_size = false
 		sector_root.add_child(marker)
 		sector_markers[sector_name] = marker
 
@@ -5281,7 +5293,7 @@ func _build_world() -> void:
 	supply_depot_marker.billboard = (
 		BaseMaterial3D.BILLBOARD_ENABLED
 	)
-	supply_depot_marker.fixed_size = true
+	supply_depot_marker.fixed_size = false
 	supply_depot.add_child(supply_depot_marker)
 
 	supply_depot_progress_label = Label3D.new()
@@ -5291,7 +5303,7 @@ func _build_world() -> void:
 	supply_depot_progress_label.billboard = (
 		BaseMaterial3D.BILLBOARD_ENABLED
 	)
-	supply_depot_progress_label.fixed_size = true
+	supply_depot_progress_label.fixed_size = false
 	supply_depot.add_child(supply_depot_progress_label)
 
 	supply_depot_light = OmniLight3D.new()
@@ -5329,7 +5341,7 @@ func _build_world() -> void:
 	command_post_marker.font_size = 34
 	command_post_marker.outline_size = 10
 	command_post_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	command_post_marker.fixed_size = true
+	command_post_marker.fixed_size = false
 	command_post.add_child(command_post_marker)
 
 	command_post_progress_label = Label3D.new()
@@ -5339,7 +5351,7 @@ func _build_world() -> void:
 	command_post_progress_label.billboard = (
 		BaseMaterial3D.BILLBOARD_ENABLED
 	)
-	command_post_progress_label.fixed_size = true
+	command_post_progress_label.fixed_size = false
 	command_post.add_child(command_post_progress_label)
 
 	command_post_beacon = OmniLight3D.new()
@@ -5438,7 +5450,7 @@ func _build_world() -> void:
 	objective_marker.font_size = 42
 	objective_marker.outline_size = 12
 	objective_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	objective_marker.fixed_size = true
+	objective_marker.fixed_size = false
 	objective_marker.no_depth_test = false
 	add_child(objective_marker)
 
@@ -5448,7 +5460,7 @@ func _build_world() -> void:
 	objective_progress_label.font_size = 28
 	objective_progress_label.outline_size = 10
 	objective_progress_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	objective_progress_label.fixed_size = true
+	objective_progress_label.fixed_size = false
 	add_child(objective_progress_label)
 
 	dynamite_model = MeshInstance3D.new()

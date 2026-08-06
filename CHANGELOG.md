@@ -1,11 +1,11 @@
 # Changelog
 
-## 4.7.0
-- Added third-person arm and leg locomotion animation
-- Added walk, sprint, crouch, bob, and gear motion
-- Added original circular compass/radar frame
-- Added live compass heading and objective distance
-- Restyled kill feed and TAB typography
-- Preserved first-person body hiding
-- Preserved protocol 341
-- Preserved explicit connection-string `+`
+## 4.8.0
+- Added resolution-safe HUD scaling and recentering
+- Reduced and clipped circular compass
+- Recalibrated radar marker coordinates
+- Repositioned kill feed
+- Reduced spawn beams and hid them near the player
+- Converted world labels away from fixed screen size
+- Reduced cover-label clutter
+- Preserved protocol 341 and connection-string `+`
