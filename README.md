@@ -1,17 +1,12 @@
 # Frontline: Objective
 
-## Version 8.7.0 Soldier Asset-Fidelity Pass
+## Version 8.8.0 — Battlefield Environmental Fidelity
 
-The bundled fallback soldiers now have cleaner human silhouettes, rounded
-boots and packs, team-specific helmet shapes, visible webbing, shoulder straps,
-breast pockets, buttons, belt hardware, facial ears, and more detailed rifles
-with handguards, bolts, trigger guards, and canvas slings.
+The battlefield now complements the v8.7 soldier-fidelity and v8.6 Forward+ PBR upgrades with layered period architecture and denser environmental storytelling. Village streets gain recessed doors and windows, stone foundations, iron balconies, street lamps, chimneys, deterministic rubble clusters, puddles, and repaired road seams.
 
-Uniform textures are now limited to cloth instead of incorrectly covering
-faces, leather, wood, and weapon metal. Metal parts receive separate reflective
-material response. Battlefield ambience is louder and loops continuously.
-All v8.6 Forward+ PBR improvements remain enabled. Licensed external rigged
-models still override these fallbacks automatically when installed.
+The new visual geometry is decorative and does not alter established objective routes or structural collision. Client-only detail is skipped on headless servers. External licensed models continue to override bundled fallback assets automatically.
 
-Build: v8.7.0
+All v8.7 soldier improvements, v8.6 Forward+ PBR rendering, v8.5 spatial surface audio, and v8.4 persistent combat effects remain included.
+
+Build: v8.8.0
 Protocol: 341

@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.8.0
+- Added layered period facades with recessed doors, windows, stone bases, lintels, and sills
+- Added iron balconies, warm street lamps, chimneys, and stronger roof silhouettes
+- Added deterministic battle-damage rubble clusters around village and rail approaches
+- Added reflective puddles and repaired road seams to break up broad flat surfaces
+- Kept all new dressing non-blocking and disabled it on headless servers
+- Preserved v8.7 soldier fidelity, Forward+ PBR, spatial audio, combat effects, and protocol 341
+
+
 ## 8.7.0
 - Improved bundled Allied and Axis fallback soldier silhouettes
 - Added team-specific helmet geometry, facial ears, and neck protection
