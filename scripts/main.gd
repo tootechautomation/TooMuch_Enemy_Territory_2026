@@ -39,6 +39,9 @@ const CombatEffectsManagerScript = preload(
 const CinematicEnvironmentPassScript = preload(
 	"res://scripts/visuals/cinematic_environment_pass.gd"
 )
+const ObjectiveSetpieceFidelityScript = preload(
+	"res://scripts/visuals/objective_setpiece_fidelity.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -72,7 +75,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.11.0"
+const BUILD_VERSION := "8.12.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -297,6 +300,7 @@ var urban_realism_pass: Node3D
 var alley_detail_pass: Node3D
 var combat_effects_manager: Node3D
 var cinematic_environment_pass: Node3D
+var objective_setpiece_fidelity: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -8909,7 +8913,18 @@ func _build_world() -> void:
 	dynamite_light.light_energy = 2.3
 	dynamite_light.visible = false
 	add_child(dynamite_light)
+	_build_objective_setpiece_fidelity()
 	call_deferred("_run_structure_collision_audit")
+
+func _build_objective_setpiece_fidelity() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if objective_setpiece_fidelity != null:
+		return
+	objective_setpiece_fidelity = ObjectiveSetpieceFidelityScript.new()
+	objective_setpiece_fidelity.name = "ObjectiveSetpieceFidelity"
+	add_child(objective_setpiece_fidelity)
+	objective_setpiece_fidelity.call("build", self)
 
 func _make_spawn_zone(
 	zone_name: String,

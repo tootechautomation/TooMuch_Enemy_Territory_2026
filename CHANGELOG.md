@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.12.0
+- Added ten visible bridge-construction stages tied to engineer progress
+- Added a detailed command-post field table, radio, controls, antenna, and map board
+- Added a canvas supply canopy, detailed crates, poles, bands, and artillery stores
+- Added a wired dynamite bundle, bunker hardware, and state-colored sector flags
+- Kept all additions client-side and non-colliding
+- Preserved objective logic, interaction radii, navigation, networking, previous milestones, and protocol 341
+
+
 ## 8.11.0
 - Added an original synchronized calm, tension, and assault battlefield score
 - Added smooth objective-driven intensity crossfades
