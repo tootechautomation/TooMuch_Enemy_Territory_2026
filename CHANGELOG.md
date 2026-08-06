@@ -1,11 +1,10 @@
 # Changelog
 
-## 5.4.0
-- Added explicit player/world collision layers and masks
-- Replaced trapping staging shells with open courtyards
-- Moved team spawn candidates away from geometry
-- Enlarged spawn validation capsule and margin
-- Added bot waypoint routing
-- Added bot jump cooldown and lateral obstacle recovery
-- Added validated server-side stuck recovery
+## 5.5.0
+- Replaced oversized townhouse shells with aligned wall segments
+- Added doorway gaps and lintels matching visible façades
+- Added collision to western gray/plaster route walls
+- Reduced landmark collision footprints
+- Added collision-extent audit warnings
+- Improved bot entrance waypoints and low-obstacle detection
 - Preserved protocol 341 and explicit connection-string `+`

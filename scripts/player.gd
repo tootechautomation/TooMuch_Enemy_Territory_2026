@@ -103,6 +103,7 @@ var bot_stuck_accumulator := 0.0
 var bot_last_position := Vector3.ZERO
 var bot_strafe_direction := 1.0
 var bot_next_jump_ms := 0
+var bot_entrance_clearance_until_ms := 0
 var bot_last_recovery_ms := 0
 var bot_waypoint_index := 0
 var bot_route: Array[Vector3] = []
@@ -2183,8 +2184,10 @@ func _bot_initialize_route() -> void:
 	if team == 0:
 		bot_route = [
 			Vector3(-48.0, 1.0, -10.0),
+			Vector3(-42.0, 1.0, -15.0),
 			Vector3(-35.0, 1.0, -22.0),
-			Vector3(-20.0, 1.0, -12.0),
+			Vector3(-24.0, 1.0, -15.0),
+			Vector3(-14.0, 1.0, -8.0),
 			Vector3(-6.0, 1.0, 0.0),
 			Vector3(10.0, 1.0, 8.0),
 			Vector3(28.0, 1.0, 20.0)
@@ -2192,8 +2195,10 @@ func _bot_initialize_route() -> void:
 	else:
 		bot_route = [
 			Vector3(48.0, 1.0, 10.0),
+			Vector3(42.0, 1.0, 16.0),
 			Vector3(36.0, 1.0, 22.0),
-			Vector3(24.0, 1.0, 10.0),
+			Vector3(28.0, 1.0, 14.0),
+			Vector3(20.0, 1.0, 8.0),
 			Vector3(10.0, 1.0, 2.0),
 			Vector3(-6.0, 1.0, -4.0),
 			Vector3(-22.0, 1.0, -12.0)
@@ -2207,7 +2212,7 @@ func _bot_route_goal(fallback_goal: Vector3) -> Vector3:
 		return fallback_goal
 
 	var waypoint: Vector3 = bot_route[bot_waypoint_index]
-	if global_position.distance_to(waypoint) < 2.2:
+	if global_position.distance_to(waypoint) < 3.0:
 		bot_waypoint_index = (
 			bot_waypoint_index + 1
 		) % bot_route.size()
@@ -2283,7 +2288,7 @@ func _bot_obstacle_ahead(direction: Vector3) -> bool:
 	)
 
 	var low_from: Vector3 = global_position + Vector3.UP * 0.35
-	var low_to: Vector3 = low_from + direction * 0.9
+	var low_to: Vector3 = low_from + direction * 1.15
 	var low_query := PhysicsRayQueryParameters3D.create(
 		low_from,
 		low_to
@@ -2298,7 +2303,7 @@ func _bot_obstacle_ahead(direction: Vector3) -> bool:
 		return false
 
 	var high_from: Vector3 = global_position + Vector3.UP * 1.25
-	var high_to: Vector3 = high_from + direction * 0.9
+	var high_to: Vector3 = high_from + direction * 1.15
 	var high_query := PhysicsRayQueryParameters3D.create(
 		high_from,
 		high_to
@@ -2311,7 +2316,14 @@ func _bot_obstacle_ahead(direction: Vector3) -> bool:
 		high_query
 	)
 
-	return high_hit.is_empty()
+		if not high_hit.is_empty():
+		return false
+
+	var low_position: Vector3 = Vector3(
+		low_hit.get("position", low_to)
+	)
+	var obstacle_height: float = low_position.y - global_position.y
+	return obstacle_height <= 0.75
 
 func _bot_update_stuck_state(delta: float) -> void:
 	var moved_distance: float = global_position.distance_to(
@@ -3722,11 +3734,16 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 	else:
 		et_objective_arrow_label.text = "◀"
 
-	et_route_hint_label.text = (
+	if Time.get_ticks_msec() < collision_debug_notice_until_ms:
+		et_route_hint_label.text = (
+			"COLLISION AUDIT ACTIVE AFTER RESTART"
+		)
+	else:
+		et_route_hint_label.text = (
 		"NORTH STREET · CENTRAL ROAD · SOUTH FLANK · SEWER"
 		if int(main.get("objective_stage")) == 0
-		else "RAIL YARD · FORT APPROACH · SOUTH ANNEX"
-	)
+			else "RAIL YARD · FORT APPROACH · SOUTH ANNEX"
+		)
 
 	et_team_label.text = "%s · %s" % [
 		team_name,

@@ -1,41 +1,43 @@
 # Frontline: Objective
 
-## Version 5.4.0 Navigation & Collision Reliability
+## Version 5.5.0 Geometry Alignment & Interior Route Polish
 
-### Physics contract
-- Players now use collision layer 2 and collision mask 1.
-- All world structures explicitly use collision layer 1 and mask 1.
-- Bot obstacle rays explicitly query world layer 1.
-- Spawn validation uses an oversized capsule and larger safety margin.
+### Townhouse collision correction
+The v5.3/v5.4 townhouse proxies used broad full-building shells. Those shells
+were larger than the rendered townhouse assets, causing invisible walls in
+front of red brick façades while still missing portions of plaster walls.
 
-### Spawn fix
-The enclosed staging buildings introduced in v5.2 overlapped valid spawn
-capsules and trapped players and bots inside walls.
+They have been replaced with model-specific aligned collision:
 
-They were replaced with open deployment courtyards:
-- Solid floor
-- Rear protective wall only
-- Three low cover pieces
-- Open front and side exits
-- Spawn positions moved farther outward and away from geometry
+- Thin front-façade segments
+- Door-sized openings
+- Door lintels
+- Inset left and right side walls
+- Rear wall aligned to the rendered depth
+- No broad roof or floor proxy around imported façades
 
-### Bot navigation
-- Added team-specific waypoint routes through the expanded map.
-- Bots use waypoints until reaching the active objective area.
-- Added a 1.8-second jump cooldown.
-- Bots jump only when the low ray is blocked and the high ray is clear.
-- Stuck bots strafe and rotate rather than repeatedly jumping.
-- Severely stuck bots request a validated server recovery position.
-- Recovery has a five-second cooldown.
+### Gray wall correction
+Added authoritative collision for the western plaster wall and adjoining corner
+wall visible near the attacker staging route.
 
-### Collision
-- All v5.3 structure collision remains.
-- Wall, doorway, church, warehouse, bunker, rail-car, vehicle, tunnel, and
-  expanded-building collision remains server authoritative.
+### Landmark adjustment
+Church, warehouse, and bunker collision dimensions were reduced slightly to
+better match their visible footprints.
+
+### Collision audit
+Startup validation now calculates each registered proxy's horizontal extent and
+warns about suspiciously oversized collision roots.
+
+### Bot route polish
+- Added centered approach waypoints near village entrances.
+- Increased waypoint arrival radius to reduce doorway oscillation.
+- Bot obstacle rays extend slightly farther.
+- Bots only jump obstacles whose measured hit height is below 0.75 meters.
+- Tall walls trigger route recovery instead of jump attempts.
 
 ### Compatibility
-- Build: v5.4.0
+- Build: v5.5.0
 - Protocol: 341
 - Explicit connection-message `+` retained.
 
-Expected status: `Connected: v5.4.0 protocol 341`
+Expected status: `Connected: v5.5.0 protocol 341`

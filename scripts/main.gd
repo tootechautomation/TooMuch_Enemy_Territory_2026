@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.4.0"
+const BUILD_VERSION := "5.5.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -1533,6 +1533,142 @@ func _collision_box(
 
 	return body
 
+func _create_aligned_facade_collision(
+	node_name: String,
+	position: Vector3,
+	rotation_y: float,
+	width: float,
+	depth: float,
+	height: float,
+	front_offset: float,
+	door_center_x: float = 0.0,
+	door_width: float = 2.0,
+	door_height: float = 2.8,
+	has_door: bool = true,
+	back_wall: bool = true
+) -> Node3D:
+	var root: Node3D = Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+	structure_collision_roots.append(root)
+
+	var wall_thickness := 0.24
+	var half_width: float = width * 0.5
+	var half_depth: float = depth * 0.5
+	var front_z: float = front_offset
+
+	# The façade is segmented around the actual visible doorway rather than
+	# represented by a broad shell extending beyond the rendered model.
+	if has_door:
+		var left_width: float = maxf(
+			0.20,
+			door_center_x - door_width * 0.5 + half_width
+		)
+		var right_width: float = maxf(
+			0.20,
+			half_width - door_center_x - door_width * 0.5
+		)
+
+		if left_width > 0.22:
+			_collision_box(
+				root,
+				"FacadeLeft",
+				Vector3(
+					-half_width + left_width * 0.5,
+					height * 0.5,
+					front_z
+				),
+				Vector3(left_width, height, wall_thickness)
+			)
+
+		if right_width > 0.22:
+			_collision_box(
+				root,
+				"FacadeRight",
+				Vector3(
+					half_width - right_width * 0.5,
+					height * 0.5,
+					front_z
+				),
+				Vector3(right_width, height, wall_thickness)
+			)
+
+		if height > door_height:
+			_collision_box(
+				root,
+				"FacadeLintel",
+				Vector3(
+					door_center_x,
+					door_height + (height - door_height) * 0.5,
+					front_z
+				),
+				Vector3(
+					door_width,
+					height - door_height,
+					wall_thickness
+				)
+			)
+	else:
+		_collision_box(
+			root,
+			"Facade",
+			Vector3(0.0, height * 0.5, front_z),
+			Vector3(width, height, wall_thickness)
+		)
+
+	# Thin side walls follow the rendered footprint closely.
+	_collision_box(
+		root,
+		"LeftSide",
+		Vector3(
+			-half_width,
+			height * 0.5,
+			front_z + depth * 0.5
+		),
+		Vector3(wall_thickness, height, depth)
+	)
+	_collision_box(
+		root,
+		"RightSide",
+		Vector3(
+			half_width,
+			height * 0.5,
+			front_z + depth * 0.5
+		),
+		Vector3(wall_thickness, height, depth)
+	)
+
+	if back_wall:
+		_collision_box(
+			root,
+			"RearWall",
+			Vector3(
+				0.0,
+				height * 0.5,
+				front_z + depth
+			),
+			Vector3(width, height, wall_thickness)
+		)
+
+	return root
+
+func _create_wall_segment_collision(
+	node_name: String,
+	position: Vector3,
+	size: Vector3,
+	rotation_y: float = 0.0
+) -> StaticBody3D:
+	var body: StaticBody3D = _make_gameplay_block(
+		node_name,
+		position,
+		size,
+		Color(0.42, 0.40, 0.35),
+		rotation_y
+	)
+	return body
+
 func _create_collision_shell(
 	node_name: String,
 	position: Vector3,
@@ -1705,29 +1841,85 @@ func _add_interior_cover(
 		)
 
 func _build_structure_collision_pass() -> void:
-	# Imported village buildings. These must exist on the headless server.
-	for building_data in [
-		["TownhouseA_ServerCollision",Vector3(-51.0,0.0,-27.0),Vector3(11.0,8.2,8.0),deg_to_rad(8.0)],
-		["TownhouseB_ServerCollision",Vector3(-52.0,0.0,-8.0),Vector3(12.0,8.2,8.5),deg_to_rad(-4.0)],
-		["TownhouseC_ServerCollision",Vector3(-50.0,0.0,13.0),Vector3(11.0,8.2,8.0),deg_to_rad(7.0)],
-		["TownhouseD_ServerCollision",Vector3(-49.0,0.0,34.0),Vector3(12.0,8.2,8.5),deg_to_rad(-9.0)]
-	]:
-		_create_collision_shell(
-			str(building_data[0]),
-			Vector3(building_data[1]),
-			Vector3(building_data[2]),
-			float(building_data[3]),
-			2.3,
-			2.9,
-			true,
-			false
-		)
+	# Imported village façades are aligned to the visible asset footprints.
+	# Measurements are intentionally inset from the old broad proxy shells.
+	_create_aligned_facade_collision(
+		"TownhouseA_AlignedCollision",
+		Vector3(-51.0, 0.0, -27.0),
+		deg_to_rad(8.0),
+		8.4,
+		6.4,
+		7.7,
+		-3.20,
+		0.0,
+		2.2,
+		2.9,
+		false,
+		true
+	)
+	_create_aligned_facade_collision(
+		"TownhouseB_AlignedCollision",
+		Vector3(-52.0, 0.0, -8.0),
+		deg_to_rad(-4.0),
+		8.8,
+		6.7,
+		7.8,
+		-3.56,
+		0.0,
+		1.85,
+		2.65,
+		true,
+		true
+	)
+	_create_aligned_facade_collision(
+		"TownhouseC_AlignedCollision",
+		Vector3(-50.0, 0.0, 13.0),
+		deg_to_rad(7.0),
+		8.4,
+		6.3,
+		7.7,
+		-3.18,
+		0.0,
+		2.2,
+		2.9,
+		false,
+		true
+	)
+	_create_aligned_facade_collision(
+		"TownhouseD_AlignedCollision",
+		Vector3(-49.0, 0.0, 34.0),
+		deg_to_rad(-9.0),
+		8.7,
+		6.8,
+		7.9,
+		-3.84,
+		0.0,
+		1.85,
+		2.65,
+		true,
+		true
+	)
+
+	# Gray/plaster route walls visible near the western staging and village.
+	# These were graphical meshes without matching authoritative bodies.
+	_create_wall_segment_collision(
+		"WestPlasterWallCollision",
+		Vector3(-45.2, 2.4, -13.7),
+		Vector3(0.28, 4.8, 11.0),
+		deg_to_rad(2.0)
+	)
+	_create_wall_segment_collision(
+		"WestPlasterCornerCollision",
+		Vector3(-40.6, 2.4, -18.8),
+		Vector3(9.4, 4.8, 0.28),
+		deg_to_rad(2.0)
+	)
 
 	# Large imported landmarks.
 	_create_collision_shell(
 		"Church_ServerCollision",
 		Vector3(-42.0,0.0,9.0),
-		Vector3(10.0,9.0,18.0),
+		Vector3(9.2,8.8,17.2),
 		deg_to_rad(7.0),
 		2.2,
 		3.4,
@@ -1737,7 +1929,7 @@ func _build_structure_collision_pass() -> void:
 	_create_collision_shell(
 		"Warehouse_ServerCollision",
 		Vector3(47.0,0.0,-18.0),
-		Vector3(18.0,7.2,10.0),
+		Vector3(17.2,7.0,9.2),
 		deg_to_rad(-2.0),
 		5.0,
 		4.4,
@@ -1747,7 +1939,7 @@ func _build_structure_collision_pass() -> void:
 	_create_collision_shell(
 		"FortBunker_ServerCollision",
 		Vector3(33.0,0.0,28.0),
-		Vector3(8.2,4.7,6.3),
+		Vector3(7.7,4.5,5.9),
 		PI,
 		1.5,
 		2.3,
@@ -1798,6 +1990,30 @@ func _build_structure_collision_pass() -> void:
 			str(interior_data[2])
 		)
 
+func _collision_root_horizontal_extent(
+	root: Node3D
+) -> Vector2:
+	var maximum := Vector2.ZERO
+	for child in root.get_children():
+		if not child is StaticBody3D:
+			continue
+		var body := child as StaticBody3D
+		for body_child in body.get_children():
+			if not body_child is CollisionShape3D:
+				continue
+			var collision := body_child as CollisionShape3D
+			if collision.shape is BoxShape3D:
+				var box := collision.shape as BoxShape3D
+				maximum.x = maxf(
+					maximum.x,
+					absf(body.position.x) + box.size.x * 0.5
+				)
+				maximum.y = maxf(
+					maximum.y,
+					absf(body.position.z) + box.size.z * 0.5
+				)
+	return maximum
+
 func _validate_structure_collision_layout() -> void:
 	# Lightweight startup validation; logs missing/invalid proxies.
 	for collision_root in structure_collision_roots:
@@ -1816,6 +2032,16 @@ func _validate_structure_collision_layout() -> void:
 			push_error(
 				"Structure collision has no shapes: %s"
 				% collision_root.name
+			)
+			continue
+
+		var horizontal_extent: Vector2 = (
+			_collision_root_horizontal_extent(collision_root)
+		)
+		if horizontal_extent.x > 12.0 or horizontal_extent.y > 14.0:
+			push_warning(
+				"Large collision proxy requires review: %s extent=%s"
+				% [collision_root.name, horizontal_extent]
 			)
 
 func _load_optional_scene(path: String) -> PackedScene:
