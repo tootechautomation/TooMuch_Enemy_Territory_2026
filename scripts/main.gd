@@ -51,6 +51,9 @@ const PeriodInterfaceFidelityScript = preload(
 const VisualQualityManagerScript = preload(
 	"res://scripts/visuals/visual_quality_manager.gd"
 )
+const BattlefieldSurfaceFidelityScript = preload(
+	"res://scripts/visuals/battlefield_surface_fidelity.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -84,7 +87,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.17.1"
+const BUILD_VERSION := "8.18.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -313,6 +316,7 @@ var objective_setpiece_fidelity: Node3D
 var dynamic_weather_system: Node3D
 var period_interface_fidelity: Node
 var visual_quality_manager: Node
+var battlefield_surface_fidelity: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -962,6 +966,16 @@ func _apply_wwii_material_library() -> void:
 			wwii_material_library.call("apply_to_world", self)
 		)
 		print("WWII material assignment: %s" % report)
+
+func _build_battlefield_surface_fidelity() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_surface_fidelity != null:
+		return
+	battlefield_surface_fidelity = BattlefieldSurfaceFidelityScript.new()
+	battlefield_surface_fidelity.name = "BattlefieldSurfaceFidelity"
+	add_child(battlefield_surface_fidelity)
+	battlefield_surface_fidelity.call("build")
 
 func _build_battlefield_atmosphere() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -8632,6 +8646,7 @@ func _build_world() -> void:
 	_build_cinematic_environment_pass()
 	_ensure_combat_effects_manager()
 	_apply_wwii_material_library()
+	_build_battlefield_surface_fidelity()
 	_build_battlefield_atmosphere()
 	_build_dynamic_weather_system()
 	_build_battlefield_dressing_pass()

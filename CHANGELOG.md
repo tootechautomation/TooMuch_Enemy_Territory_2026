@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.18.0
+- Added detailed railway sleepers, spikes, ballast beds, rail heads, and rusted rail webs
+- Added layered vehicle ruts and period road-repair seams to break up flat road surfaces
+- Added recessed village glazing, dimensional mullions, door hardware, and aged glass response
+- Added fort embrasure lips, armored shutters, fasteners, and layered material response
+- Added dimensional period wayfinding and rounded mixed-material rubble clusters
+- Added distance fading and headless exclusions for the new client-side dressing
+- Preserved collision, navigation, imported-asset overrides, gameplay, networking, and protocol 341
+
 ## 8.17.1
 - Renamed reserved `class_name` locals and parameters in the player and team-identity HUD scripts
 - Fixed the associated Godot parser failures without changing team readability behavior
