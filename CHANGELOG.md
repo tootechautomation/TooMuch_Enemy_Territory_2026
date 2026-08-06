@@ -1,9 +1,10 @@
 # Changelog
 
-## 5.5.2
-- Added authoritative collision under expanded terrain and roads
-- Added collision under outer staging and flank routes
-- Added playable perimeter blockers
-- Added server-side fall recovery below y=-12
-- Preserved sewer access below the main terrain
+## 5.6.0
+- Added exact trimesh collision generated from imported GLB structures
+- Preloaded collision assets on headless server
+- Removed approximate townhouse and landmark proxy shells
+- Added collision-generation startup diagnostics
+- Added surface-aware footstep pitch and volume
+- Preserved ground bounds and fall recovery
 - Preserved protocol 341 and explicit connection-string `+`

@@ -178,6 +178,8 @@ var reload_audio: AudioStreamPlayer
 var footstep_audio: AudioStreamPlayer3D
 var confirm_audio: AudioStreamPlayer
 var footstep_accumulator := 0.0
+var current_surface_name := "ground"
+var landing_was_airborne := false
 var radar_panel: Control
 var radar_objective: Label
 var radar_actor_markers: Dictionary = {}
@@ -3431,6 +3433,80 @@ func _play_dry_click() -> void:
 	weapon_audio.pitch_scale = 1.0
 	weapon_audio.play()
 
+func _detect_surface_name() -> String:
+	var space_state := get_world_3d().direct_space_state
+	var from := global_position + Vector3.UP * 0.25
+	var to := global_position + Vector3.DOWN * 1.35
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.exclude = [self]
+	query.collision_mask = 1
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	var result: Dictionary = space_state.intersect_ray(query)
+	if result.is_empty():
+		return "air"
+
+	var collider: Object = result.get("collider")
+	var collider_name := ""
+	if collider != null:
+		collider_name = str(collider.get("name")).to_lower()
+
+	if (
+		"metal" in collider_name
+		or "rail" in collider_name
+		or "halftrack" in collider_name
+	):
+		return "metal"
+	if (
+		"wood" in collider_name
+		or "crate" in collider_name
+		or "stagingcover" in collider_name
+		or "barricade" in collider_name
+	):
+		return "wood"
+	if (
+		"brick" in collider_name
+		or "townhouse" in collider_name
+		or "church" in collider_name
+		or "warehouse" in collider_name
+		or "concrete" in collider_name
+		or "bunker" in collider_name
+	):
+		return "stone"
+	if (
+		"mud" in collider_name
+		or "ground" in collider_name
+		or "crater" in collider_name
+	):
+		return "ground"
+	return "gravel"
+
+func _surface_footstep_pitch(surface_name: String) -> float:
+	match surface_name:
+		"metal":
+			return randf_range(1.12, 1.24)
+		"wood":
+			return randf_range(0.86, 0.96)
+		"stone":
+			return randf_range(1.00, 1.10)
+		"gravel":
+			return randf_range(0.94, 1.06)
+		_:
+			return randf_range(0.88, 1.00)
+
+func _surface_footstep_volume(surface_name: String) -> float:
+	match surface_name:
+		"metal":
+			return 1.5
+		"wood":
+			return 0.5
+		"stone":
+			return 1.0
+		"gravel":
+			return 0.8
+		_:
+			return 0.0
+
 func _update_footstep_audio(delta: float) -> void:
 	if footstep_audio == null or not alive or downed or not is_on_floor():
 		footstep_accumulator = 0.0
@@ -3438,12 +3514,19 @@ func _update_footstep_audio(delta: float) -> void:
 	var speed: float = Vector2(velocity.x, velocity.z).length()
 	if speed < 1.0:
 		footstep_accumulator = 0.0
+		footstep_audio.volume_db = 0.0
 		return
 	var interval: float = 0.29 if speed >= 8.0 else (0.40 if speed >= 5.0 else 0.52)
 	footstep_accumulator += delta
 	if footstep_accumulator >= interval:
 		footstep_accumulator = 0.0
-		footstep_audio.pitch_scale = randf_range(0.92, 1.08)
+		current_surface_name = _detect_surface_name()
+		footstep_audio.pitch_scale = _surface_footstep_pitch(
+			current_surface_name
+		)
+		footstep_audio.volume_db = _surface_footstep_volume(
+			current_surface_name
+		)
 		footstep_audio.play()
 
 func _play_confirm_sound(headshot: bool) -> void:

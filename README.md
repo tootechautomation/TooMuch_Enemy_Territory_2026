@@ -1,37 +1,51 @@
 # Frontline: Objective
 
-## Version 5.5.2 Ground Bounds & Fall Recovery
+## Version 5.6.0 Exact Structure Collision & Surface Feedback
 
-### Ground collision fix
-The expanded gray roads and terrain overlays were graphical surfaces without
-matching authoritative collision beyond the original map footprint.
+### Exact imported collision
+The red-brick and plaster buildings no longer use hand-measured collision
+proxies. Collision is generated directly from the imported GLB mesh geometry.
 
-This update adds shared client/server collision under:
-- Central battlefield
-- Northern urban lane
-- Southern flank
-- Attacker and defender staging areas
-- Western and eastern outer approaches
-- Expanded corner routes
+Exact mesh collision now covers:
+- Two intact townhouses
+- Two ruined townhouses
+- Stone church
+- Rail warehouse
+- Concrete bunker
 
-### Playable boundary
-Added thin authoritative perimeter walls at the true playable limits. Players
-can reach visible walls and roads but cannot continue into unsupported scenery.
+The same PackedScene resources are preloaded on graphical clients and the
+headless VPS. Each MeshInstance3D generates trimesh collision, and every
+generated StaticBody3D is assigned to world collision layer 1.
 
-### Out-of-bounds recovery
-Players and bots falling below y=-12 are moved to the nearest validated spawn
-position. The sewer remains safe because its floor is around y=-3.3.
+### Removed approximate proxies
+Removed the previous townhouse, church, warehouse, and bunker shell collision.
+The remaining authored collision is limited to:
+- Gray/plaster route-wall segments
+- Rail cars and half-tracks
+- Interior cover
+- Expanded roads, terrain, and perimeter
+- Sewer and modular map buildings
 
-Recovery:
-- Runs only on the authoritative server
-- Has a 2.5-second cooldown
-- Clears velocity
-- Resets bot routing after recovery
+### Startup verification
+The server prints:
+`Exact structure collision ready: <name> generated=<n> bodies=<n>`
+
+Any structure that fails to generate collision reports an error.
+
+### Surface feedback
+Footstep audio now changes pitch and volume according to detected surfaces:
+- Metal
+- Wood
+- Stone/brick/concrete
+- Gravel
+- Ground/mud
+
+This uses existing project audio and does not add external copyrighted sounds.
 
 ### Compatibility
-- Build: v5.5.2
+- Build: v5.6.0
 - Protocol: 341
 - Explicit connection-message `+` retained.
-- All v5.5.1 geometry-alignment and parser fixes remain included.
+- All v5.5.2 ground collision and fall recovery remain.
 
-Expected status: `Connected: v5.5.2 protocol 341`
+Expected status: `Connected: v5.6.0 protocol 341`
