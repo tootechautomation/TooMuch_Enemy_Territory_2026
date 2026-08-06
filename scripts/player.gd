@@ -419,16 +419,37 @@ func apply_local_profile_settings(settings: Dictionary) -> void:
 		0.70,
 		1.40
 	)
-	selected_team = clampi(
-		int(settings.get("preferred_team", selected_team)),
-		0,
-		1
+	var team_preference := int(
+		settings.get("preferred_team", selected_team)
 	)
-	selected_class = clampi(
-		int(settings.get("preferred_class", selected_class)),
-		0,
-		4
+	var class_preference := int(
+		settings.get("preferred_class", selected_class)
 	)
+	var main_node: Node = get_parent()
+	if main_node != null:
+		var address_control = main_node.get("connection_address")
+		var port_control = main_node.get("connection_port")
+		if address_control != null and port_control != null:
+			var preference_key := "%s:%d" % [
+				str(address_control.text),
+				int(port_control.value)
+			]
+			var preferences: Dictionary = Dictionary(
+				settings.get("server_preferences", {})
+			)
+			if preferences.has(preference_key):
+				var server_data: Dictionary = Dictionary(
+					preferences[preference_key]
+				)
+				team_preference = int(
+					server_data.get("team", team_preference)
+				)
+				class_preference = int(
+					server_data.get("class", class_preference)
+				)
+
+	selected_team = clampi(team_preference, 0, 1)
+	selected_class = clampi(class_preference, 0, 4)
 
 	var camera: Camera3D = get_node_or_null(
 		"Head/Camera3D"

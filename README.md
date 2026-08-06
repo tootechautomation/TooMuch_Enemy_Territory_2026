@@ -1,34 +1,18 @@
 # Frontline: Objective
 
-## Version 7.4.1 Player Profile Parser Hotfix
+## Version 7.5.0 Player Identity, Keybinds & Server Profiles
 
-The v7.4.0 profile panel used `class_name` as a loop variable. `class_name` is
-a reserved GDScript keyword, so `main.gd` failed to parse.
+- Persistent keybindings with in-game key capture
+- Recent and favorite server selection
+- Per-server preferred team and class
+- Persistent non-secret player identity ID
+- Profile export and import
+- Existing custom name, FOV, HUD and audio preferences retained
 
-Fixed implementation:
+The profile is stored at `user://frontline_profile.cfg`.
 
-```gdscript
-var profile_class_names: Array[String] = [
-    "Soldier",
-    "Medic",
-    "Engineer",
-    "Field Ops",
-    "Scout"
-]
-for profile_class_name in profile_class_names:
-    profile_class_option.add_item(profile_class_name)
-```
+The player ID helps a server recognize a returning installation. It is not
+secure authentication and must not be treated as a password.
 
-All v7.4 profile features remain:
-- Custom persistent player name
-- Cross-server local profile
-- Preferred team and class
-- Mouse sensitivity
-- Field of view
-- HUD scale
-- Audio settings
-- Last server address and port
-- F8 profile/settings panel
-
-Build: v7.4.1
+Build: v7.5.0
 Protocol: 341

@@ -3,6 +3,9 @@ extends Node
 const PlayerProfileScript = preload(
 	"res://scripts/profile/player_profile.gd"
 )
+const InputBindingManagerScript = preload(
+	"res://scripts/profile/input_binding_manager.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -36,7 +39,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.4.1"
+const BUILD_VERSION := "7.5.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -135,6 +138,7 @@ var squad_order_revision := 0
 var squad_claim_reset_ms := 0
 var player_teams: Dictionary = {}
 var player_names: Dictionary = {}
+var player_identity_ids: Dictionary = {}
 var supply_packs: Dictionary = {}
 var grenades: Dictionary = {}
 var next_grenade_id := 1
@@ -195,6 +199,11 @@ var connection_address: LineEdit
 var connection_port: SpinBox
 var connection_join_button: Button
 var connection_player_name: LineEdit
+var connection_server_list: OptionButton
+var connection_favorite_button: Button
+var profile_binding_buttons: Dictionary = {}
+var profile_waiting_for_action := ""
+var profile_transfer_path: LineEdit
 var profile_manager
 var local_profile: Dictionary = {}
 var profile_canvas: CanvasLayer
@@ -297,6 +306,9 @@ var forward_spawn_points := {
 func _ready() -> void:
 	profile_manager = PlayerProfileScript.new()
 	local_profile = profile_manager.load_profile()
+	InputBindingManagerScript.apply_bindings(
+		Dictionary(local_profile.get("keybindings", {}))
+	)
 	_apply_profile_audio_settings()
 	if DisplayServer.get_name() != "headless":
 		_initialize_battlefield_ambience()
@@ -417,6 +429,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			if key_event.physical_keycode != 0
 			else key_event.keycode
 		)
+		if not profile_waiting_for_action.is_empty():
+			if key_code == KEY_ESCAPE:
+				profile_waiting_for_action = ""
+				if profile_status_label != null:
+					profile_status_label.text = (
+						"Keybinding capture cancelled."
+					)
+			else:
+				_capture_binding_key(int(key_code))
+			get_viewport().set_input_as_handled()
+			return
+
 		if key_code == KEY_F10:
 			_toggle_external_asset_overlay()
 			get_viewport().set_input_as_handled()
@@ -4467,6 +4491,44 @@ func _build_profile_panel() -> void:
 	)
 	class_row.add_child(profile_class_option)
 
+	var controls_title := Label.new()
+	controls_title.text = "KEYBINDINGS"
+	controls_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(controls_title)
+
+	profile_binding_buttons.clear()
+	var active_bindings: Dictionary = (
+		InputBindingManagerScript.sanitize_bindings(
+			local_profile.get("keybindings", {})
+		)
+	)
+	for binding_action in (
+		InputBindingManagerScript.SUPPORTED_ACTIONS.keys()
+	):
+		var binding_row := HBoxContainer.new()
+		box.add_child(binding_row)
+		var binding_label := Label.new()
+		binding_label.text = (
+			InputBindingManagerScript.action_label(
+				str(binding_action)
+			)
+		)
+		binding_label.custom_minimum_size = Vector2(250, 28)
+		binding_row.add_child(binding_label)
+
+		var binding_button := Button.new()
+		binding_button.custom_minimum_size = Vector2(190, 28)
+		binding_button.text = InputBindingManagerScript.key_name(
+			int(active_bindings[binding_action])
+		)
+		var action_to_capture := str(binding_action)
+		binding_button.pressed.connect(
+			func() -> void:
+				_begin_binding_capture(action_to_capture)
+		)
+		binding_row.add_child(binding_button)
+		profile_binding_buttons[action_to_capture] = binding_button
+
 	profile_sensitivity_slider = _profile_slider_row(
 		box,
 		"Mouse sensitivity",
@@ -4516,6 +4578,22 @@ func _build_profile_panel() -> void:
 		float(local_profile.get("music_volume", 0.65))
 	)
 
+	profile_transfer_path = LineEdit.new()
+	profile_transfer_path.text = "user://frontline_profile_export.cfg"
+	profile_transfer_path.placeholder_text = "Profile backup path"
+	box.add_child(profile_transfer_path)
+
+	var transfer_row := HBoxContainer.new()
+	box.add_child(transfer_row)
+	var export_button := Button.new()
+	export_button.text = "EXPORT PROFILE"
+	export_button.pressed.connect(_export_profile)
+	transfer_row.add_child(export_button)
+	var import_button := Button.new()
+	import_button.text = "IMPORT PROFILE"
+	import_button.pressed.connect(_import_profile)
+	transfer_row.add_child(import_button)
+
 	var button_row := HBoxContainer.new()
 	box.add_child(button_row)
 
@@ -4539,6 +4617,66 @@ func _build_profile_panel() -> void:
 	profile_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(profile_status_label)
 
+func _begin_binding_capture(action_id: String) -> void:
+	profile_waiting_for_action = action_id
+	if profile_status_label != null:
+		profile_status_label.text = (
+			"Press a key for %s · Escape cancels"
+			% InputBindingManagerScript.action_label(action_id)
+		)
+
+func _capture_binding_key(key_code: int) -> void:
+	if profile_waiting_for_action.is_empty():
+		return
+	var bindings: Dictionary = (
+		InputBindingManagerScript.sanitize_bindings(
+			local_profile.get("keybindings", {})
+		)
+	)
+	bindings[profile_waiting_for_action] = key_code
+	local_profile["keybindings"] = bindings
+	if profile_binding_buttons.has(profile_waiting_for_action):
+		var binding_button: Button = (
+			profile_binding_buttons[profile_waiting_for_action]
+			as Button
+		)
+		if binding_button != null:
+			binding_button.text = (
+				InputBindingManagerScript.key_name(key_code)
+			)
+	profile_waiting_for_action = ""
+	InputBindingManagerScript.apply_bindings(bindings)
+	if profile_status_label != null:
+		profile_status_label.text = "Keybinding updated."
+
+func _export_profile() -> void:
+	var path := profile_transfer_path.text.strip_edges()
+	var error: Error = profile_manager.export_profile(path)
+	if profile_status_label != null:
+		profile_status_label.text = (
+			"Profile exported to %s" % path
+			if error == OK
+			else "Export failed: %d" % error
+		)
+
+func _import_profile() -> void:
+	var path := profile_transfer_path.text.strip_edges()
+	var error: Error = profile_manager.import_profile(path)
+	if error != OK:
+		if profile_status_label != null:
+			profile_status_label.text = "Import failed: %d" % error
+		return
+	local_profile = profile_manager.load_profile()
+	InputBindingManagerScript.apply_bindings(
+		Dictionary(local_profile.get("keybindings", {}))
+	)
+	_apply_profile_audio_settings()
+	_apply_profile_to_local_player()
+	if profile_status_label != null:
+		profile_status_label.text = (
+			"Profile imported. Reopen settings to refresh fields."
+		)
+
 func _save_profile_from_panel() -> void:
 	if profile_manager == null:
 		return
@@ -4553,6 +4691,9 @@ func _save_profile_from_panel() -> void:
 		"master_volume": profile_master_slider.value,
 		"effects_volume": profile_effects_slider.value,
 		"music_volume": profile_music_slider.value,
+		"keybindings": InputBindingManagerScript.sanitize_bindings(
+			local_profile.get("keybindings", {})
+		),
 		"last_server": (
 			connection_address.text
 			if connection_address != null
@@ -4565,8 +4706,18 @@ func _save_profile_from_panel() -> void:
 		)
 	})
 
+	InputBindingManagerScript.apply_bindings(
+		Dictionary(local_profile.get("keybindings", {}))
+	)
 	_apply_profile_audio_settings()
 	_apply_profile_to_local_player()
+	if connection_address != null and connection_port != null:
+		local_profile = profile_manager.set_server_preference(
+			connection_address.text.strip_edges(),
+			int(connection_port.value),
+			profile_team_option.selected,
+			profile_class_option.selected
+		)
 
 	if connection_player_name != null:
 		connection_player_name.text = str(
@@ -4576,7 +4727,8 @@ func _save_profile_from_panel() -> void:
 	if multiplayer.multiplayer_peer != null:
 		request_player_profile.rpc_id(
 			1,
-			str(local_profile.get("player_name", "Soldier"))
+			str(local_profile.get("player_name", "Soldier")),
+			str(local_profile.get("player_id", ""))
 		)
 
 	if profile_status_label != null:
@@ -4596,6 +4748,64 @@ func _set_profile_panel_visible(visible_value: bool) -> void:
 		if visible_value
 		else Input.MOUSE_MODE_CAPTURED
 	)
+
+func _refresh_connection_server_list() -> void:
+	if connection_server_list == null:
+		return
+	connection_server_list.clear()
+	connection_server_list.add_item("Recent & Favorite Servers")
+	connection_server_list.set_item_metadata(0, {})
+
+	var seen := {}
+	for source_group in [
+		Array(local_profile.get("favorite_servers", [])),
+		Array(local_profile.get("recent_servers", []))
+	]:
+		for raw_entry in source_group:
+			if not raw_entry is Dictionary:
+				continue
+			var entry: Dictionary = Dictionary(raw_entry)
+			var key := "%s:%d" % [
+				str(entry.get("address", "")),
+				int(entry.get("port", PORT_DEFAULT))
+			]
+			if seen.has(key):
+				continue
+			seen[key] = true
+			connection_server_list.add_item(
+				str(entry.get("label", key))
+			)
+			var item_index := connection_server_list.item_count - 1
+			connection_server_list.set_item_metadata(
+				item_index,
+				entry
+			)
+
+func _on_connection_server_selected(index: int) -> void:
+	if connection_server_list == null or index <= 0:
+		return
+	var metadata: Variant = (
+		connection_server_list.get_item_metadata(index)
+	)
+	if not metadata is Dictionary:
+		return
+	var entry: Dictionary = Dictionary(metadata)
+	connection_address.text = str(entry.get("address", ""))
+	connection_port.value = int(
+		entry.get("port", PORT_DEFAULT)
+	)
+
+func _add_current_server_to_favorites() -> void:
+	if profile_manager == null:
+		return
+	local_profile = profile_manager.remember_server(
+		connection_address.text.strip_edges(),
+		int(connection_port.value),
+		true
+	)
+	_refresh_connection_server_list()
+	if status_label != null:
+		status_label.text = "Server saved to favorites."
 
 func _show_connection_menu() -> void:
 	_build_profile_panel()
@@ -4623,6 +4833,14 @@ func _show_connection_menu() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 24)
 	box.add_child(title)
+
+	connection_server_list = OptionButton.new()
+	connection_server_list.add_item("Recent & Favorite Servers")
+	connection_server_list.item_selected.connect(
+		_on_connection_server_selected
+	)
+	box.add_child(connection_server_list)
+	_refresh_connection_server_list()
 
 	connection_player_name = LineEdit.new()
 	connection_player_name.placeholder_text = "Player name"
@@ -4661,12 +4879,24 @@ func _show_connection_menu() -> void:
 				"last_server": connection_address.text.strip_edges(),
 				"last_port": int(connection_port.value)
 			})
+			local_profile = profile_manager.remember_server(
+				connection_address.text.strip_edges(),
+				int(connection_port.value),
+				false
+			)
 			join_server(
 				connection_address.text.strip_edges(),
 				int(connection_port.value)
 			)
 	)
 	box.add_child(connection_join_button)
+
+	connection_favorite_button = Button.new()
+	connection_favorite_button.text = "Add Current Server to Favorites"
+	connection_favorite_button.pressed.connect(
+		_add_current_server_to_favorites
+	)
+	box.add_child(connection_favorite_button)
 
 	var settings_button := Button.new()
 	settings_button.text = "Player Profile & Settings"
@@ -4806,7 +5036,8 @@ func receive_server_protocol(
 	)
 	request_player_profile.rpc_id(
 		1,
-		str(local_profile.get("player_name", "Soldier"))
+		str(local_profile.get("player_name", "Soldier")),
+		str(local_profile.get("player_id", ""))
 	)
 	_apply_profile_to_local_player()
 
@@ -5275,13 +5506,23 @@ func request_player_ability(requested_peer_id: int) -> void:
 		player.call("server_ability_request")
 
 @rpc("any_peer", "call_remote", "reliable")
-func request_player_profile(requested_name: String) -> void:
+func request_player_profile(
+	requested_name: String,
+	requested_player_id: String = ""
+) -> void:
 	if not multiplayer.is_server():
 		return
 
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if not players.has(sender_id):
 		return
+
+	var safe_identity := requested_player_id.strip_edges().substr(
+		0,
+		64
+	)
+	if safe_identity.length() >= 16:
+		player_identity_ids[sender_id] = safe_identity
 
 	var safe_name: String = PlayerProfileScript.sanitize_player_name(
 		requested_name

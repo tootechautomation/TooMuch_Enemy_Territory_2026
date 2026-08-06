@@ -50,3 +50,5 @@ tactical_map={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":75)]
 }
+
+profile_settings={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":4194339)]}
