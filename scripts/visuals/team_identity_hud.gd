@@ -25,7 +25,7 @@ func initialize() -> void:
 
 func update_identity(
 	team_id: int,
-	class_name: String,
+	class_label: String,
 	objective_stage: int,
 	has_deployed: bool
 ) -> void:
@@ -38,7 +38,7 @@ func update_identity(
 	last_stage = safe_stage
 	last_deployed = has_deployed
 	if changed:
-		_refresh_panel(safe_team, class_name, safe_stage)
+		_refresh_panel(safe_team, class_label, safe_stage)
 	if has_deployed and (just_deployed or team_changed):
 		_show_deployment_announcement(safe_team)
 	if identity_panel != null:
@@ -117,7 +117,7 @@ func _build_deployment_announcement() -> void:
 	deployment_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	deployment_panel.add_child(deployment_label)
 
-func _refresh_panel(team_id: int, class_name: String, stage: int) -> void:
+func _refresh_panel(team_id: int, class_label: String, stage: int) -> void:
 	if identity_panel == null or identity_label == null:
 		return
 	var color := ATTACKER_COLOR if team_id == 0 else DEFENDER_COLOR
@@ -125,7 +125,7 @@ func _refresh_panel(team_id: int, class_name: String, stage: int) -> void:
 	var order_text := _order_text(team_id, stage)
 	identity_label.text = "%s  ◆  %s\n%s\nTEAM COLOR: %s" % [
 		team_text,
-		class_name.to_upper(),
+		class_label.to_upper(),
 		order_text,
 		"BLUE" if team_id == 0 else "RED"
 	]
@@ -175,4 +175,3 @@ func _panel_style(color: Color) -> StyleBoxFlat:
 	style.content_margin_top = 8.0
 	style.content_margin_bottom = 8.0
 	return style
-

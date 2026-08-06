@@ -4321,8 +4321,8 @@ func _update_team_identity_hud() -> void:
 	if main != null:
 		stage = int(main.get("objective_stage"))
 	var class_names: Array[String] = ["SOLDIER", "MEDIC", "ENGINEER", "FIELD OPS", "SCOUT"]
-	var class_name: String = class_names[clampi(player_class, 0, class_names.size() - 1)]
-	team_identity_hud.call("update_identity", team, class_name, stage, has_deployed)
+	var selected_class_label: String = class_names[clampi(player_class, 0, class_names.size() - 1)]
+	team_identity_hud.call("update_identity", team, selected_class_label, stage, has_deployed)
 
 func _safe_load_audio(path: String) -> AudioStream:
 	if not ResourceLoader.exists(path):

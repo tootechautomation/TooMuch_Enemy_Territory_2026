@@ -1,5 +1,10 @@
 # Changelog
 
+## 8.17.1
+- Renamed reserved `class_name` locals and parameters in the player and team-identity HUD scripts
+- Fixed the associated Godot parser failures without changing team readability behavior
+- Preserved all v8.17 features, networking compatibility, and protocol 341
+
 ## 8.17.0
 - Added a persistent ATTACKERS or DEFENDERS panel with class, current order, and explicit team color
 - Added restrained blue or red screen-edge accents
