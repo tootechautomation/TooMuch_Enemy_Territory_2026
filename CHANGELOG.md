@@ -1,8 +1,10 @@
 # Changelog
 
-## 8.2.1
-- Added explicit Array[float] typing for wall probe heights
-- Added explicit Vector3 typing for wall probe origin
-- Added explicit float typing for wall hit distance
-- Preserved v8.2.0 server structural authority and visual upgrades
+## 8.3.0
+- Added surface-aware combat effects manager
+- Added brick, concrete, stone, wood, metal, ground, and flesh impacts
+- Added procedural bullet-impact decals
+- Added sparks, dust, chips, splinters, and fragments
+- Added explosion fireball, flash, smoke, debris, and scorch marks
+- Added bounded effect/decal cleanup
 - Preserved protocol 341 and explicit connection-string `+`

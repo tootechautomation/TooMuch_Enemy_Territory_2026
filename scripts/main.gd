@@ -30,6 +30,9 @@ const UrbanRealismPassScript = preload(
 const AlleyDetailPassScript = preload(
 	"res://scripts/visuals/alley_detail_pass.gd"
 )
+const CombatEffectsManagerScript = preload(
+	"res://scripts/visuals/combat_effects_manager.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -63,7 +66,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.2.1"
+const BUILD_VERSION := "8.3.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -286,6 +289,7 @@ var battlefield_atmosphere: Node3D
 var structure_collision_report: Dictionary = {}
 var urban_realism_pass: Node3D
 var alley_detail_pass: Node3D
+var combat_effects_manager: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -843,22 +847,13 @@ func _spawn_impact_particles(position: Vector3, hit_player: bool) -> void:
 func _spawn_explosion_debris(position: Vector3) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	for index in range(18):
-		var debris := MeshInstance3D.new()
-		var mesh: BoxMesh = BoxMesh.new()
-		mesh.size = Vector3(randf_range(0.06,0.22),randf_range(0.04,0.18),randf_range(0.05,0.20))
-		debris.mesh = mesh
-		debris.position = position
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(randf_range(0.22,0.48),randf_range(0.18,0.36),randf_range(0.10,0.24))
-		mat.roughness = 0.96
-		debris.material_override = mat
-		add_child(debris)
-		var tween := create_tween()
-		tween.set_parallel(true)
-		tween.tween_property(debris,"position",position+Vector3(randf_range(-3.2,3.2),randf_range(0.8,3.8),randf_range(-3.2,3.2)),0.58)
-		tween.tween_property(debris,"rotation_degrees",Vector3(randf_range(180.0,720.0),randf_range(180.0,720.0),randf_range(180.0,720.0)),0.58)
-		tween.chain().tween_callback(debris.queue_free)
+	_ensure_combat_effects_manager()
+	if combat_effects_manager != null:
+		combat_effects_manager.call(
+			"spawn_explosion_polish",
+			position,
+			"ground"
+		)
 
 func _set_environment_property_if_available(
 	property_name: StringName,
@@ -2832,6 +2827,15 @@ func _create_authoritative_townhouse_fallback(
 		% node_name
 	)
 	return root
+
+func _ensure_combat_effects_manager() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if combat_effects_manager != null:
+		return
+	combat_effects_manager = CombatEffectsManagerScript.new()
+	combat_effects_manager.name = "CombatEffectsManager"
+	add_child(combat_effects_manager)
 
 func _build_alley_detail_pass() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -7083,10 +7087,14 @@ func show_shot_effect(
 	)
 	tracer.material_override = tracer_material
 	effect_root.add_child(tracer)
-	if not hit_player:
-		spawn_bullet_impact_decal(
+	_ensure_combat_effects_manager()
+	if combat_effects_manager != null:
+		combat_effects_manager.call(
+			"spawn_surface_impact",
+			self,
 			end_position,
-			(start_position - end_position).normalized()
+			(start_position - end_position).normalized(),
+			hit_player
 		)
 
 	var impact := MeshInstance3D.new()
@@ -7109,7 +7117,6 @@ func show_shot_effect(
 	impact_material.emission = impact_material.albedo_color
 	impact.material_override = impact_material
 	effect_root.add_child(impact)
-	_spawn_impact_particles(end_position, hit_player)
 
 	var timer := Timer.new()
 	timer.one_shot = true
@@ -8503,6 +8510,7 @@ func _build_world() -> void:
 	_build_wwii_detail_pass()
 	_build_urban_realism_pass()
 	_build_alley_detail_pass()
+	_ensure_combat_effects_manager()
 	_apply_wwii_material_library()
 	_build_battlefield_atmosphere()
 	_build_battlefield_dressing_pass()

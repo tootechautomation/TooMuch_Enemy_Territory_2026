@@ -1,26 +1,27 @@
 # Frontline: Objective
 
-## Version 8.2.1 Wall Probe Type Hotfix
+## Version 8.3.0 Combat Effects, Surface Impacts & Destruction Polish
 
-The three-height server wall probe used inferred local variables. Godot could
-not infer the type of `origin` from the loop value.
+Bullet impacts now inspect the nearby collider and select an effect for metal,
+wood, brick, concrete, stone, ground, or player hits.
 
-The probe now uses:
+Effects include:
 
-```gdscript
-var probe_heights: Array[float] = [0.35, 0.95, 1.45]
+- impact decals,
+- sparks,
+- masonry chips,
+- wood splinters,
+- concrete dust,
+- dirt puffs,
+- short impact lights,
+- restrained player-hit particles.
 
-for probe_height: float in probe_heights:
-    var origin: Vector3 = (
-        global_position
-        + Vector3.UP * float(probe_height)
-    )
-```
+Explosion polish includes a rapidly expanding fireball, flash light, smoke,
+dirt, fragments, and a ground scorch mark.
 
-The hit distance is also explicitly typed as `float`.
+The effect manager limits active roots and decals and cleans temporary effects
+automatically. All combat effects remain client-side and are skipped on the
+headless VPS.
 
-All v8.2 structural authority, fallback collision, wall sweep, and alley-detail
-changes remain enabled.
-
-Build: v8.2.1
+Build: v8.3.0
 Protocol: 341
