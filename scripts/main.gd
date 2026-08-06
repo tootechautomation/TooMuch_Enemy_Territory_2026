@@ -32,7 +32,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.3.0"
+const BUILD_VERSION := "7.3.1"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -102,7 +102,7 @@ var breakable_props: Dictionary = {}
 var next_breakable_prop_id := 1
 var structure_collision_roots: Array[Node3D] = []
 var collision_debug_enabled := false
-var external_lod_controller: ExternalLODController
+var external_lod_controller: Node
 var external_asset_reports: Array[String] = []
 var external_asset_overlay: PanelContainer
 var external_asset_overlay_label: Label
@@ -2305,12 +2305,17 @@ func _toggle_external_asset_overlay() -> void:
 func _initialize_external_lod() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	external_lod_controller = ExternalLODControllerScript.new()
+	var controller_instance: Node = (
+		ExternalLODControllerScript.new()
+	)
+	external_lod_controller = controller_instance
 	external_lod_controller.name = "ExternalLODController"
 	add_child(external_lod_controller)
-	external_lod_controller.configure(
-		get_viewport().get_camera_3d()
-	)
+	if external_lod_controller.has_method("configure"):
+		external_lod_controller.call(
+			"configure",
+			get_viewport().get_camera_3d()
+		)
 
 func _spawn_external_environment_assets() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -2449,8 +2454,14 @@ func _spawn_external_environment_assets() -> void:
 		)
 		external_asset_reports.append(report_line)
 		print(report_line)
-		if external_lod_controller != null:
-			external_lod_controller.register_external(
+		if (
+			external_lod_controller != null
+			and external_lod_controller.has_method(
+				"register_external"
+			)
+		):
+			external_lod_controller.call(
+				"register_external",
 				external_node
 			)
 

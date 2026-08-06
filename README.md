@@ -1,29 +1,50 @@
 # Frontline: Objective
 
-## Version 7.3.0 Asset Validation, LOD & Runtime Replacement
+## Version 7.3.1 External LOD Parser Hotfix
 
-### Asset validation
-Imported characters are checked for meshes, skeletons, animations, recognized
-weapon sockets, and approximate height.
+### Fixed parser error
 
-Imported environment models are checked for meshes, StaticBody3D nodes,
-CollisionShape3D nodes, and overall dimensions.
+Version 7.3.0 declared:
 
-### Runtime LOD
-External characters and environment models now use distance-based visibility,
-shadow, and GI control. Far assets stop casting shadows and disappear beyond
-the configured range.
+```gdscript
+var external_lod_controller: ExternalLODController
+```
 
-### Developer overlay
-Press F10 to display imported asset availability, validation warnings,
-collision results, and instantiated-node information.
+Godot could parse `main.gd` before the external script's `class_name` was
+registered, producing:
 
-### Safe replacement
-Procedural assets remain active unless an imported replacement loads and has
-valid collision. This prevents invisible holes and duplicate decorative models.
+```text
+Could not find type "ExternalLODController" in the current scope.
+```
+
+The controller is now stored as a standard `Node` and instantiated through the
+already preloaded script resource:
+
+```gdscript
+var external_lod_controller: Node
+
+var controller_instance: Node = (
+    ExternalLODControllerScript.new()
+)
+```
+
+Method calls use `has_method()` and `call()`, removing the cross-script parser
+dependency while retaining the complete LOD behavior.
+
+### Included v7.3 features
+
+- Character and environment asset validation
+- Runtime distance-based LOD
+- Far-distance shadow and GI reduction
+- F10 external-asset status overlay
+- Safe procedural fallback replacement
+- Imported collision validation
 
 ### Compatibility
-- Build: v7.3.0
+
+- Build: v7.3.1
 - Protocol: 341
 - Explicit connection-message `+` retained
-- Missing assets continue using fallbacks
+- No external assets are required for startup
+
+Expected status: `Connected: v7.3.1 protocol 341`
