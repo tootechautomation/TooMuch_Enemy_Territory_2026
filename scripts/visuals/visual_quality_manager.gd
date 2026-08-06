@@ -10,14 +10,14 @@ enum QualityMode {
 }
 
 const CONFIG_PATH := "user://frontline_graphics.cfg"
-const MODE_NAMES := ["AUTO", "CINEMATIC", "HIGH", "BALANCED", "PERFORMANCE"]
+const MODE_NAMES: Array[String] = ["AUTO", "CINEMATIC", "HIGH", "BALANCED", "PERFORMANCE"]
 
 var world_root: Node
-var selected_mode := QualityMode.AUTO
-var active_tier := QualityMode.CINEMATIC
-var low_fps_elapsed := 0.0
-var high_fps_elapsed := 0.0
-var sample_elapsed := 0.0
+var selected_mode: int = QualityMode.AUTO
+var active_tier: int = QualityMode.CINEMATIC
+var low_fps_elapsed: float = 0.0
+var high_fps_elapsed: float = 0.0
+var sample_elapsed: float = 0.0
 var status_label: Label
 var status_tween: Tween
 
@@ -41,7 +41,7 @@ func _process(delta: float) -> void:
 	if sample_elapsed < 1.0:
 		return
 	sample_elapsed = 0.0
-	var fps := float(Engine.get_frames_per_second())
+	var fps: float = float(Engine.get_frames_per_second())
 	if fps < 43.0:
 		low_fps_elapsed += 1.0
 		high_fps_elapsed = 0.0
@@ -65,7 +65,7 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not event is InputEventKey:
 		return
-	var key_event := event as InputEventKey
+	var key_event: InputEventKey = event as InputEventKey
 	if not key_event.pressed or key_event.echo or key_event.physical_keycode != KEY_F6:
 		return
 	selected_mode = (selected_mode + 1) % QualityMode.size()
@@ -87,7 +87,7 @@ func _apply_active_tier(show_status: bool = false) -> void:
 		_show_status()
 
 func _apply_viewport_quality() -> void:
-	var viewport := get_viewport()
+	var viewport: Viewport = get_viewport()
 	if viewport == null:
 		return
 	match active_tier:
@@ -113,7 +113,7 @@ func _apply_environment_quality() -> void:
 		var world_environment := node_value as WorldEnvironment
 		if world_environment == null or world_environment.environment == null:
 			continue
-		var environment := world_environment.environment
+		var environment: Environment = world_environment.environment
 		environment.ssao_enabled = active_tier <= QualityMode.BALANCED
 		environment.ssil_enabled = active_tier <= QualityMode.HIGH
 		environment.glow_enabled = active_tier <= QualityMode.BALANCED
@@ -148,12 +148,12 @@ func _apply_shadow_quality() -> void:
 				light.directional_shadow_max_distance = 42.0
 
 func _apply_effect_visibility() -> void:
-	var hide_balanced := [
+	var hide_balanced: Array[String] = [
 		"WetGroundMist",
 		"AirborneDust",
 		"MovingOvercastLayer_2"
 	]
-	var hide_performance := [
+	var hide_performance: Array[String] = [
 		"WetGroundMist",
 		"AirborneDust",
 		"MovingOvercastLayer_1",
@@ -161,14 +161,14 @@ func _apply_effect_visibility() -> void:
 		"BattlefieldSmoke",
 		"CombatEmbers"
 	]
-	var optional_effect_names := hide_balanced + hide_performance
+	var optional_effect_names: Array[String] = hide_balanced + hide_performance
 	for node_value in world_root.find_children("*", "GeometryInstance3D", true, false):
 		var geometry := node_value as GeometryInstance3D
 		if geometry == null:
 			continue
 		if geometry.name not in optional_effect_names:
 			continue
-		var should_show := true
+		var should_show: bool = true
 		if active_tier == QualityMode.BALANCED:
 			should_show = geometry.name not in hide_balanced
 		elif active_tier == QualityMode.PERFORMANCE:
@@ -211,8 +211,8 @@ func _build_status() -> void:
 func _show_status() -> void:
 	if status_label == null:
 		return
-	var mode_text := MODE_NAMES[selected_mode]
-	var tier_text := MODE_NAMES[active_tier]
+	var mode_text: String = str(MODE_NAMES[selected_mode])
+	var tier_text: String = str(MODE_NAMES[active_tier])
 	status_label.text = (
 		"GRAPHICS: %s (%s)  ·  F6 TO CHANGE"
 		% [mode_text, tier_text]

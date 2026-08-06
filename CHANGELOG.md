@@ -1,5 +1,12 @@
 # Changelog
 
+## 8.16.1
+- Added explicit String typing for graphics mode and active-tier status text
+- Added explicit typed arrays and local variable annotations throughout the quality manager
+- Fixed Godot 4.7 parser inference failures at visual_quality_manager.gd lines 214-215
+- Preserved all v8.16 quality modes, F6 cycling, auto-scaling behavior, and protocol 341
+
+
 ## 8.16.0
 - Added Auto, Cinematic, High, Balanced, and Performance graphics modes
 - Added F6 mode cycling, active-tier display, and local persistence
