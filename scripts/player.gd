@@ -105,6 +105,7 @@ var bot_strafe_direction := 1.0
 var bot_next_jump_ms := 0
 var bot_entrance_clearance_until_ms := 0
 var bot_last_recovery_ms := 0
+var out_of_bounds_recovery_cooldown_ms := 0
 var bot_waypoint_index := 0
 var bot_route: Array[Vector3] = []
 var bot_grenade_accumulator := 2.0
@@ -687,6 +688,7 @@ func server_receive_input(move: Vector2, yaw: float, look_pitch: float, wants_ju
 	aim_requested = wants_aim
 
 func _server_simulate(delta: float) -> void:
+	_server_check_out_of_bounds_recovery()
 	var now: int = Time.get_ticks_msec()
 	var was_on_floor: bool = is_on_floor()
 	var falling_speed: float = -previous_vertical_velocity
@@ -2222,6 +2224,43 @@ func _bot_route_goal(fallback_goal: Vector3) -> Vector3:
 	if global_position.distance_to(fallback_goal) < 18.0:
 		return fallback_goal
 	return waypoint
+
+func _server_check_out_of_bounds_recovery() -> void:
+	if not multiplayer.is_server():
+		return
+
+	var now: int = Time.get_ticks_msec()
+	if now < out_of_bounds_recovery_cooldown_ms:
+		return
+	if global_position.y > -12.0:
+		return
+
+	out_of_bounds_recovery_cooldown_ms = now + 2500
+
+	var main_node: Node = get_parent()
+	if (
+		main_node == null
+		or not main_node.has_method(
+			"server_recover_out_of_bounds_player"
+		)
+	):
+		return
+
+	var recovered: Vector3 = Vector3(
+		main_node.call(
+			"server_recover_out_of_bounds_player",
+			peer_id,
+			team,
+			global_position
+		)
+	)
+	if recovered.distance_to(global_position) > 1.0:
+		global_position = recovered
+		velocity = Vector3.ZERO
+		bot_last_position = recovered
+		if is_bot:
+			bot_route.clear()
+			bot_waypoint_index = 0
 
 func _bot_try_stuck_recovery() -> void:
 	var now: int = Time.get_ticks_msec()

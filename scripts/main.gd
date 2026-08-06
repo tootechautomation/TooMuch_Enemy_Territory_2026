@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.5.1"
+const BUILD_VERSION := "5.5.2"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -2043,6 +2043,91 @@ func _validate_structure_collision_layout() -> void:
 				"Large collision proxy requires review: %s extent=%s"
 				% [collision_root.name, horizontal_extent]
 			)
+
+func _make_ground_collision_tile(
+	node_name: String,
+	position: Vector3,
+	size: Vector3
+) -> StaticBody3D:
+	var body: StaticBody3D = StaticBody3D.new()
+	body.name = node_name
+	body.collision_layer = 1
+	body.collision_mask = 1
+	body.position = position
+	add_child(body)
+
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
+	shape.size = size
+	collision.shape = shape
+	body.add_child(collision)
+
+	if collision_debug_enabled and DisplayServer.get_name() != "headless":
+		var visual: MeshInstance3D = MeshInstance3D.new()
+		var mesh: BoxMesh = BoxMesh.new()
+		mesh.size = size
+		visual.mesh = mesh
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.albedo_color = Color(0.18, 0.72, 1.0, 0.16)
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		visual.material_override = material
+		body.add_child(visual)
+
+	return body
+
+func _build_expanded_ground_collision() -> void:
+	# Continuous collision under the full surface combat area.
+	# The top sits at y = 0.0 while the body extends downward.
+	for tile_data in [
+		["GroundCenter", Vector3(0.0,-1.0,0.0), Vector3(104.0,2.0,84.0)],
+		["GroundNorth", Vector3(0.0,-1.0,-51.0), Vector3(104.0,2.0,24.0)],
+		["GroundSouth", Vector3(0.0,-1.0,51.0), Vector3(104.0,2.0,24.0)],
+		["GroundWest", Vector3(-57.0,-1.0,-10.0), Vector3(18.0,2.0,34.0)],
+		["GroundEast", Vector3(57.0,-1.0,10.0), Vector3(18.0,2.0,34.0)],
+		["GroundNorthWest", Vector3(-50.0,-1.0,-44.0), Vector3(20.0,2.0,22.0)],
+		["GroundNorthEast", Vector3(50.0,-1.0,-44.0), Vector3(20.0,2.0,22.0)],
+		["GroundSouthWest", Vector3(-50.0,-1.0,44.0), Vector3(20.0,2.0,22.0)],
+		["GroundSouthEast", Vector3(50.0,-1.0,44.0), Vector3(20.0,2.0,22.0)]
+	]:
+		_make_ground_collision_tile(
+			str(tile_data[0]),
+			Vector3(tile_data[1]),
+			Vector3(tile_data[2])
+		)
+
+	# Invisible perimeter walls stop players from reaching unsupported visuals.
+	for wall_data in [
+		["BoundaryWest", Vector3(-67.0,2.5,0.0), Vector3(0.8,5.0,116.0)],
+		["BoundaryEast", Vector3(67.0,2.5,0.0), Vector3(0.8,5.0,116.0)],
+		["BoundaryNorth", Vector3(0.0,2.5,-63.0), Vector3(134.0,5.0,0.8)],
+		["BoundarySouth", Vector3(0.0,2.5,63.0), Vector3(134.0,5.0,0.8)]
+	]:
+		_make_gameplay_block(
+			str(wall_data[0]),
+			Vector3(wall_data[1]),
+			Vector3(wall_data[2]),
+			Color(0.12,0.12,0.12,0.0),
+			0.0
+		)
+
+func server_recover_out_of_bounds_player(
+	peer_id: int,
+	team_id: int,
+	current_position: Vector3
+) -> Vector3:
+	if not multiplayer.is_server():
+		return current_position
+
+	# Sewer floor is around y=-3.3, so only recover well below it.
+	if current_position.y > -12.0:
+		return current_position
+
+	return server_recover_stuck_player(
+		peer_id,
+		team_id,
+		current_position
+	)
 
 func _load_optional_scene(path: String) -> PackedScene:
 	if DisplayServer.get_name() == "headless":
@@ -6661,6 +6746,7 @@ func _build_world() -> void:
 	_build_battlefield_dressing_pass()
 	_build_combat_atmosphere_pass()
 	_build_map_expansion_pass()
+	_build_expanded_ground_collision()
 	_build_structure_collision_pass()
 	_validate_structure_collision_layout()
 
