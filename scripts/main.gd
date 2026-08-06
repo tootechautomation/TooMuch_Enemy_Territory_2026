@@ -11,7 +11,7 @@ const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const RallyPointScript = preload("res://scripts/rally_point.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.8.0"
+const BUILD_VERSION := "3.9.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -35,6 +35,8 @@ const SUPPLY_DEPOT_RADIUS := 5.2
 const SUPPLY_DEPOT_TICKET_INTERVAL := 12.0
 const RALLY_POINT_DURATION := 45.0
 const RALLY_POINT_CONTEST_RADIUS := 8.0
+const LARGE_MAP_HALF_WIDTH := 46.0
+const LARGE_MAP_HALF_LENGTH := 38.0
 
 var tex_metal: Texture2D
 var tex_objective: Texture2D
@@ -368,6 +370,361 @@ func _create_foliage_sprite(position: Vector3, scale_value: float) -> void:
 	sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	add_child(sprite)
+
+func _make_road(
+	node_name: String,
+	position: Vector3,
+	size: Vector3,
+	rotation_y: float = 0.0
+) -> void:
+	var road := MeshInstance3D.new()
+	road.name = node_name
+	road.position = position
+	road.rotation.y = rotation_y
+
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	road.mesh = mesh
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.16, 0.17, 0.17)
+	material.roughness = 0.94
+	road.material_override = material
+	add_child(road)
+
+func _make_sloped_ground(
+	node_name: String,
+	position: Vector3,
+	size: Vector3,
+	rotation_degrees_value: Vector3,
+	color: Color
+) -> void:
+	var body := StaticBody3D.new()
+	body.name = node_name
+	body.position = position
+	body.rotation_degrees = rotation_degrees_value
+
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mesh_instance.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = 0.96
+	mesh_instance.material_override = material
+	body.add_child(mesh_instance)
+
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	collision.shape = shape
+	body.add_child(collision)
+	add_child(body)
+
+func _make_tree(
+	position: Vector3,
+	scale_value: float = 1.0
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var root := Node3D.new()
+	root.position = position
+	root.scale = Vector3.ONE * scale_value
+	add_child(root)
+
+	var trunk := MeshInstance3D.new()
+	var trunk_mesh := CylinderMesh.new()
+	trunk_mesh.top_radius = 0.18
+	trunk_mesh.bottom_radius = 0.27
+	trunk_mesh.height = 3.6
+	trunk.mesh = trunk_mesh
+	trunk.position.y = 1.8
+	var trunk_material := StandardMaterial3D.new()
+	trunk_material.albedo_color = Color(0.25, 0.16, 0.09)
+	trunk_material.roughness = 1.0
+	trunk.material_override = trunk_material
+	root.add_child(trunk)
+
+	for crown_position in [
+		Vector3(0.0, 4.1, 0.0),
+		Vector3(-0.55, 3.7, 0.15),
+		Vector3(0.55, 3.75, -0.10)
+	]:
+		var crown := MeshInstance3D.new()
+		var crown_mesh := SphereMesh.new()
+		crown_mesh.radius = 1.25
+		crown_mesh.height = 2.2
+		crown.mesh = crown_mesh
+		crown.position = crown_position
+		var crown_material := StandardMaterial3D.new()
+		crown_material.albedo_color = Color(
+			0.12 + randf_range(0.0, 0.05),
+			0.30 + randf_range(0.0, 0.08),
+			0.12 + randf_range(0.0, 0.04)
+		)
+		crown_material.roughness = 0.95
+		crown.material_override = crown_material
+		root.add_child(crown)
+
+func _make_ruined_house(
+	node_name: String,
+	position: Vector3,
+	rotation_y: float,
+	size: Vector3
+) -> void:
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+
+	var wall_color := Color(0.39, 0.36, 0.32)
+	var wall_height: float = size.y
+
+	_make_static_box(
+		node_name + "_Back",
+		position + Vector3(0.0, wall_height * 0.5, size.z * 0.5),
+		Vector3(size.x, wall_height, 0.45),
+		wall_color
+	)
+	_make_static_box(
+		node_name + "_Left",
+		position + Vector3(-size.x * 0.5, wall_height * 0.5, 0.0),
+		Vector3(0.45, wall_height, size.z),
+		wall_color
+	)
+	_make_static_box(
+		node_name + "_RightBroken",
+		position + Vector3(size.x * 0.5, wall_height * 0.30, 0.7),
+		Vector3(0.45, wall_height * 0.60, size.z * 0.55),
+		wall_color.darkened(0.08)
+	)
+	_make_static_box(
+		node_name + "_Floor",
+		position + Vector3(0.0, 0.15, 0.0),
+		Vector3(size.x, 0.30, size.z),
+		Color(0.24, 0.22, 0.20)
+	)
+
+func _make_watchtower(
+	node_name: String,
+	position: Vector3
+) -> void:
+	_make_static_box(
+		node_name + "_Platform",
+		position + Vector3(0.0, 4.3, 0.0),
+		Vector3(4.2, 0.5, 4.2),
+		Color(0.27, 0.25, 0.21)
+	)
+	for offset in [
+		Vector3(-1.65, 2.0, -1.65),
+		Vector3(1.65, 2.0, -1.65),
+		Vector3(-1.65, 2.0, 1.65),
+		Vector3(1.65, 2.0, 1.65)
+	]:
+		_make_static_box(
+			node_name + "_Leg_%s" % str(offset),
+			position + offset,
+			Vector3(0.35, 4.0, 0.35),
+			Color(0.22, 0.20, 0.17)
+		)
+	_make_static_box(
+		node_name + "_Roof",
+		position + Vector3(0.0, 6.0, 0.0),
+		Vector3(5.0, 0.35, 5.0),
+		Color(0.20, 0.20, 0.20)
+	)
+
+func _build_operation_black_river_expansion() -> void:
+	# Large outer terrain, roughly 92 x 76 meters.
+	_make_static_box(
+		"OuterGroundWest",
+		Vector3(-27.0, -0.65, 0.0),
+		Vector3(34.0, 1.3, 74.0),
+		Color(0.18, 0.25, 0.17)
+	)
+	_make_static_box(
+		"OuterGroundEast",
+		Vector3(27.0, -0.65, 0.0),
+		Vector3(34.0, 1.3, 74.0),
+		Color(0.18, 0.25, 0.17)
+	)
+	_make_static_box(
+		"OuterRiverNorth",
+		Vector3(0.0, -1.05, -25.0),
+		Vector3(6.0, 0.35, 26.0),
+		Color(0.07, 0.20, 0.28)
+	)
+	_make_static_box(
+		"OuterRiverSouth",
+		Vector3(0.0, -1.05, 25.0),
+		Vector3(6.0, 0.35, 26.0),
+		Color(0.07, 0.20, 0.28)
+	)
+
+	# Main roads and side routes.
+	_make_road(
+		"WestVillageRoad",
+		Vector3(-20.0, 0.04, 0.0),
+		Vector3(7.0, 0.08, 72.0)
+	)
+	_make_road(
+		"EastFortRoad",
+		Vector3(20.0, 0.04, 0.0),
+		Vector3(7.0, 0.08, 72.0)
+	)
+	_make_road(
+		"NorthCrossRoad",
+		Vector3(0.0, 0.05, -27.0),
+		Vector3(42.0, 0.10, 5.0)
+	)
+	_make_road(
+		"SouthCrossRoad",
+		Vector3(0.0, 0.05, 27.0),
+		Vector3(42.0, 0.10, 5.0)
+	)
+
+	# Village sector.
+	_make_ruined_house(
+		"VillageHouseA",
+		Vector3(-27.0, 0.0, -19.0),
+		deg_to_rad(8.0),
+		Vector3(7.0, 4.5, 6.0)
+	)
+	_make_ruined_house(
+		"VillageHouseB",
+		Vector3(-29.0, 0.0, 2.0),
+		deg_to_rad(-6.0),
+		Vector3(8.0, 5.0, 6.5)
+	)
+	_make_ruined_house(
+		"VillageHouseC",
+		Vector3(-25.0, 0.0, 21.0),
+		deg_to_rad(12.0),
+		Vector3(6.5, 4.2, 7.0)
+	)
+	_make_watchtower(
+		"VillageWatchtower",
+		Vector3(-36.0, 0.0, -29.0)
+	)
+
+	# Rail-yard sector.
+	for rail_z in [-23.0, -19.5, -16.0]:
+		_make_static_box(
+			"Rail_%s_A" % str(rail_z),
+			Vector3(25.0, 0.12, rail_z),
+			Vector3(30.0, 0.16, 0.18),
+			Color(0.25, 0.26, 0.27)
+		)
+		_make_static_box(
+			"Rail_%s_B" % str(rail_z),
+			Vector3(25.0, 0.12, rail_z + 1.1),
+			Vector3(30.0, 0.16, 0.18),
+			Color(0.25, 0.26, 0.27)
+		)
+	for car_x in [14.0, 24.0, 34.0]:
+		_make_static_box(
+			"RailCar_%s" % str(car_x),
+			Vector3(car_x, 1.6, -20.5),
+			Vector3(7.5, 3.2, 2.8),
+			Color(0.26, 0.30, 0.31)
+		)
+
+	# Fort/bunker sector.
+	_make_static_box(
+		"FortNorthWall",
+		Vector3(30.0, 2.5, 16.0),
+		Vector3(24.0, 5.0, 1.0),
+		Color(0.33, 0.34, 0.34)
+	)
+	_make_static_box(
+		"FortSouthWall",
+		Vector3(30.0, 2.5, 34.0),
+		Vector3(24.0, 5.0, 1.0),
+		Color(0.33, 0.34, 0.34)
+	)
+	_make_static_box(
+		"FortEastWall",
+		Vector3(42.0, 2.5, 25.0),
+		Vector3(1.0, 5.0, 19.0),
+		Color(0.33, 0.34, 0.34)
+	)
+	_make_static_box(
+		"FortWestGateA",
+		Vector3(18.0, 2.5, 19.0),
+		Vector3(1.0, 5.0, 6.0),
+		Color(0.33, 0.34, 0.34)
+	)
+	_make_static_box(
+		"FortWestGateB",
+		Vector3(18.0, 2.5, 31.0),
+		Vector3(1.0, 5.0, 6.0),
+		Color(0.33, 0.34, 0.34)
+	)
+	_make_watchtower(
+		"FortWatchtower",
+		Vector3(36.0, 0.0, 27.0)
+	)
+
+	# Sloped approaches and elevated flank routes.
+	_make_sloped_ground(
+		"WestHillRamp",
+		Vector3(-38.0, 1.0, 7.0),
+		Vector3(12.0, 1.2, 18.0),
+		Vector3(0.0, 0.0, -8.0),
+		Color(0.17, 0.23, 0.15)
+	)
+	_make_sloped_ground(
+		"EastHillRamp",
+		Vector3(38.0, 1.0, -4.0),
+		Vector3(12.0, 1.2, 18.0),
+		Vector3(0.0, 0.0, 8.0),
+		Color(0.17, 0.23, 0.15)
+	)
+
+	# Trees and visual breakup.
+	for tree_position in [
+		Vector3(-40.0, 0.0, -32.0),
+		Vector3(-34.0, 0.0, -14.0),
+		Vector3(-39.0, 0.0, 2.0),
+		Vector3(-35.0, 0.0, 18.0),
+		Vector3(-41.0, 0.0, 31.0),
+		Vector3(39.0, 0.0, -31.0),
+		Vector3(34.0, 0.0, -11.0),
+		Vector3(40.0, 0.0, 5.0),
+		Vector3(35.0, 0.0, 18.0),
+		Vector3(43.0, 0.0, 34.0),
+		Vector3(-15.0, 0.0, -33.0),
+		Vector3(15.0, 0.0, 34.0)
+	]:
+		_make_tree(tree_position, randf_range(0.85, 1.30))
+
+	# Outer boundaries.
+	_make_static_box(
+		"OuterBoundaryNorth",
+		Vector3(0.0, 3.0, -38.0),
+		Vector3(94.0, 6.0, 1.0),
+		Color(0.24, 0.25, 0.26)
+	)
+	_make_static_box(
+		"OuterBoundarySouth",
+		Vector3(0.0, 3.0, 38.0),
+		Vector3(94.0, 6.0, 1.0),
+		Color(0.24, 0.25, 0.26)
+	)
+	_make_static_box(
+		"OuterBoundaryWest",
+		Vector3(-46.0, 3.0, 0.0),
+		Vector3(1.0, 6.0, 76.0),
+		Color(0.24, 0.25, 0.26)
+	)
+	_make_static_box(
+		"OuterBoundaryEast",
+		Vector3(46.0, 3.0, 0.0),
+		Vector3(1.0, 6.0, 76.0),
+		Color(0.24, 0.25, 0.26)
+	)
 
 func _create_field_emplacement(
 	emplacement_id: int,
@@ -3306,19 +3663,36 @@ func _reset_round() -> void:
 func _build_world() -> void:
 	var env := WorldEnvironment.new()
 	battlefield_environment = Environment.new()
-	battlefield_environment.background_mode = Environment.BG_COLOR
-	battlefield_environment.background_color = Color(0.12, 0.16, 0.19)
+	battlefield_environment.background_mode = Environment.BG_SKY
+
+	var sky := Sky.new()
+	var sky_material := ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color(0.08, 0.16, 0.25)
+	sky_material.sky_horizon_color = Color(0.56, 0.63, 0.68)
+	sky_material.ground_bottom_color = Color(0.08, 0.09, 0.08)
+	sky_material.ground_horizon_color = Color(0.38, 0.38, 0.34)
+	sky_material.sun_angle_max = 18.0
+	sky.sky_material = sky_material
+	battlefield_environment.sky = sky
+	battlefield_environment.background_energy_multiplier = 0.85
 	battlefield_environment.ambient_light_source = (
 		Environment.AMBIENT_SOURCE_COLOR
 	)
 	battlefield_environment.ambient_light_color = Color(0.7, 0.75, 0.8)
-	battlefield_environment.ambient_light_energy = 0.75
+	battlefield_environment.ambient_light_energy = 0.92
+	battlefield_environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	battlefield_environment.fog_enabled = true
+	battlefield_environment.fog_light_color = Color(0.52, 0.57, 0.60)
+	battlefield_environment.fog_light_energy = 0.65
+	battlefield_environment.fog_density = 0.006
 	env.environment = battlefield_environment
 	add_child(env)
 
 	battlefield_sun = DirectionalLight3D.new()
 	battlefield_sun.rotation_degrees = Vector3(-55, -35, 0)
 	battlefield_sun.shadow_enabled = true
+	battlefield_sun.light_energy = 1.15
+	battlefield_sun.directional_shadow_max_distance = 90.0
 	add_child(battlefield_sun)
 
 	_make_static_box("GroundWest", Vector3(-11, -0.5, 0), Vector3(18, 1, 24), Color(0.22, 0.27, 0.22))
@@ -3378,6 +3752,8 @@ func _build_world() -> void:
 		Vector3(2.0, 1.5, 4.0),
 		Color(0.34, 0.31, 0.25)
 	)
+
+	_build_operation_black_river_expansion()
 
 	# Combined-arms battlefield expansion.
 	_make_static_box(

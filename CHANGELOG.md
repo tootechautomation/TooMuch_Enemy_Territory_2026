@@ -1,12 +1,13 @@
 # Changelog
 
-## 3.8.0
-- Added persistent session rank progression
-- Added Major rank
-- Added rank health and reserve-ammo bonuses
-- Added assists, objective score, and round XP
-- Added rank-progress HUD
-- Added MVP and specialist round awards
-- Expanded scoreboard columns and sorting
-- Preserved explicit connection-string `+`
+## 3.9.0
+- Added Operation Black River large-map expansion
+- Added village, rail-yard, fort, road, river, hill, and watchtower sectors
+- Expanded playable footprint to approximately 92 x 76 meters
+- Rebuilt character visuals with rounded geometry
+- Added class-specific visual gear
+- Added procedural sky, fog, filmic tonemapping, and longer shadows
+- Reworked remote player interpolation
+- Added smoother remote movement animation
 - Preserved protocol 341 compatibility
+- Preserved explicit connection-message `+`

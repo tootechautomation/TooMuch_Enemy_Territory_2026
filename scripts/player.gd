@@ -21,7 +21,7 @@ const WALK_SPEED := 7.0
 const SPRINT_SPEED := 10.0
 const CROUCH_SPEED := 4.0
 const JUMP_SPEED := 5.2
-const SNAPSHOT_LERP_SPEED := 14.0
+const SNAPSHOT_LERP_SPEED := 20.0
 const ABILITY_COOLDOWN_MS := 12000
 const SCOUT_SPOT_DURATION_MS := 8000
 const DEFAULT_FOV := 75.0
@@ -98,6 +98,8 @@ var bot_role_initialized := false
 var target_position := Vector3.ZERO
 var target_yaw := 0.0
 var target_pitch := 0.0
+var remote_smoothed_velocity := Vector3.ZERO
+var previous_remote_position := Vector3.ZERO
 var hud: Label
 var scoreboard: Label
 var feed: Label
@@ -301,9 +303,39 @@ func _physics_process(delta: float) -> void:
 		_update_world_character_animation(delta)
 		_update_radar()
 	elif not multiplayer.is_server():
-		global_position = global_position.lerp(target_position, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
-		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
-		$Head.rotation.x = lerp_angle($Head.rotation.x, target_pitch, clampf(delta * SNAPSHOT_LERP_SPEED, 0.0, 1.0))
+		var position_alpha: float = (
+			1.0 - exp(-SNAPSHOT_LERP_SPEED * delta)
+		)
+		var rotation_alpha: float = (
+			1.0 - exp(-18.0 * delta)
+		)
+		var before_position: Vector3 = global_position
+		global_position = global_position.lerp(
+			target_position,
+			position_alpha
+		)
+		rotation.y = lerp_angle(
+			rotation.y,
+			target_yaw,
+			rotation_alpha
+		)
+		$Head.rotation.x = lerp_angle(
+			$Head.rotation.x,
+			target_pitch,
+			rotation_alpha
+		)
+		if delta > 0.0001:
+			var measured_velocity: Vector3 = (
+				global_position - before_position
+			) / delta
+			remote_smoothed_velocity = (
+				remote_smoothed_velocity.lerp(
+					measured_velocity,
+					1.0 - exp(-12.0 * delta)
+				)
+			)
+			velocity = remote_smoothed_velocity
+		_update_world_character_animation(delta)
 		_update_identity_visibility()
 	if multiplayer.is_server(): _server_simulate(delta)
 
@@ -3350,11 +3382,58 @@ func _update_first_person_animation(delta: float) -> void:
 func _update_world_character_animation(delta: float) -> void:
 	if class_accent_mesh == null:
 		return
-	var speed: float = Vector2(velocity.x, velocity.z).length()
+
+	var speed: float = Vector2(
+		velocity.x,
+		velocity.z
+	).length()
+	var animation_clock: float = (
+		float(Time.get_ticks_msec()) / 1000.0
+	)
+	var speed_ratio: float = clampf(
+		speed / SPRINT_SPEED,
+		0.0,
+		1.0
+	)
+
 	var target_roll := 0.0
-	if alive and speed > 0.7:
-		target_roll = sin(Time.get_ticks_msec() * 0.012) * minf(0.12, speed * 0.012)
-	class_accent_mesh.rotation.z = lerpf(class_accent_mesh.rotation.z, target_roll, clampf(delta * 10.0,0.0,1.0))
+	var target_yaw_offset := 0.0
+	var target_vertical_offset := 0.0
+
+	if alive and speed > 0.45:
+		var stride_frequency: float = lerpf(
+			5.5,
+			9.0,
+			speed_ratio
+		)
+		target_roll = (
+			sin(animation_clock * stride_frequency)
+			* lerpf(0.025, 0.075, speed_ratio)
+		)
+		target_yaw_offset = (
+			cos(animation_clock * stride_frequency * 0.5)
+			* 0.018
+		)
+		target_vertical_offset = (
+			absf(sin(animation_clock * stride_frequency))
+			* lerpf(0.008, 0.026, speed_ratio)
+		)
+
+	class_accent_mesh.rotation.z = lerpf(
+		class_accent_mesh.rotation.z,
+		target_roll,
+		1.0 - exp(-10.0 * delta)
+	)
+	class_accent_mesh.rotation.y = lerpf(
+		class_accent_mesh.rotation.y,
+		target_yaw_offset,
+		1.0 - exp(-8.0 * delta)
+	)
+	class_accent_mesh.position.y = lerpf(
+		class_accent_mesh.position.y,
+		target_vertical_offset,
+		1.0 - exp(-12.0 * delta)
+	)
 
 func _update_hud() -> void:
 	if hud == null:
