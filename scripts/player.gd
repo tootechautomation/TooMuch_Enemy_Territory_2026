@@ -2754,6 +2754,80 @@ func _build_first_person_weapon() -> void:
 	$Head/Camera3D.add_child(weapon_view)
 	_rebuild_first_person_weapon()
 
+func _first_person_skin_material() -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.58, 0.39, 0.27)
+	material.roughness = 0.88
+	return material
+
+func _first_person_sleeve_material() -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = (
+		Color(0.24, 0.31, 0.20)
+		if team == 0
+		else Color(0.31, 0.27, 0.20)
+	)
+	material.roughness = 0.94
+	return material
+
+func _add_first_person_arm(
+	node_name: String,
+	position_value: Vector3,
+	rotation_value: Vector3,
+	length: float,
+	right_hand: bool
+) -> void:
+	var arm_root := Node3D.new()
+	arm_root.name = node_name
+	arm_root.position = position_value
+	arm_root.rotation_degrees = rotation_value
+	weapon_view.add_child(arm_root)
+
+	var sleeve := MeshInstance3D.new()
+	var sleeve_mesh := CapsuleMesh.new()
+	sleeve_mesh.radius = 0.095
+	sleeve_mesh.height = length
+	sleeve_mesh.radial_segments = 16
+	sleeve_mesh.rings = 8
+	sleeve.mesh = sleeve_mesh
+	sleeve.rotation_degrees.x = 90.0
+	sleeve.position.z = length * 0.42
+	sleeve.material_override = _first_person_sleeve_material()
+	arm_root.add_child(sleeve)
+
+	var hand := MeshInstance3D.new()
+	var hand_mesh := CapsuleMesh.new()
+	hand_mesh.radius = 0.085
+	hand_mesh.height = 0.24
+	hand_mesh.radial_segments = 16
+	hand_mesh.rings = 8
+	hand.mesh = hand_mesh
+	hand.rotation_degrees.x = 90.0
+	hand.position = Vector3(
+		0.025 if right_hand else -0.025,
+		0.0,
+		length * 0.88
+	)
+	hand.material_override = _first_person_skin_material()
+	arm_root.add_child(hand)
+
+	for finger_index in range(3):
+		var finger := MeshInstance3D.new()
+		var finger_mesh := CapsuleMesh.new()
+		finger_mesh.radius = 0.018
+		finger_mesh.height = 0.13
+		finger_mesh.radial_segments = 10
+		finger_mesh.rings = 4
+		finger.mesh = finger_mesh
+		finger.rotation_degrees.x = 90.0
+		finger.position = Vector3(
+			(float(finger_index) - 1.0) * 0.035,
+			-0.02,
+			length * 0.98
+		)
+		finger.material_override = _first_person_skin_material()
+		arm_root.add_child(finger)
+
 func _rebuild_first_person_weapon() -> void:
 	if weapon_view == null:
 		return
@@ -2859,6 +2933,37 @@ func _rebuild_first_person_weapon() -> void:
 	grip.rotation_degrees.x = -15.0 if is_pistol else 0.0
 	grip.material_override = wood
 	weapon_view.add_child(grip)
+
+	if is_pistol:
+		_add_first_person_arm(
+			"RightArm",
+			Vector3(0.18, 0.18, 0.30),
+			Vector3(-12.0, -4.0, -8.0),
+			0.58,
+			true
+		)
+		_add_first_person_arm(
+			"LeftSupportArm",
+			Vector3(-0.16, 0.22, 0.18),
+			Vector3(-18.0, 10.0, 8.0),
+			0.48,
+			false
+		)
+	else:
+		_add_first_person_arm(
+			"RightArm",
+			Vector3(0.24, 0.22, 0.36),
+			Vector3(-15.0, -9.0, -12.0),
+			0.70,
+			true
+		)
+		_add_first_person_arm(
+			"LeftArm",
+			Vector3(-0.24, 0.18, -0.02),
+			Vector3(-24.0, 12.0, 10.0),
+			0.82,
+			false
+		)
 
 	muzzle_flash = MeshInstance3D.new()
 	var flash_mesh := SphereMesh.new()

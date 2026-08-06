@@ -11,7 +11,7 @@ const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const RallyPointScript = preload("res://scripts/rally_point.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "4.0.0"
+const BUILD_VERSION := "4.1.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -35,8 +35,8 @@ const SUPPLY_DEPOT_RADIUS := 5.2
 const SUPPLY_DEPOT_TICKET_INTERVAL := 12.0
 const RALLY_POINT_DURATION := 45.0
 const RALLY_POINT_CONTEST_RADIUS := 8.0
-const LARGE_MAP_HALF_WIDTH := 46.0
-const LARGE_MAP_HALF_LENGTH := 38.0
+const LARGE_MAP_HALF_WIDTH := 62.0
+const LARGE_MAP_HALF_LENGTH := 52.0
 const SECTOR_CAPTURE_RADIUS := 7.0
 const SECTOR_CAPTURE_SECONDS := 12.0
 const SECTOR_TICKET_INTERVAL := 18.0
@@ -564,6 +564,205 @@ func _make_watchtower(
 		Color(0.20, 0.20, 0.20)
 	)
 
+func _make_cobblestone_square(
+	node_name: String,
+	center: Vector3,
+	columns: int,
+	rows: int,
+	tile_size: float
+) -> void:
+	for x_index in range(columns):
+		for z_index in range(rows):
+			var offset_x: float = (
+				float(x_index) - float(columns - 1) * 0.5
+			) * tile_size
+			var offset_z: float = (
+				float(z_index) - float(rows - 1) * 0.5
+			) * tile_size
+			var variation: float = randf_range(-0.035, 0.035)
+			_make_static_box(
+				"%s_%d_%d" % [node_name, x_index, z_index],
+				center + Vector3(offset_x, 0.03 + variation, offset_z),
+				Vector3(tile_size * 0.94, 0.10, tile_size * 0.94),
+				Color(
+					randf_range(0.28, 0.38),
+					randf_range(0.27, 0.36),
+					randf_range(0.25, 0.33)
+				)
+			)
+
+func _make_wwii_apartment(
+	node_name: String,
+	position: Vector3,
+	width: float,
+	depth: float,
+	floors: int,
+	damaged: bool = false
+) -> void:
+	var floor_height := 3.1
+	var total_height: float = float(floors) * floor_height
+	var wall_color := Color(0.43, 0.39, 0.34)
+
+	_make_static_box(
+		node_name + "_Rear",
+		position + Vector3(0.0, total_height * 0.5, depth * 0.5),
+		Vector3(width, total_height, 0.55),
+		wall_color
+	)
+	_make_static_box(
+		node_name + "_Left",
+		position + Vector3(-width * 0.5, total_height * 0.5, 0.0),
+		Vector3(0.55, total_height, depth),
+		wall_color.darkened(0.04)
+	)
+	_make_static_box(
+		node_name + "_Right",
+		position + Vector3(width * 0.5, total_height * 0.5, 0.0),
+		Vector3(0.55, total_height, depth),
+		wall_color.darkened(0.02)
+	)
+
+	for floor_index in range(floors):
+		var y: float = float(floor_index) * floor_height + 0.18
+		_make_static_box(
+			"%s_Floor_%d" % [node_name, floor_index],
+			position + Vector3(0.0, y, 0.0),
+			Vector3(width, 0.32, depth),
+			Color(0.24, 0.22, 0.20)
+		)
+
+		for side in [-1.0, 1.0]:
+			var front_piece_width: float = width * 0.28
+			var front_y: float = (
+				float(floor_index) * floor_height
+				+ floor_height * 0.56
+			)
+			if damaged and floor_index == floors - 1 and side > 0.0:
+				continue
+			_make_static_box(
+				"%s_Front_%d_%s" % [
+					node_name,
+					floor_index,
+					str(side)
+				],
+				position + Vector3(
+					side * width * 0.34,
+					front_y,
+					-depth * 0.5
+				),
+				Vector3(
+					front_piece_width,
+					floor_height * 0.88,
+					0.55
+				),
+				wall_color
+			)
+
+	# Dark window recesses and lintels.
+	for floor_index in range(floors):
+		for window_index in [-1, 0, 1]:
+			if damaged and floor_index == floors - 1 and window_index == 1:
+				continue
+			var window_x: float = float(window_index) * width * 0.25
+			var window_y: float = (
+				float(floor_index) * floor_height + 1.75
+			)
+			_make_static_box(
+				"%s_Window_%d_%d" % [
+					node_name,
+					floor_index,
+					window_index
+				],
+				position + Vector3(window_x, window_y, -depth * 0.51),
+				Vector3(width * 0.13, 1.15, 0.12),
+				Color(0.055, 0.065, 0.070)
+			)
+
+	# Pitched dark roof.
+	_make_sloped_ground(
+		node_name + "_RoofA",
+		position + Vector3(-width * 0.22, total_height + 0.85, 0.0),
+		Vector3(width * 0.56, 0.32, depth + 0.5),
+		Vector3(0.0, 0.0, -22.0),
+		Color(0.18, 0.14, 0.12)
+	)
+	_make_sloped_ground(
+		node_name + "_RoofB",
+		position + Vector3(width * 0.22, total_height + 0.85, 0.0),
+		Vector3(width * 0.56, 0.32, depth + 0.5),
+		Vector3(0.0, 0.0, 22.0),
+		Color(0.18, 0.14, 0.12)
+	)
+
+func _make_sandbag_wall(
+	node_name: String,
+	position: Vector3,
+	length: int,
+	rotation_y: float = 0.0
+) -> void:
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+
+	for row in range(2):
+		for index in range(length):
+			var bag := MeshInstance3D.new()
+			var mesh := CapsuleMesh.new()
+			mesh.radius = 0.24
+			mesh.height = 0.78
+			mesh.radial_segments = 12
+			mesh.rings = 6
+			bag.mesh = mesh
+			bag.rotation_degrees.z = 90.0
+			bag.position = Vector3(
+				float(index) * 0.68 - float(length - 1) * 0.34,
+				0.26 + float(row) * 0.38,
+				0.10 if (index + row) % 2 == 0 else -0.10
+			)
+			var material := StandardMaterial3D.new()
+			material.albedo_color = Color(
+				randf_range(0.38, 0.46),
+				randf_range(0.34, 0.41),
+				randf_range(0.22, 0.28)
+			)
+			material.roughness = 1.0
+			bag.material_override = material
+			root.add_child(bag)
+
+func _make_street_lamp(
+	node_name: String,
+	position: Vector3
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	add_child(root)
+
+	var pole := MeshInstance3D.new()
+	var pole_mesh := CylinderMesh.new()
+	pole_mesh.top_radius = 0.07
+	pole_mesh.bottom_radius = 0.10
+	pole_mesh.height = 4.8
+	pole.mesh = pole_mesh
+	pole.position.y = 2.4
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.08, 0.09, 0.09)
+	metal.metallic = 0.55
+	metal.roughness = 0.40
+	pole.material_override = metal
+	root.add_child(pole)
+
+	var lamp := OmniLight3D.new()
+	lamp.position = Vector3(0.0, 4.35, 0.0)
+	lamp.omni_range = 9.0
+	lamp.light_color = Color(1.0, 0.72, 0.38)
+	lamp.light_energy = 1.25
+	root.add_child(lamp)
+
 func _build_operation_black_river_expansion() -> void:
 	# Large outer terrain, roughly 92 x 76 meters.
 	_make_static_box(
@@ -728,29 +927,127 @@ func _build_operation_black_river_expansion() -> void:
 	]:
 		_make_tree(tree_position, randf_range(0.85, 1.30))
 
+	# WWII urban expansion: cobbled village, apartments, courtyards.
+	_make_cobblestone_square(
+		"VillageCobble",
+		Vector3(-31.0, 0.0, 2.0),
+		20,
+		24,
+		1.15
+	)
+	_make_cobblestone_square(
+		"FortCourtyard",
+		Vector3(33.0, 0.0, 26.0),
+		18,
+		14,
+		1.10
+	)
+
+	_make_wwii_apartment(
+		"OldTownApartmentsA",
+		Vector3(-42.0, 0.0, -18.0),
+		12.0,
+		8.0,
+		3,
+		true
+	)
+	_make_wwii_apartment(
+		"OldTownApartmentsB",
+		Vector3(-44.0, 0.0, 7.0),
+		14.0,
+		8.5,
+		4,
+		false
+	)
+	_make_wwii_apartment(
+		"OldTownApartmentsC",
+		Vector3(-39.0, 0.0, 31.0),
+		11.0,
+		7.5,
+		3,
+		true
+	)
+	_make_wwii_apartment(
+		"RailOffice",
+		Vector3(45.0, 0.0, -18.0),
+		13.0,
+		8.0,
+		3,
+		true
+	)
+	_make_wwii_apartment(
+		"FortBarracks",
+		Vector3(49.0, 0.0, 26.0),
+		15.0,
+		9.0,
+		3,
+		false
+	)
+
+	for wall_data in [
+		[Vector3(-22.0, 0.0, -13.0), 9, 0.0],
+		[Vector3(-18.0, 0.0, 17.0), 11, 0.2],
+		[Vector3(18.0, 0.0, -10.0), 10, -0.1],
+		[Vector3(24.0, 0.0, 11.0), 12, 0.0],
+		[Vector3(35.0, 0.0, 18.0), 8, 1.57]
+	]:
+		_make_sandbag_wall(
+			"Sandbags_%s" % str(wall_data[0]),
+			Vector3(wall_data[0]),
+			int(wall_data[1]),
+			float(wall_data[2])
+		)
+
+	for lamp_position in [
+		Vector3(-32.0, 0.0, -12.0),
+		Vector3(-31.0, 0.0, 2.0),
+		Vector3(-30.0, 0.0, 17.0),
+		Vector3(23.0, 0.0, -20.0),
+		Vector3(32.0, 0.0, 26.0),
+		Vector3(42.0, 0.0, 26.0)
+	]:
+		_make_street_lamp(
+			"Lamp_%s" % str(lamp_position),
+			lamp_position
+		)
+
+	# Longer outskirts for larger battles.
+	_make_static_box(
+		"FarWestGround",
+		Vector3(-54.0, -0.65, 0.0),
+		Vector3(16.0, 1.3, 102.0),
+		Color(0.19, 0.22, 0.17)
+	)
+	_make_static_box(
+		"FarEastGround",
+		Vector3(54.0, -0.65, 0.0),
+		Vector3(16.0, 1.3, 102.0),
+		Color(0.19, 0.22, 0.17)
+	)
+
 	# Outer boundaries.
 	_make_static_box(
 		"OuterBoundaryNorth",
-		Vector3(0.0, 3.0, -38.0),
-		Vector3(94.0, 6.0, 1.0),
+		Vector3(0.0, 3.0, -52.0),
+		Vector3(126.0, 6.0, 1.0),
 		Color(0.24, 0.25, 0.26)
 	)
 	_make_static_box(
 		"OuterBoundarySouth",
-		Vector3(0.0, 3.0, 38.0),
-		Vector3(94.0, 6.0, 1.0),
+		Vector3(0.0, 3.0, 52.0),
+		Vector3(126.0, 6.0, 1.0),
 		Color(0.24, 0.25, 0.26)
 	)
 	_make_static_box(
 		"OuterBoundaryWest",
-		Vector3(-46.0, 3.0, 0.0),
-		Vector3(1.0, 6.0, 76.0),
+		Vector3(-62.0, 3.0, 0.0),
+		Vector3(1.0, 6.0, 104.0),
 		Color(0.24, 0.25, 0.26)
 	)
 	_make_static_box(
 		"OuterBoundaryEast",
-		Vector3(46.0, 3.0, 0.0),
-		Vector3(1.0, 6.0, 76.0),
+		Vector3(62.0, 3.0, 0.0),
+		Vector3(1.0, 6.0, 104.0),
 		Color(0.24, 0.25, 0.26)
 	)
 
@@ -3701,6 +3998,11 @@ func round_awards_text() -> String:
 			]
 		)
 
+	lines.append("")
+	lines.append("Current Objective: %s" % objective_status_text())
+	lines.append("Sector Control: %s" % sector_status_text())
+	lines.append("Round Awards Preview:")
+	lines.append(round_awards_text())
 	return "\n".join(lines)
 
 func scoreboard_text() -> String:
@@ -3719,7 +4021,7 @@ func scoreboard_text() -> String:
 
 	var lines: Array[String] = [
 		(
-			"SCOREBOARD · Tickets ATK %d / DEF %d · "
+			"TAB RESULTS · Tickets ATK %d / DEF %d · "
 			+ "Command Post %s · Supply Depot %s"
 		)
 		% [
