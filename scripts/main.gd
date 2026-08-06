@@ -21,6 +21,9 @@ const BattlefieldAtmosphereScript = preload(
 const RealAssetAdapterScript = preload(
 	"res://scripts/assets/real_asset_adapter.gd"
 )
+const StructureCollisionAuditorScript = preload(
+	"res://scripts/physics/structure_collision_auditor.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -54,7 +57,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.9.0"
+const BUILD_VERSION := "8.0.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -274,6 +277,7 @@ var battlefield_environment: Environment
 var wwii_detail_pass: Node3D
 var wwii_material_library
 var battlefield_atmosphere: Node3D
+var structure_collision_report: Dictionary = {}
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -1545,6 +1549,41 @@ func _make_gameplay_block(
 		body.add_child(visual)
 	return body
 
+func _make_local_structure_block(
+	parent: Node3D,
+	node_name: String,
+	local_position: Vector3,
+	size: Vector3,
+	color: Color
+) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = node_name
+	body.position = local_position
+	body.collision_layer = 1
+	body.collision_mask = 1
+	body.set_meta("authoritative_structure_collision", true)
+	parent.add_child(body)
+
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	collision.shape = shape
+	body.add_child(collision)
+
+	if DisplayServer.get_name() != "headless":
+		var visual := MeshInstance3D.new()
+		visual.name = "%s_Visual" % node_name
+		var mesh := BoxMesh.new()
+		mesh.size = size
+		visual.mesh = mesh
+		visual.material_override = _generated_surface_material(
+			node_name,
+			color
+		)
+		body.add_child(visual)
+
+	return body
+
 func _make_open_building(
 	node_name: String,
 	position: Vector3,
@@ -1554,36 +1593,85 @@ func _make_open_building(
 	rotation_y: float,
 	wall_color: Color
 ) -> Node3D:
-	var root: Node3D = Node3D.new()
+	var root := Node3D.new()
 	root.name = node_name
 	root.position = position
 	root.rotation.y = rotation_y
+	root.set_meta("authoritative_structure_root", true)
 	add_child(root)
 
 	var thickness := 0.42
 	var doorway_width := 2.3
-	var side_width: float = (width - doorway_width) * 0.5
+	var side_width: float = (
+		width - doorway_width
+	) * 0.5
 
 	var part_data: Array = [
-		["Floor", Vector3(0.0,0.10,0.0), Vector3(width,0.20,depth), Color(0.24,0.24,0.22)],
-		["Back", Vector3(0.0,height*0.5,depth*0.5), Vector3(width,height,thickness), wall_color],
-		["Left", Vector3(-width*0.5,height*0.5,0.0), Vector3(thickness,height,depth), wall_color],
-		["Right", Vector3(width*0.5,height*0.5,0.0), Vector3(thickness,height,depth), wall_color],
-		["FrontLeft", Vector3(-(doorway_width+side_width)*0.5,height*0.5,-depth*0.5), Vector3(side_width,height,thickness), wall_color],
-		["FrontRight", Vector3((doorway_width+side_width)*0.5,height*0.5,-depth*0.5), Vector3(side_width,height,thickness), wall_color],
-		["Roof", Vector3(0.0,height+0.16,0.0), Vector3(width+0.35,0.32,depth+0.35), Color(0.13,0.15,0.16)]
+		[
+			"Floor",
+			Vector3(0.0, 0.10, 0.0),
+			Vector3(width, 0.20, depth),
+			Color(0.24, 0.24, 0.22)
+		],
+		[
+			"BackWall",
+			Vector3(0.0, height * 0.5, depth * 0.5),
+			Vector3(width, height, thickness),
+			wall_color
+		],
+		[
+			"LeftWall",
+			Vector3(-width * 0.5, height * 0.5, 0.0),
+			Vector3(thickness, height, depth),
+			wall_color
+		],
+		[
+			"RightWall",
+			Vector3(width * 0.5, height * 0.5, 0.0),
+			Vector3(thickness, height, depth),
+			wall_color
+		],
+		[
+			"FrontLeftWall",
+			Vector3(
+				-(doorway_width + side_width) * 0.5,
+				height * 0.5,
+				-depth * 0.5
+			),
+			Vector3(side_width, height, thickness),
+			wall_color
+		],
+		[
+			"FrontRightWall",
+			Vector3(
+				(doorway_width + side_width) * 0.5,
+				height * 0.5,
+				-depth * 0.5
+			),
+			Vector3(side_width, height, thickness),
+			wall_color
+		],
+		[
+			"Roof",
+			Vector3(0.0, height + 0.16, 0.0),
+			Vector3(
+				width + 0.35,
+				0.32,
+				depth + 0.35
+			),
+			Color(0.13, 0.15, 0.16)
+		]
 	]
+
 	for item in part_data:
-		var part: StaticBody3D = _make_gameplay_block(
+		_make_local_structure_block(
+			root,
 			"%s_%s" % [node_name, str(item[0])],
-			position,
+			Vector3(item[1]),
 			Vector3(item[2]),
-			Color(item[3]),
-			rotation_y
+			Color(item[3])
 		)
-		part.reparent(root)
-		part.position = Vector3(item[1])
-		part.rotation.y = 0.0
+
 	return root
 
 func _make_tunnel_segment(
@@ -8034,6 +8122,35 @@ func _reset_round() -> void:
 	push_kill_feed.rpc("New round started")
 	announce.rpc("ROUND START · Secure the bridge and command post")
 
+func _run_structure_collision_audit() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	structure_collision_report = (
+		StructureCollisionAuditorScript.audit_and_repair(self)
+	)
+	print(
+		"Structure collision audit: %s"
+		% structure_collision_report
+	)
+
+func structure_collision_status_text() -> String:
+	if structure_collision_report.is_empty():
+		return "Structure collision audit has not run."
+	return (
+		"STRUCTURE COLLISION\n"
+		+ "Scanned %d · Structural %d\n"
+		+ "Protected %d · Trimesh %d\n"
+		+ "Box fallback %d · Failed %d"
+	) % [
+		int(structure_collision_report.get("scanned_meshes", 0)),
+		int(structure_collision_report.get("structural_meshes", 0)),
+		int(structure_collision_report.get("already_protected", 0)),
+		int(structure_collision_report.get("trimesh_generated", 0)),
+		int(structure_collision_report.get("box_fallbacks", 0)),
+		int(structure_collision_report.get("failed", 0))
+	]
+
 func _build_world() -> void:
 	var env := WorldEnvironment.new()
 	battlefield_environment = Environment.new()
@@ -8511,7 +8628,7 @@ func _build_world() -> void:
 	dynamite_light.light_energy = 2.3
 	dynamite_light.visible = false
 	add_child(dynamite_light)
-
+	call_deferred("_run_structure_collision_audit")
 
 func _make_spawn_zone(
 	zone_name: String,

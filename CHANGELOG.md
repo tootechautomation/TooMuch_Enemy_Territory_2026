@@ -1,11 +1,9 @@
 # Changelog
 
-## 7.9.0
-- Added real_asset_adapter.gd
-- Added automatic character height normalization and grounding
-- Added skeleton and animation inspection
-- Added expanded weapon socket discovery
-- Added material cleanup for imported GLBs
-- Added environment target-height normalization
-- Added invalid-character rejection with procedural fallback
+## 8.0.0
+- Rebuilt open-building walls as exact local StaticBody3D parts
+- Fixed rotated building visual/collision alignment
+- Added structural collision audit and repair
+- Added automatic trimesh collision for unprotected wall meshes
+- Added conservative local box fallback
 - Preserved protocol 341 and explicit connection-string `+`
