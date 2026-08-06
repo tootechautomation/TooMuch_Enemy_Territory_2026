@@ -1,13 +1,12 @@
 # Changelog
 
-## 3.9.0
-- Added Operation Black River large-map expansion
-- Added village, rail-yard, fort, road, river, hill, and watchtower sectors
-- Expanded playable footprint to approximately 92 x 76 meters
-- Rebuilt character visuals with rounded geometry
-- Added class-specific visual gear
-- Added procedural sky, fog, filmic tonemapping, and longer shadows
-- Reworked remote player interpolation
-- Added smoother remote movement animation
+## 4.0.0
+- Added Village, Rail Yard, and Fort capture sectors
+- Added sector capture, contesting, synchronization, and ticket rewards
+- Added tactical map on M
+- Added sector-based validated forward spawns
+- Added world capture rings and beacons
+- Added route-aware bot navigation for the large map
+- Preserved original objective chain
 - Preserved protocol 341 compatibility
 - Preserved explicit connection-message `+`

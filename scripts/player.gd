@@ -186,6 +186,11 @@ var class_mode_label: Label
 var rally_cooldown_until_ms := 0
 var mission_banner: Label
 var rank_progress_label: Label
+var tactical_map_panel: PanelContainer
+var tactical_map_label: Label
+var tactical_map_open := false
+var bot_route_index := 0
+var bot_route_repath_ms := 0
 var compass_label: Label
 var medal_icon: TextureRect
 var medal_label: Label
@@ -340,6 +345,16 @@ func _physics_process(delta: float) -> void:
 	if multiplayer.is_server(): _server_simulate(delta)
 
 func _poll_spawn_menu_toggle() -> void:
+	if Input.is_action_just_pressed("tactical_map"):
+		tactical_map_open = not tactical_map_open
+		if tactical_map_panel != null:
+			tactical_map_panel.visible = tactical_map_open
+		Input.mouse_mode = (
+			Input.MOUSE_MODE_VISIBLE
+			if tactical_map_open
+			else Input.MOUSE_MODE_CAPTURED
+		)
+
 	var pressed: bool = Input.is_action_pressed("spawn_menu")
 
 	if pressed and not menu_toggle_latched:
@@ -353,7 +368,7 @@ func _poll_spawn_menu_toggle() -> void:
 		menu_toggle_latched = false
 
 func _collect_and_send_input() -> void:
-	if spawn_menu_open:
+	if spawn_menu_open or tactical_map_open:
 		is_aiming = false
 		_update_aim_view()
 		return
@@ -1908,8 +1923,24 @@ func _server_bot_tick(delta: float) -> void:
 			has_movement_goal = true
 
 	if not has_movement_goal:
-		movement_goal = Vector3(
+		if now >= bot_route_repath_ms:
+			bot_route_repath_ms = now + 3500
+			bot_route_index += 1
+
+		var routed_goal: Vector3 = Vector3(
+			main.call(
+				"bot_route_waypoint",
+				self,
+				bot_route_index
+			)
+		)
+		var objective_goal: Vector3 = Vector3(
 			main.call("bot_goal_position", self)
+		)
+		movement_goal = (
+			objective_goal
+			if global_position.distance_to(objective_goal) <= 18.0
+			else routed_goal
 		)
 
 		var artillery_danger: Variant = (
@@ -3128,6 +3159,28 @@ func _build_hud() -> void:
 	)
 	layer.add_child(rank_progress_label)
 
+	tactical_map_panel = PanelContainer.new()
+	tactical_map_panel.position = Vector2(310, 105)
+	tactical_map_panel.custom_minimum_size = Vector2(660, 500)
+	tactical_map_panel.visible = false
+	layer.add_child(tactical_map_panel)
+
+	var tactical_box := VBoxContainer.new()
+	tactical_map_panel.add_child(tactical_box)
+
+	var tactical_title := Label.new()
+	tactical_title.text = "TACTICAL MAP · M TO CLOSE"
+	tactical_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tactical_title.add_theme_font_size_override("font_size", 25)
+	tactical_box.add_child(tactical_title)
+
+	tactical_map_label = Label.new()
+	tactical_map_label.custom_minimum_size = Vector2(620, 420)
+	tactical_map_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tactical_map_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	tactical_map_label.add_theme_font_size_override("font_size", 20)
+	tactical_box.add_child(tactical_map_label)
+
 	command_post_bar = ProgressBar.new()
 	command_post_bar.position = Vector2(440, 122)
 	command_post_bar.size = Vector2(400, 18)
@@ -3558,6 +3611,11 @@ func _update_hud() -> void:
 	if rank_progress_label != null:
 		rank_progress_label.text = rank_progress_text()
 
+	if tactical_map_label != null and main != null:
+		tactical_map_label.text = str(
+			main.call("tactical_map_text")
+		)
+
 	if mission_banner != null and main != null:
 		var banner_until: int = int(
 			main.get("mission_banner_until_ms")
@@ -3720,7 +3778,7 @@ func _update_hud() -> void:
 		if replicated_ability_cooldown_ms <= 0
 		else "%.1fs" % cooldown
 	)
-	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  Smoke %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  MMB: ping  B: smoke  C: barricade  V: rally  F: freecam\nBlue=Attackers  Red=Defenders  Accent=Class" % [
+	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  Smoke %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  M: map  MMB: ping  B: smoke  C: barricade  V: rally  F: freecam\nBlue=Attackers  Red=Defenders  Accent=Class" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],

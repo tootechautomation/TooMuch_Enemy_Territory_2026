@@ -11,7 +11,7 @@ const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const RallyPointScript = preload("res://scripts/rally_point.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "3.9.0"
+const BUILD_VERSION := "4.0.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -37,6 +37,9 @@ const RALLY_POINT_DURATION := 45.0
 const RALLY_POINT_CONTEST_RADIUS := 8.0
 const LARGE_MAP_HALF_WIDTH := 46.0
 const LARGE_MAP_HALF_LENGTH := 38.0
+const SECTOR_CAPTURE_RADIUS := 7.0
+const SECTOR_CAPTURE_SECONDS := 12.0
+const SECTOR_TICKET_INTERVAL := 18.0
 
 var tex_metal: Texture2D
 var tex_objective: Texture2D
@@ -141,6 +144,29 @@ var supply_depot_progress_label: Label3D
 var supply_depot_light: OmniLight3D
 var mission_banner_text := ""
 var mission_banner_until_ms := 0
+var sector_positions: Dictionary = {
+	"Village": Vector3(-28.0, 0.0, 1.0),
+	"Rail Yard": Vector3(25.0, 0.0, -20.0),
+	"Fort": Vector3(30.0, 0.0, 25.0)
+}
+var sector_control: Dictionary = {
+	"Village": -1,
+	"Rail Yard": -1,
+	"Fort": -1
+}
+var sector_progress: Dictionary = {
+	"Village": 0.0,
+	"Rail Yard": 0.0,
+	"Fort": 0.0
+}
+var sector_contested: Dictionary = {
+	"Village": false,
+	"Rail Yard": false,
+	"Fort": false
+}
+var sector_ticket_accumulator := 0.0
+var sector_markers: Dictionary = {}
+var sector_lights: Dictionary = {}
 var forward_spawn_points := {
 	0: [
 		Vector3(3.5, 1.0, -8.5),
@@ -182,6 +208,7 @@ func _process(delta: float) -> void:
 	_update_objective_visuals()
 	_update_command_post_visuals()
 	_update_supply_depot_visuals()
+	_update_sector_visuals()
 	_update_battlefield_atmosphere()
 
 	var active_peer: MultiplayerPeer = multiplayer.multiplayer_peer
@@ -197,6 +224,7 @@ func _process(delta: float) -> void:
 
 	_update_pending_artillery(delta)
 	_update_supply_depot(delta)
+	_update_sector_warfare(delta)
 
 	station_accumulator += delta
 	if station_accumulator >= COMMAND_POST_STATION_INTERVAL:
@@ -1084,6 +1112,343 @@ func _artillery_danger_position() -> Variant:
 				strike.get("position", Vector3.ZERO)
 			)
 	return danger_position
+
+func _update_sector_warfare(delta: float) -> void:
+	if not multiplayer.is_server() or match_over:
+		return
+
+	for sector_name_value in sector_positions.keys():
+		var sector_name: String = str(sector_name_value)
+		var sector_position: Vector3 = Vector3(
+			sector_positions.get(sector_name, Vector3.ZERO)
+		)
+		var attackers := 0
+		var defenders := 0
+
+		for player_value in players.values():
+			var player: Node3D = player_value as Node3D
+			if player == null:
+				continue
+			if not bool(player.get("alive")):
+				continue
+			if bool(player.get("downed")):
+				continue
+			if player.global_position.distance_to(
+				sector_position
+			) > SECTOR_CAPTURE_RADIUS:
+				continue
+
+			if int(player.get("team")) == 0:
+				attackers += 1
+			else:
+				defenders += 1
+
+		var contested: bool = attackers > 0 and defenders > 0
+		sector_contested[sector_name] = contested
+
+		var current_progress: float = float(
+			sector_progress.get(sector_name, 0.0)
+		)
+		if attackers != defenders:
+			var advantage: int = clampi(
+				abs(attackers - defenders),
+				1,
+				3
+			)
+			var capture_rate: float = (
+				100.0 / SECTOR_CAPTURE_SECONDS
+			) * float(advantage)
+
+			if attackers > defenders:
+				current_progress = minf(
+					100.0,
+					current_progress + capture_rate * delta
+				)
+			else:
+				current_progress = maxf(
+					-100.0,
+					current_progress - capture_rate * delta
+				)
+
+		sector_progress[sector_name] = current_progress
+		var old_control: int = int(
+			sector_control.get(sector_name, -1)
+		)
+		var new_control := old_control
+
+		if current_progress >= 100.0:
+			new_control = 0
+		elif current_progress <= -100.0:
+			new_control = 1
+		elif absf(current_progress) <= 4.0:
+			new_control = -1
+
+		if new_control != old_control:
+			sector_control[sector_name] = new_control
+			if new_control == 0:
+				show_mission_event.rpc(
+					"ATTACKERS CAPTURED %s" % sector_name.to_upper()
+				)
+			elif new_control == 1:
+				show_mission_event.rpc(
+					"DEFENDERS CAPTURED %s" % sector_name.to_upper()
+				)
+			else:
+				show_mission_event.rpc(
+					"%s NEUTRALIZED" % sector_name.to_upper()
+				)
+
+	sector_ticket_accumulator += delta
+	if sector_ticket_accumulator >= SECTOR_TICKET_INTERVAL:
+		sector_ticket_accumulator = 0.0
+		var attacker_sectors := 0
+		var defender_sectors := 0
+		for control_value in sector_control.values():
+			var control: int = int(control_value)
+			if control == 0:
+				attacker_sectors += 1
+			elif control == 1:
+				defender_sectors += 1
+
+		if attacker_sectors >= 2:
+			attacker_tickets = mini(
+				INITIAL_TEAM_TICKETS,
+				attacker_tickets + 1
+			)
+		if defender_sectors >= 2:
+			defender_tickets = mini(
+				INITIAL_TEAM_TICKETS,
+				defender_tickets + 1
+			)
+
+	sync_sector_state.rpc(
+		sector_control,
+		sector_progress,
+		sector_contested
+	)
+
+@rpc("authority", "call_local", "unreliable")
+func sync_sector_state(
+	new_control: Dictionary,
+	new_progress: Dictionary,
+	new_contested: Dictionary
+) -> void:
+	sector_control = new_control.duplicate(true)
+	sector_progress = new_progress.duplicate(true)
+	sector_contested = new_contested.duplicate(true)
+
+func _update_sector_visuals() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	for sector_name_value in sector_positions.keys():
+		var sector_name: String = str(sector_name_value)
+		var control: int = int(
+			sector_control.get(sector_name, -1)
+		)
+		var contested: bool = bool(
+			sector_contested.get(sector_name, false)
+		)
+		var progress: int = int(round(float(
+			sector_progress.get(sector_name, 0.0)
+		)))
+
+		var marker: Label3D = (
+			sector_markers.get(sector_name) as Label3D
+		)
+		var light: OmniLight3D = (
+			sector_lights.get(sector_name) as OmniLight3D
+		)
+		var color := Color(0.72, 0.72, 0.72)
+		var owner_text := "NEUTRAL"
+
+		if control == 0:
+			color = Color(0.20, 0.58, 1.0)
+			owner_text = "ATTACKERS"
+		elif control == 1:
+			color = Color(1.0, 0.25, 0.16)
+			owner_text = "DEFENDERS"
+
+		if contested:
+			color = Color(1.0, 0.76, 0.12)
+			owner_text = "CONTESTED"
+
+		if marker != null:
+			marker.text = (
+				"%s · %s · %+d%%"
+				% [sector_name.to_upper(), owner_text, progress]
+			)
+			marker.modulate = color
+		if light != null:
+			light.light_color = color
+			light.light_energy = (
+				2.8 if contested else 1.6
+			)
+
+func sector_status_text() -> String:
+	var parts: Array[String] = []
+	for sector_name_value in [
+		"Village",
+		"Rail Yard",
+		"Fort"
+	]:
+		var sector_name: String = str(sector_name_value)
+		var control: int = int(
+			sector_control.get(sector_name, -1)
+		)
+		var code := "N"
+		if bool(sector_contested.get(sector_name, false)):
+			code = "X"
+		elif control == 0:
+			code = "A"
+		elif control == 1:
+			code = "D"
+		parts.append("%s:%s" % [
+			sector_name.substr(0, 1),
+			code
+		])
+	return " ".join(parts)
+
+func tactical_map_text() -> String:
+	var village := _sector_map_code("Village")
+	var rail := _sector_map_code("Rail Yard")
+	var fort := _sector_map_code("Fort")
+	var objective_name := (
+		"BRIDGE"
+		if objective_stage == 0
+		else "BUNKER"
+	)
+
+	return (
+		"OPERATION BLACK RIVER\n"
+		+ "════════════════════════════════════════════\n"
+		+ "       NORTH ROAD / VILLAGE APPROACH\n"
+		+ "  [VILLAGE %s]          [RAIL YARD %s]\n"
+		+ "          \\              //\n"
+		+ "           \\  BLACK RIVER //\n"
+		+ "            [ACTIVE: %s]\n"
+		+ "                 ||\n"
+		+ "          [SUPPLY DEPOT]\n"
+		+ "                 ||\n"
+		+ "             [FORT %s]\n"
+		+ "════════════════════════════════════════════\n"
+		+ "A=Attackers  D=Defenders  N=Neutral  X=Contested"
+	) % [village, rail, objective_name, fort]
+
+func _sector_map_code(sector_name: String) -> String:
+	if bool(sector_contested.get(sector_name, false)):
+		return "X"
+	var control: int = int(
+		sector_control.get(sector_name, -1)
+	)
+	if control == 0:
+		return "A"
+	if control == 1:
+		return "D"
+	return "N"
+
+func bot_route_waypoint(
+	player: Node3D,
+	route_index: int
+) -> Vector3:
+	var team_id: int = int(player.get("team"))
+	var role: int = int(player.get("bot_squad_role"))
+	var routes: Array[Array] = []
+
+	if team_id == 0:
+		routes = [
+			[
+				Vector3(-36.0, 1.0, -28.0),
+				Vector3(-28.0, 1.0, -18.0),
+				Vector3(-18.0, 1.0, -8.0),
+				Vector3(-5.0, 1.0, 0.0),
+				Vector3(18.0, 1.0, 16.0),
+				Vector3(30.0, 1.0, 25.0)
+			],
+			[
+				Vector3(-38.0, 1.0, 22.0),
+				Vector3(-28.0, 1.0, 20.0),
+				Vector3(-14.0, 1.0, 10.0),
+				Vector3(0.0, 1.0, 5.0),
+				Vector3(20.0, 1.0, -18.0),
+				Vector3(30.0, 1.0, 25.0)
+			],
+			[
+				Vector3(-25.0, 1.0, 0.0),
+				Vector3(-10.0, 1.0, 0.0),
+				Vector3(5.0, 1.0, 0.0),
+				Vector3(18.0, 1.0, 8.0),
+				Vector3(30.0, 1.0, 25.0)
+			],
+			[
+				Vector3(-30.0, 1.0, 3.0),
+				Vector3(-18.0, 1.0, 8.0),
+				Vector3(-8.2, 1.0, 7.8),
+				Vector3(8.0, 1.0, 8.0),
+				Vector3(25.0, 1.0, 15.0)
+			]
+		]
+	else:
+		routes = [
+			[
+				Vector3(38.0, 1.0, 29.0),
+				Vector3(30.0, 1.0, 25.0),
+				Vector3(18.0, 1.0, 16.0),
+				Vector3(5.0, 1.0, 2.0),
+				Vector3(-18.0, 1.0, -8.0),
+				Vector3(-30.0, 1.0, -18.0)
+			],
+			[
+				Vector3(39.0, 1.0, -28.0),
+				Vector3(25.0, 1.0, -20.0),
+				Vector3(14.0, 1.0, -9.0),
+				Vector3(0.0, 1.0, -4.0),
+				Vector3(-20.0, 1.0, 9.0),
+				Vector3(-30.0, 1.0, 20.0)
+			],
+			[
+				Vector3(31.0, 1.0, 25.0),
+				Vector3(20.0, 1.0, 14.0),
+				Vector3(8.0, 1.0, 3.0),
+				Vector3(-5.0, 1.0, 0.0),
+				Vector3(-25.0, 1.0, 0.0)
+			],
+			[
+				Vector3(30.0, 1.0, 25.0),
+				Vector3(20.0, 1.0, 10.0),
+				Vector3(8.0, 1.0, 8.0),
+				Vector3(-8.2, 1.0, 7.8),
+				Vector3(-26.0, 1.0, 4.0)
+			]
+		]
+
+	var selected_route: Array = routes[
+		clampi(role, 0, routes.size() - 1)
+	]
+	return Vector3(selected_route[
+		posmod(route_index, selected_route.size())
+	])
+
+func sector_forward_spawn(
+	team_id: int
+) -> Variant:
+	var priority: Array[String] = (
+		["Fort", "Rail Yard", "Village"]
+		if team_id == 0
+		else ["Village", "Rail Yard", "Fort"]
+	)
+	for sector_name in priority:
+		if int(sector_control.get(sector_name, -1)) != team_id:
+			continue
+		var center: Vector3 = Vector3(
+			sector_positions.get(sector_name, Vector3.ZERO)
+		)
+		return center + Vector3(
+			-3.0 if team_id == 0 else 3.0,
+			1.0,
+			0.0
+		)
+	return null
 
 func _command_post_node() -> Node3D:
 	return get_node_or_null("CommandPost") as Node3D
@@ -2187,6 +2552,15 @@ func _get_spawn(team: int, peer_id: int) -> Vector3:
 	if rally_spawn is Vector3:
 		return rally_spawn as Vector3
 
+	var sector_spawn: Variant = sector_forward_spawn(safe_team)
+	if sector_spawn is Vector3:
+		var validated_sector: Dictionary = _validate_spawn_candidate(
+			sector_spawn as Vector3,
+			peer_id
+		)
+		if bool(validated_sector.get("valid", false)):
+			return Vector3(validated_sector.get("position"))
+
 	if (
 		objective_stage >= 1
 		and command_post_control == safe_team
@@ -3190,7 +3564,7 @@ func objective_status_text() -> String:
 				bridge_required,
 				attacker_tickets,
 				defender_tickets,
-				guns_text,
+				guns_text + " · " + sector_status_text(),
 				overtime_text
 			]
 		)
@@ -3584,6 +3958,12 @@ func _reset_round() -> void:
 	supply_depot_progress = 0.0
 	supply_depot_contested = false
 	supply_depot_ticket_accumulator = 0.0
+	sector_ticket_accumulator = 0.0
+	for sector_name_value in sector_positions.keys():
+		var sector_name: String = str(sector_name_value)
+		sector_control[sector_name] = -1
+		sector_progress[sector_name] = 0.0
+		sector_contested[sector_name] = false
 	overtime_active = false
 	atmosphere_elapsed = 0.0
 
@@ -3754,6 +4134,49 @@ func _build_world() -> void:
 	)
 
 	_build_operation_black_river_expansion()
+
+	for sector_name_value in sector_positions.keys():
+		var sector_name: String = str(sector_name_value)
+		var sector_root := Node3D.new()
+		sector_root.name = "Sector_%s" % sector_name.replace(" ", "_")
+		sector_root.position = Vector3(
+			sector_positions.get(sector_name, Vector3.ZERO)
+		)
+		add_child(sector_root)
+
+		var ring := MeshInstance3D.new()
+		var ring_mesh := CylinderMesh.new()
+		ring_mesh.top_radius = SECTOR_CAPTURE_RADIUS
+		ring_mesh.bottom_radius = SECTOR_CAPTURE_RADIUS
+		ring_mesh.height = 0.08
+		ring.mesh = ring_mesh
+		ring.position.y = 0.06
+		var ring_material := StandardMaterial3D.new()
+		ring_material.transparency = (
+			BaseMaterial3D.TRANSPARENCY_ALPHA
+		)
+		ring_material.albedo_color = Color(0.7, 0.7, 0.7, 0.16)
+		ring_material.shading_mode = (
+			BaseMaterial3D.SHADING_MODE_UNSHADED
+		)
+		ring.material_override = ring_material
+		sector_root.add_child(ring)
+
+		var marker := Label3D.new()
+		marker.position = Vector3(0.0, 4.0, 0.0)
+		marker.font_size = 26
+		marker.outline_size = 10
+		marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		marker.fixed_size = true
+		sector_root.add_child(marker)
+		sector_markers[sector_name] = marker
+
+		var light := OmniLight3D.new()
+		light.position = Vector3(0.0, 2.2, 0.0)
+		light.omni_range = 8.0
+		light.light_energy = 1.6
+		sector_root.add_child(light)
+		sector_lights[sector_name] = light
 
 	# Combined-arms battlefield expansion.
 	_make_static_box(

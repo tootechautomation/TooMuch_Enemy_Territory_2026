@@ -45,3 +45,8 @@ deploy_barricade={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycod
 throw_smoke={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":66)]}
 spectator_freecam={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":70)]}
 deploy_rally={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":86)]}
+
+tactical_map={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":77)]
+}
