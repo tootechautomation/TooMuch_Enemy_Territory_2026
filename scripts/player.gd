@@ -9,6 +9,9 @@ const ExternalAssetLoaderScript = preload(
 const HumanoidAnimationControllerScript = preload(
 	"res://scripts/characters/humanoid_animation_controller.gd"
 )
+const ExternalAssetValidatorScript = preload(
+	"res://scripts/assets/external_asset_validator.gd"
+)
 
 const RadarCompassScript = preload("res://scripts/radar_compass.gd")
 
@@ -1850,6 +1853,28 @@ func _build_external_character_model() -> bool:
 		)
 	)
 	external_model_loaded = true
+	var character_validation: Dictionary = (
+		ExternalAssetValidatorScript.validate_character(
+			external_character_model
+		)
+	)
+	print(
+		"External character validation peer=%d team=%d %s"
+		% [peer_id, team, character_validation]
+	)
+	var main_node: Node = get_parent()
+	if (
+		main_node != null
+		and main_node.get("external_lod_controller") != null
+	):
+		var lod_controller = main_node.get(
+			"external_lod_controller"
+		)
+		if lod_controller.has_method("register_external"):
+			lod_controller.call(
+				"register_external",
+				external_character_model
+			)
 	_refresh_external_weapon_model()
 
 	var fallback_body: Node3D = get_node_or_null("Body") as Node3D

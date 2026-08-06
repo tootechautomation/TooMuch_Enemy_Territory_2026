@@ -6,6 +6,12 @@ const ExternalAssetRegistryScript = preload(
 const ExternalAssetLoaderScript = preload(
 	"res://scripts/assets/external_asset_loader.gd"
 )
+const ExternalAssetValidatorScript = preload(
+	"res://scripts/assets/external_asset_validator.gd"
+)
+const ExternalLODControllerScript = preload(
+	"res://scripts/assets/external_lod_controller.gd"
+)
 
 const TacticalDirectorScript = preload(
 	"res://scripts/ai/tactical_director.gd"
@@ -26,7 +32,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.2.0"
+const BUILD_VERSION := "7.3.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -96,6 +102,11 @@ var breakable_props: Dictionary = {}
 var next_breakable_prop_id := 1
 var structure_collision_roots: Array[Node3D] = []
 var collision_debug_enabled := false
+var external_lod_controller: ExternalLODController
+var external_asset_reports: Array[String] = []
+var external_asset_overlay: PanelContainer
+var external_asset_overlay_label: Label
+var external_asset_overlay_visible := false
 var pbr_limestone_albedo: Texture2D
 var pbr_limestone_normal: Texture2D
 var pbr_limestone_roughness: Texture2D
@@ -356,7 +367,10 @@ func _ready() -> void:
 		visual_prop_cluster_scene = _load_optional_scene("res://assets/models/crate_barrel_cluster.glb")
 
 	_build_world()
+	_initialize_external_lod()
+	_build_external_asset_overlay()
 	_spawn_external_environment_assets()
+	_update_external_asset_overlay()
 	_apply_high_visual_quality()
 	_build_round_results_ui()
 	_update_objective_visuals()
@@ -365,6 +379,24 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	_parse_command_line()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if (
+		event is InputEventKey
+		and event.pressed
+		and not event.echo
+	):
+		var key_event := event as InputEventKey
+		var key_code: Key = (
+			key_event.physical_keycode
+			if key_event.physical_keycode != 0
+			else key_event.keycode
+		)
+		if key_code == KEY_F10:
+			_toggle_external_asset_overlay()
+			get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
 	atmosphere_elapsed += delta
@@ -2221,6 +2253,65 @@ func _apply_high_visual_quality() -> void:
 				0.012
 			)
 
+func _build_external_asset_overlay() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	external_asset_overlay = PanelContainer.new()
+	external_asset_overlay.name = "ExternalAssetOverlay"
+	external_asset_overlay.set_anchors_preset(
+		Control.PRESET_TOP_LEFT
+	)
+	external_asset_overlay.position = Vector2(18, 62)
+	external_asset_overlay.custom_minimum_size = Vector2(480, 260)
+	external_asset_overlay.visible = false
+
+	external_asset_overlay_label = Label.new()
+	external_asset_overlay_label.autowrap_mode = (
+		TextServer.AUTOWRAP_WORD_SMART
+	)
+	external_asset_overlay_label.add_theme_font_size_override(
+		"font_size",
+		13
+	)
+	external_asset_overlay.add_child(
+		external_asset_overlay_label
+	)
+
+	var canvas := CanvasLayer.new()
+	canvas.name = "ExternalAssetDebugCanvas"
+	canvas.layer = 110
+	canvas.add_child(external_asset_overlay)
+	add_child(canvas)
+
+func _update_external_asset_overlay() -> void:
+	if external_asset_overlay == null:
+		return
+	external_asset_overlay.visible = (
+		external_asset_overlay_visible
+	)
+	if external_asset_overlay_label != null:
+		external_asset_overlay_label.text = (
+			"EXTERNAL ASSETS · F10 TO CLOSE\n\n"
+			+ "\n\n".join(external_asset_reports)
+		)
+
+func _toggle_external_asset_overlay() -> void:
+	external_asset_overlay_visible = (
+		not external_asset_overlay_visible
+	)
+	_update_external_asset_overlay()
+
+func _initialize_external_lod() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	external_lod_controller = ExternalLODControllerScript.new()
+	external_lod_controller.name = "ExternalLODController"
+	add_child(external_lod_controller)
+	external_lod_controller.configure(
+		get_viewport().get_camera_3d()
+	)
+
 func _spawn_external_environment_assets() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -2347,10 +2438,21 @@ func _spawn_external_environment_assets() -> void:
 				string_names
 			)
 
-		print(
-			"External environment asset %s collision=%s"
-			% [asset_id, collision_result]
+		var validation: Dictionary = (
+			ExternalAssetValidatorScript.validate_environment(
+				external_node
+			)
 		)
+		var report_line := (
+			"%s\nvalidation=%s\ncollision=%s"
+			% [asset_id, validation, collision_result]
+		)
+		external_asset_reports.append(report_line)
+		print(report_line)
+		if external_lod_controller != null:
+			external_lod_controller.register_external(
+				external_node
+			)
 
 	var availability: Dictionary = (
 		ExternalAssetRegistryScript.availability_report()

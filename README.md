@@ -1,37 +1,29 @@
 # Frontline: Objective
 
-## Version 7.2.0 Weapon Attachment, Imported Collision & Replacement Controls
+## Version 7.3.0 Asset Validation, LOD & Runtime Replacement
 
-### Third-person weapons
-Optional Allied rifle, Axis rifle and service-pistol GLBs attach to rigged
-character hand sockets. Weapon visuals update when the equipped slot changes.
+### Asset validation
+Imported characters are checked for meshes, skeletons, animations, recognized
+weapon sockets, and approximate height.
 
-### Imported environment collision
-External environment models now:
-- Use authored StaticBody3D collision when available
-- Generate trimesh collision when configured and authored collision is absent
-- Receive world collision layer 1 and mask 1
-- Report collision status during startup
+Imported environment models are checked for meshes, StaticBody3D nodes,
+CollisionShape3D nodes, and overall dimensions.
 
-### Safe visual replacement
-Procedural stand-ins are hidden only when:
-1. The real GLB loads successfully
-2. The imported model has valid collision
+### Runtime LOD
+External characters and environment models now use distance-based visibility,
+shadow, and GI control. Far assets stop casting shadows and disappear beyond
+the configured range.
 
-This prevents real-looking decorative models from leaving passable walls.
+### Developer overlay
+Press F10 to display imported asset availability, validation warnings,
+collision results, and instantiated-node information.
 
-### Asset diagnostics
-Startup now prints an external asset report showing:
-- Available character slots
-- Available weapon slots
-- Available environment slots
-- Instantiated external nodes
-- Collision results for imported environment assets
+### Safe replacement
+Procedural assets remain active unless an imported replacement loads and has
+valid collision. This prevents invisible holes and duplicate decorative models.
 
 ### Compatibility
-- Build: v7.2.0
+- Build: v7.3.0
 - Protocol: 341
 - Explicit connection-message `+` retained
-- Missing assets continue using procedural fallbacks
-
-Expected status: `Connected: v7.2.0 protocol 341`
+- Missing assets continue using fallbacks

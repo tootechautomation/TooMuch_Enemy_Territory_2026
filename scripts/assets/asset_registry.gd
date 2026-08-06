@@ -180,3 +180,16 @@ static func environment_config(asset_id: String) -> Dictionary:
 	return Dictionary(
 		ENVIRONMENT_CONFIG.get(asset_id, {})
 	)
+
+static func lod_config(asset_id: String) -> Dictionary:
+	if asset_id in ["warehouse", "village_house_a", "village_house_b"]:
+		return {
+			"near": 40.0,
+			"medium": 85.0,
+			"far": 150.0
+		}
+	return {
+		"near": 30.0,
+		"medium": 65.0,
+		"far": 110.0
+	}
