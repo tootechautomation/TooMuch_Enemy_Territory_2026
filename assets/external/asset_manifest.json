@@ -1,9 +1,10 @@
 {
-  "version": "7.0.0",
+  "version": "8.19.0",
   "notes": [
     "Only include assets whose individual license permits game use.",
     "Do not commit or redistribute CGTrader source files unless the license explicitly permits it.",
-    "CC0 sources may be bundled, modified, and distributed."
+    "CC0 sources may be bundled, modified, and distributed.",
+    "The Modular Military 2 free download is a cooked UE4 evaluation executable, not a Godot-importable source pack."
   ],
   "slots": {
     "characters/allied_soldier.glb": {

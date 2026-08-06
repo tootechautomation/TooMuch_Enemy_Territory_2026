@@ -1,12 +1,18 @@
 extends RefCounted
 class_name ExternalAssetRegistry
 
-const CHARACTER_ALLIED := (
-	"res://assets/external/characters/allied_soldier.glb"
-)
-const CHARACTER_AXIS := (
-	"res://assets/external/characters/axis_soldier.glb"
-)
+const CHARACTER_ALLIED_CANDIDATES: Array[String] = [
+	"res://assets/external/characters/allied_soldier.glb",
+	"res://assets/external/characters/modular_military_2_allied.glb",
+	"res://assets/external/characters/modular_military_2_allied.fbx",
+	"res://assets/external/characters/modular_military_2_allied.blend"
+]
+const CHARACTER_AXIS_CANDIDATES: Array[String] = [
+	"res://assets/external/characters/axis_soldier.glb",
+	"res://assets/external/characters/modular_military_2_axis.glb",
+	"res://assets/external/characters/modular_military_2_axis.fbx",
+	"res://assets/external/characters/modular_military_2_axis.blend"
+]
 
 const CHARACTER_CONFIG := {
 	0: {
@@ -130,11 +136,28 @@ static func optional_scene(path: String) -> PackedScene:
 		return loaded as PackedScene
 	return null
 
+static func first_available_scene(
+	candidates: Array[String]
+) -> PackedScene:
+	for path in candidates:
+		var scene := optional_scene(path)
+		if scene != null:
+			return scene
+	return null
+
+static func first_available_path(
+	candidates: Array[String]
+) -> String:
+	for path in candidates:
+		if ResourceLoader.exists(path):
+			return path
+	return ""
+
 static func available_character(team_id: int) -> PackedScene:
-	return optional_scene(
-		CHARACTER_ALLIED
+	return first_available_scene(
+		CHARACTER_ALLIED_CANDIDATES
 		if team_id == 0
-		else CHARACTER_AXIS
+		else CHARACTER_AXIS_CANDIDATES
 	)
 
 static func environment_scene(asset_id: String) -> PackedScene:
@@ -144,11 +167,17 @@ static func environment_scene(asset_id: String) -> PackedScene:
 
 static func availability_report() -> Dictionary:
 	var report := {
-		"allied_character": ResourceLoader.exists(
-			CHARACTER_ALLIED
+		"allied_character": not first_available_path(
+			CHARACTER_ALLIED_CANDIDATES
+		).is_empty(),
+		"axis_character": not first_available_path(
+			CHARACTER_AXIS_CANDIDATES
+		).is_empty(),
+		"allied_character_path": first_available_path(
+			CHARACTER_ALLIED_CANDIDATES
 		),
-		"axis_character": ResourceLoader.exists(
-			CHARACTER_AXIS
+		"axis_character_path": first_available_path(
+			CHARACTER_AXIS_CANDIDATES
 		)
 	}
 	for asset_id in ENVIRONMENT_PATHS:

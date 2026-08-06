@@ -485,10 +485,10 @@ func _ready() -> void:
 	floor_stop_on_slope = true
 	if DisplayServer.get_name() != "headless":
 		tex_uniform_attackers = _load_optional_texture(
-			"res://assets/textures/uniform_attackers.png"
+			"res://assets/textures/uniform_allied_wool_v819.png"
 		)
 		tex_uniform_defenders = _load_optional_texture(
-			"res://assets/textures/uniform_defenders.png"
+			"res://assets/textures/uniform_axis_fieldgray_v819.png"
 		)
 		tex_weapon_rifle = _load_optional_texture(
 			"res://assets/textures/weapon_rifle.png"
@@ -2048,7 +2048,8 @@ func _build_external_character_model() -> bool:
 
 	var asset_adaptation: Dictionary = (
 		RealAssetAdapterScript.adapt_character(
-			external_character_model
+			external_character_model,
+			team
 		)
 	)
 	if not bool(asset_adaptation.get("valid", false)):
@@ -2272,10 +2273,10 @@ func _refresh_identity_visuals(force: bool = false) -> void:
 		)
 		if uniform_texture != null:
 			body_material.albedo_texture = uniform_texture
-		body_material.albedo_color = team_color.lightened(0.22)
-		body_material.roughness = 0.82
-		body_material.emission_enabled = true
-		body_material.emission = team_color * 0.10
+			body_material.albedo_color = Color(0.92, 0.92, 0.92, 1.0)
+			body_material.roughness = 0.94
+			body_material.metallic = 0.0
+			body_material.emission_enabled = false
 
 	if accent_material != null:
 		accent_material.albedo_color = accent_color

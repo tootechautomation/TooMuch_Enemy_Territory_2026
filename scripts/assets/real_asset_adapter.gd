@@ -1,7 +1,10 @@
 extends RefCounted
 class_name RealAssetAdapter
 
-static func adapt_character(model: Node3D) -> Dictionary:
+static func adapt_character(
+	model: Node3D,
+	team_id: int = -1
+) -> Dictionary:
 	var report := {
 		"valid": false,
 		"height_before": 0.0,
@@ -11,7 +14,8 @@ static func adapt_character(model: Node3D) -> Dictionary:
 		"skeletons": 0,
 		"animations": 0,
 		"socket": "",
-		"materials_adjusted": 0
+		"materials_adjusted": 0,
+		"team_materials_adjusted": 0
 	}
 	if model == null:
 		return report
@@ -49,6 +53,10 @@ static func adapt_character(model: Node3D) -> Dictionary:
 		report["socket"] = socket.name
 
 	report["materials_adjusted"] = _clean_materials(model, false)
+	report["team_materials_adjusted"] = _apply_team_surface_policy(
+		model,
+		team_id
+	)
 	report["valid"] = (
 		int(report["skeletons"]) > 0
 		and final_bounds.size.y >= 1.35
@@ -145,6 +153,62 @@ static func animation_map(model: Node3D) -> Dictionary:
 		elif ("death" in lower or "dead" in lower) and not result.has("downed"):
 			result["downed"] = animation_name
 	return result
+
+static func _apply_team_surface_policy(
+	root: Node3D,
+	team_id: int
+) -> int:
+	if team_id < 0 or team_id > 1:
+		return 0
+	var adjusted := 0
+	var team_tint := (
+		Color(0.86, 0.90, 0.76, 1.0)
+		if team_id == 0
+		else Color(0.76, 0.81, 0.75, 1.0)
+	)
+	for value in root.find_children("*", "MeshInstance3D", true):
+		var mesh_instance := value as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		for surface_index in range(mesh_instance.mesh.get_surface_count()):
+			var source := mesh_instance.get_active_material(surface_index)
+			if not source is StandardMaterial3D:
+				continue
+			var standard := source as StandardMaterial3D
+			var identity := (
+				mesh_instance.name
+				+ " "
+				+ standard.resource_name
+			).to_lower()
+			if not _is_uniform_surface(identity):
+				continue
+			var material := standard.duplicate() as StandardMaterial3D
+			material.albedo_color *= team_tint
+			material.roughness = maxf(material.roughness, 0.72)
+			if material.normal_enabled:
+				material.normal_scale = minf(material.normal_scale, 0.92)
+			mesh_instance.set_surface_override_material(
+				surface_index,
+				material
+			)
+			adjusted += 1
+	return adjusted
+
+static func _is_uniform_surface(identity: String) -> bool:
+	for token in [
+		"uniform",
+		"jacket",
+		"shirt",
+		"pants",
+		"trouser",
+		"sleeve",
+		"fabric",
+		"cloth",
+		"body"
+	]:
+		if token in identity:
+			return true
+	return false
 
 static func _clean_materials(root: Node3D, environment_asset: bool) -> int:
 	var adjusted := 0

@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.19.0
+- Replaced schematic fallback uniform maps with original high-resolution Allied olive-drab and opposing field-gray wool textures
+- Removed artificial uniform glow and broad blue/red material tinting for more natural cloth response
+- Added automatic GLB, FBX, and Blender candidate discovery for Modular Military 2-style team exports
+- Added cloth-surface recognition and restrained team-aware imported-material treatment
+- Extended external asset reporting with the selected character source paths
+- Documented the cooked UE4 demo limitation and the safe licensed-source import workflow
+- Preserved procedural fallbacks, generic external character slots, animation control, weapon sockets, gameplay, networking, and protocol 341
+
 ## 8.18.0
 - Added detailed railway sleepers, spikes, ballast beds, rail heads, and rusted rail webs
 - Added layered vehicle ruts and period road-repair seams to break up flat road surfaces
