@@ -1,10 +1,9 @@
 # Changelog
 
-## 4.3.0
-- Added asset-based rail-yard and fort pass
-- Added detailed rail cars, half-tracks, and bunker
-- Added concrete, mud, and rust PBR materials
-- Added battlefield dust, volumetric fog, and glow
-- Added bullet-impact decals
-- Added PBR first-person weapon materials
-- Preserved protocol 341 and explicit connection-string `+`
+## 4.4.0
+- Added spring recoil animation
+- Added muzzle smoke
+- Added impact particle bursts
+- Added explosion debris and shockwaves
+- Added breakable windows and doors
+- Preserved protocol 341 and connection-string `+`

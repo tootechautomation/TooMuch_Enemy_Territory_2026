@@ -9,9 +9,10 @@ const SensorBeaconScript = preload("res://scripts/sensor_beacon.gd")
 const FieldEmplacementScript = preload("res://scripts/field_emplacement.gd")
 const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const RallyPointScript = preload("res://scripts/rally_point.gd")
+const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "4.3.0"
+const BUILD_VERSION := "4.4.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -75,6 +76,10 @@ var visual_halftrack_scene: PackedScene
 var visual_bunker_scene: PackedScene
 var active_impact_decals: Array[Decal] = []
 var battlefield_dust: GPUParticles3D
+var muzzle_smoke_texture: Texture2D
+var glass_crack_texture: Texture2D
+var breakable_props: Dictionary = {}
+var next_breakable_prop_id := 1
 
 var players: Dictionary = {}
 var player_teams: Dictionary = {}
@@ -284,6 +289,8 @@ func _ready() -> void:
 		visual_rail_car_scene = _load_optional_scene("res://assets/models/rail_car_detailed.glb")
 		visual_halftrack_scene = _load_optional_scene("res://assets/models/halftrack_prop.glb")
 		visual_bunker_scene = _load_optional_scene("res://assets/models/concrete_bunker.glb")
+		muzzle_smoke_texture = _load_optional_texture("res://assets/fx/muzzle_smoke.png")
+		glass_crack_texture = _load_optional_texture("res://assets/fx/glass_crack.png")
 
 	_build_world()
 	_build_round_results_ui()
@@ -528,6 +535,95 @@ func spawn_bullet_impact_decal(position: Vector3, normal: Vector3) -> void:
 		var oldest: Decal = active_impact_decals.pop_front()
 		if oldest != null and is_instance_valid(oldest):
 			oldest.queue_free()
+
+func _create_breakable_prop(
+	prop_kind: String,
+	position: Vector3,
+	size: Vector3,
+	rotation_y: float = 0.0
+) -> void:
+	var prop_id: int = next_breakable_prop_id
+	next_breakable_prop_id += 1
+	var prop := StaticBody3D.new()
+	prop.name = "Breakable_%s_%d" % [prop_kind, prop_id]
+	prop.set_script(BreakablePropScript)
+	add_child(prop)
+	prop.call("configure", prop_id, prop_kind, position, size, rotation_y)
+	breakable_props[prop_id] = prop
+
+func _build_breakable_environment() -> void:
+	for window_data in [
+		[Vector3(-51.0,4.6,-30.55),Vector3(1.25,1.35,0.10),0.0],
+		[Vector3(-48.3,7.6,-30.55),Vector3(1.25,1.35,0.10),0.0],
+		[Vector3(-52.0,4.6,-11.55),Vector3(1.25,1.35,0.10),0.0],
+		[Vector3(45.0,4.4,-22.05),Vector3(1.20,1.25,0.10),0.0]
+	]:
+		_create_breakable_prop("window",Vector3(window_data[0]),Vector3(window_data[1]),float(window_data[2]))
+	for door_data in [
+		[Vector3(-52.0,1.25,-11.65),Vector3(1.55,2.50,0.20),0.0],
+		[Vector3(-49.0,1.25,30.15),Vector3(1.55,2.50,0.20),0.0],
+		[Vector3(42.0,1.25,25.0),Vector3(0.20,2.50,1.55),0.0]
+	]:
+		_create_breakable_prop("door",Vector3(door_data[0]),Vector3(door_data[1]),float(door_data[2]))
+
+func _spawn_impact_particles(position: Vector3, hit_player: bool) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var particles := GPUParticles3D.new()
+	particles.position = position
+	particles.amount = 16 if hit_player else 24
+	particles.lifetime = 0.42
+	particles.one_shot = true
+	particles.explosiveness = 0.92
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 0.08
+	pm.direction = Vector3(0.0,1.0,0.0)
+	pm.spread = 180.0
+	pm.initial_velocity_min = 1.5
+	pm.initial_velocity_max = 4.0
+	pm.gravity = Vector3(0.0,-6.0,0.0)
+	pm.scale_min = 0.035
+	pm.scale_max = 0.085
+	pm.color = Color(0.75,0.05,0.02,0.85) if hit_player else Color(1.0,0.68,0.18,0.90)
+	particles.process_material = pm
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.09,0.09)
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = pm.color
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	quad.material = mat
+	particles.draw_pass_1 = quad
+	add_child(particles)
+	particles.emitting = true
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = 0.75
+	timer.timeout.connect(particles.queue_free)
+	particles.add_child(timer)
+	timer.start()
+
+func _spawn_explosion_debris(position: Vector3) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	for index in range(18):
+		var debris := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(randf_range(0.06,0.22),randf_range(0.04,0.18),randf_range(0.05,0.20))
+		debris.mesh = mesh
+		debris.position = position
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(randf_range(0.22,0.48),randf_range(0.18,0.36),randf_range(0.10,0.24))
+		mat.roughness = 0.96
+		debris.material_override = mat
+		add_child(debris)
+		var tween := create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(debris,"position",position+Vector3(randf_range(-3.2,3.2),randf_range(0.8,3.8),randf_range(-3.2,3.2)),0.58)
+		tween.tween_property(debris,"rotation_degrees",Vector3(randf_range(180.0,720.0),randf_range(180.0,720.0),randf_range(180.0,720.0)),0.58)
+		tween.chain().tween_callback(debris.queue_free)
 
 func _load_optional_scene(path: String) -> PackedScene:
 	if DisplayServer.get_name() == "headless":
@@ -3769,6 +3865,27 @@ func explode_grenade(
 	flash.material_override = material
 	add_child(flash)
 
+	_spawn_explosion_debris(explosion_position)
+
+	var shockwave := MeshInstance3D.new()
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius = 0.22
+	ring_mesh.outer_radius = 0.34
+	shockwave.mesh = ring_mesh
+	shockwave.global_position = explosion_position + Vector3(0.0,0.18,0.0)
+	shockwave.rotation_degrees.x = 90.0
+	var ring_material := StandardMaterial3D.new()
+	ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_material.albedo_color = Color(1.0,0.72,0.22,0.70)
+	shockwave.material_override = ring_material
+	add_child(shockwave)
+	var ring_tween := create_tween()
+	ring_tween.set_parallel(true)
+	ring_tween.tween_property(shockwave,"scale",Vector3.ONE*8.5,0.34)
+	ring_tween.tween_property(ring_material,"albedo_color",Color(1.0,0.72,0.22,0.0),0.34)
+	ring_tween.chain().tween_callback(shockwave.queue_free)
+
 	var tween: Tween = create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(flash, "scale", Vector3.ONE * 6.0, 0.22)
@@ -3953,6 +4070,7 @@ func show_shot_effect(
 	impact_material.emission = impact_material.albedo_color
 	impact.material_override = impact_material
 	effect_root.add_child(impact)
+	_spawn_impact_particles(end_position, hit_player)
 
 	var timer := Timer.new()
 	timer.one_shot = true
@@ -4855,6 +4973,7 @@ func _build_world() -> void:
 
 	_build_asset_based_rail_and_fort_pass()
 	_initialize_battlefield_particles()
+	_build_breakable_environment()
 
 	# Combined-arms battlefield expansion.
 	_make_static_box(

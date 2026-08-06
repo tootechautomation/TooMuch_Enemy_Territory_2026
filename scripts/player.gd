@@ -216,6 +216,9 @@ var grenades_remaining := 2
 var next_grenade_time := 0
 var is_crouching := false
 var weapon_kick_offset := 0.0
+var recoil_rotation_impulse := Vector3.ZERO
+var recoil_position_impulse := Vector3.ZERO
+var muzzle_smoke_texture: Texture2D
 
 var server_logged_first_input := false
 
@@ -357,6 +360,7 @@ func _ready() -> void:
 		fp_wood_albedo = _load_optional_texture("res://assets/pbr/wood_albedo.png")
 		fp_wood_normal = _load_optional_texture("res://assets/pbr/wood_normal.png")
 		fp_wood_roughness = _load_optional_texture("res://assets/pbr/wood_roughness.png")
+		muzzle_smoke_texture = _load_optional_texture("res://assets/fx/muzzle_smoke.png")
 
 	_initialize_loadout()
 	if is_bot and not bot_role_initialized:
@@ -2607,6 +2611,8 @@ func _local_fire_feedback() -> void:
 	$Head.rotation.x = pitch
 
 	weapon_kick_offset = 0.10
+	recoil_position_impulse += Vector3(randf_range(-0.018,0.018),randf_range(-0.010,0.015),0.09)
+	recoil_rotation_impulse += Vector3(deg_to_rad(randf_range(1.0,2.5)),deg_to_rad(randf_range(-0.9,0.9)),deg_to_rad(randf_range(-0.7,0.7)))
 	_apply_weapon_kick()
 
 	muzzle_flash_until_ms = Time.get_ticks_msec() + 55
@@ -2617,6 +2623,24 @@ func _local_fire_feedback() -> void:
 		muzzle_flash_sprite.visible = muzzle_flash_sprite.texture != null
 
 	_spawn_local_shell_effect()
+	_spawn_muzzle_smoke()
+
+func _spawn_muzzle_smoke() -> void:
+	if weapon_view == null or muzzle_smoke_texture == null or not _is_local_player():
+		return
+	var smoke := Sprite3D.new()
+	smoke.texture = muzzle_smoke_texture
+	smoke.pixel_size = 0.0022
+	smoke.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	smoke.position = Vector3(0.02,0.01,-0.66) if current_weapon_index == 1 else Vector3(0.04,0.02,-2.04)
+	smoke.modulate = Color(0.82,0.82,0.78,0.62)
+	weapon_view.add_child(smoke)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(smoke,"position",smoke.position+Vector3(randf_range(-0.06,0.06),0.18,-0.12),0.34)
+	tween.tween_property(smoke,"scale",Vector3.ONE*2.4,0.34)
+	tween.tween_property(smoke,"modulate",Color(0.82,0.82,0.78,0.0),0.34)
+	tween.chain().tween_callback(smoke.queue_free)
 
 func _spawn_local_shell_effect() -> void:
 	if weapon_view == null or not _is_local_player():
@@ -3621,8 +3645,10 @@ func _update_first_person_animation(delta: float) -> void:
 	var speed: float = Vector2(velocity.x, velocity.z).length()
 	var moving: bool = speed > 0.8 and is_on_floor()
 	var sprinting: bool = moving and sprint_requested and replicated_stamina > 1.0 and not aim_requested
-	var target_position: Vector3 = weapon_base_position
-	var target_rotation: Vector3 = weapon_base_rotation
+	var target_position: Vector3 = weapon_base_position + recoil_position_impulse
+	var target_rotation: Vector3 = weapon_base_rotation + recoil_rotation_impulse
+	recoil_position_impulse = recoil_position_impulse.lerp(Vector3.ZERO,1.0-exp(-18.0*delta))
+	recoil_rotation_impulse = recoil_rotation_impulse.lerp(Vector3.ZERO,1.0-exp(-15.0*delta))
 	if moving:
 		var frequency: float = 11.0 if sprinting else 7.5
 		var amount: float = 0.035 if sprinting else 0.020
