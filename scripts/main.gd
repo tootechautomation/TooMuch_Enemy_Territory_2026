@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "4.4.0"
+const BUILD_VERSION := "4.5.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -80,6 +80,22 @@ var muzzle_smoke_texture: Texture2D
 var glass_crack_texture: Texture2D
 var breakable_props: Dictionary = {}
 var next_breakable_prop_id := 1
+var pbr_limestone_albedo: Texture2D
+var pbr_limestone_normal: Texture2D
+var pbr_limestone_roughness: Texture2D
+var pbr_slate_albedo: Texture2D
+var pbr_slate_normal: Texture2D
+var pbr_slate_roughness: Texture2D
+var pbr_damaged_plaster_albedo: Texture2D
+var pbr_damaged_plaster_normal: Texture2D
+var pbr_damaged_plaster_roughness: Texture2D
+var pbr_gravel_albedo: Texture2D
+var pbr_gravel_normal: Texture2D
+var pbr_gravel_roughness: Texture2D
+var visual_church_scene: PackedScene
+var visual_warehouse_scene: PackedScene
+var visual_field_gun_scene: PackedScene
+var visual_prop_cluster_scene: PackedScene
 
 var players: Dictionary = {}
 var player_teams: Dictionary = {}
@@ -291,6 +307,22 @@ func _ready() -> void:
 		visual_bunker_scene = _load_optional_scene("res://assets/models/concrete_bunker.glb")
 		muzzle_smoke_texture = _load_optional_texture("res://assets/fx/muzzle_smoke.png")
 		glass_crack_texture = _load_optional_texture("res://assets/fx/glass_crack.png")
+		pbr_limestone_albedo = _load_optional_texture("res://assets/pbr/limestone_blocks_albedo.png")
+		pbr_limestone_normal = _load_optional_texture("res://assets/pbr/limestone_blocks_normal.png")
+		pbr_limestone_roughness = _load_optional_texture("res://assets/pbr/limestone_blocks_roughness.png")
+		pbr_slate_albedo = _load_optional_texture("res://assets/pbr/slate_roof_albedo.png")
+		pbr_slate_normal = _load_optional_texture("res://assets/pbr/slate_roof_normal.png")
+		pbr_slate_roughness = _load_optional_texture("res://assets/pbr/slate_roof_roughness.png")
+		pbr_damaged_plaster_albedo = _load_optional_texture("res://assets/pbr/damaged_plaster_albedo.png")
+		pbr_damaged_plaster_normal = _load_optional_texture("res://assets/pbr/damaged_plaster_normal.png")
+		pbr_damaged_plaster_roughness = _load_optional_texture("res://assets/pbr/damaged_plaster_roughness.png")
+		pbr_gravel_albedo = _load_optional_texture("res://assets/pbr/compacted_gravel_albedo.png")
+		pbr_gravel_normal = _load_optional_texture("res://assets/pbr/compacted_gravel_normal.png")
+		pbr_gravel_roughness = _load_optional_texture("res://assets/pbr/compacted_gravel_roughness.png")
+		visual_church_scene = _load_optional_scene("res://assets/models/stone_church.glb")
+		visual_warehouse_scene = _load_optional_scene("res://assets/models/rail_warehouse.glb")
+		visual_field_gun_scene = _load_optional_scene("res://assets/models/field_artillery.glb")
+		visual_prop_cluster_scene = _load_optional_scene("res://assets/models/crate_barrel_cluster.glb")
 
 	_build_world()
 	_build_round_results_ui()
@@ -624,6 +656,132 @@ func _spawn_explosion_debris(position: Vector3) -> void:
 		tween.tween_property(debris,"position",position+Vector3(randf_range(-3.2,3.2),randf_range(0.8,3.8),randf_range(-3.2,3.2)),0.58)
 		tween.tween_property(debris,"rotation_degrees",Vector3(randf_range(180.0,720.0),randf_range(180.0,720.0),randf_range(180.0,720.0)),0.58)
 		tween.chain().tween_callback(debris.queue_free)
+
+func _set_environment_property_if_available(
+	property_name: StringName,
+	value: Variant
+) -> void:
+	if battlefield_environment == null:
+		return
+	for property_info in battlefield_environment.get_property_list():
+		if StringName(property_info.get("name", "")) == property_name:
+			battlefield_environment.set(property_name, value)
+			return
+
+func _build_high_fidelity_environment_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var stone_material := _make_pbr_material(
+		pbr_limestone_albedo,
+		pbr_limestone_normal,
+		pbr_limestone_roughness,
+		Color(0.96, 0.95, 0.91),
+		2.2
+	)
+	var plaster_material := _make_pbr_material(
+		pbr_damaged_plaster_albedo,
+		pbr_damaged_plaster_normal,
+		pbr_damaged_plaster_roughness,
+		Color(0.97, 0.92, 0.84),
+		2.0
+	)
+	var gravel_material := _make_pbr_material(
+		pbr_gravel_albedo,
+		pbr_gravel_normal,
+		pbr_gravel_roughness,
+		Color(0.90, 0.89, 0.84),
+		3.4
+	)
+	var slate_material := _make_pbr_material(
+		pbr_slate_albedo,
+		pbr_slate_normal,
+		pbr_slate_roughness,
+		Color(0.82, 0.87, 0.91),
+		2.6
+	)
+
+	var church := _spawn_visual_scene(
+		visual_church_scene,
+		"StoneChurch",
+		Vector3(-42.0, 0.0, 9.0),
+		deg_to_rad(7.0),
+		Vector3.ONE * 0.92,
+		stone_material
+	)
+	if church != null:
+		# Keep the roof darker after global stone override.
+		for child in church.get_children():
+			if child is MeshInstance3D and "roof" in child.name.to_lower():
+				(child as MeshInstance3D).material_override = slate_material
+
+	_spawn_visual_scene(
+		visual_warehouse_scene,
+		"DetailedRailWarehouse",
+		Vector3(47.0, 0.0, -18.0),
+		deg_to_rad(-2.0),
+		Vector3.ONE,
+		plaster_material
+	)
+	_spawn_visual_scene(
+		visual_field_gun_scene,
+		"FieldGunNorth",
+		Vector3(8.0, 0.0, -28.0),
+		deg_to_rad(20.0),
+		Vector3.ONE,
+		null
+	)
+	_spawn_visual_scene(
+		visual_field_gun_scene,
+		"FieldGunFort",
+		Vector3(37.0, 0.0, 18.0),
+		deg_to_rad(-65.0),
+		Vector3.ONE,
+		null
+	)
+
+	for prop_position in [
+		Vector3(-35.0, 0.0, -4.0),
+		Vector3(-30.0, 0.0, 23.0),
+		Vector3(24.0, 0.0, -24.0),
+		Vector3(40.0, 0.0, 18.0),
+		Vector3(51.0, 0.0, -10.0)
+	]:
+		_spawn_visual_scene(
+			visual_prop_cluster_scene,
+			"PropCluster_%s" % str(prop_position),
+			prop_position,
+			randf_range(-0.5, 0.5),
+			Vector3.ONE * randf_range(0.88, 1.12),
+			null
+		)
+
+	for overlay_data in [
+		["HighResGravelNorth", Vector3(0.0, 0.115, -40.0), Vector3(104.0, 0.08, 14.0)],
+		["HighResGravelSouth", Vector3(0.0, 0.115, 42.0), Vector3(105.0, 0.08, 14.0)],
+		["HighResRailApron", Vector3(39.0, 0.115, -20.0), Vector3(42.0, 0.08, 36.0)]
+	]:
+		var overlay := MeshInstance3D.new()
+		overlay.name = str(overlay_data[0])
+		overlay.position = Vector3(overlay_data[1])
+		var overlay_mesh := BoxMesh.new()
+		overlay_mesh.size = Vector3(overlay_data[2])
+		overlay.mesh = overlay_mesh
+		overlay.material_override = gravel_material
+		add_child(overlay)
+
+	# Conservative post-processing: only set properties found on this Godot build.
+	_set_environment_property_if_available(&"ssao_enabled", true)
+	_set_environment_property_if_available(&"ssao_radius", 2.4)
+	_set_environment_property_if_available(&"ssao_intensity", 2.2)
+	_set_environment_property_if_available(&"ssao_power", 1.45)
+	_set_environment_property_if_available(&"ssil_enabled", true)
+	_set_environment_property_if_available(&"ssil_radius", 4.0)
+	_set_environment_property_if_available(&"ssil_intensity", 1.1)
+	_set_environment_property_if_available(&"adjustment_enabled", true)
+	_set_environment_property_if_available(&"adjustment_contrast", 1.08)
+	_set_environment_property_if_available(&"adjustment_saturation", 0.88)
+	_set_environment_property_if_available(&"adjustment_brightness", 1.02)
 
 func _load_optional_scene(path: String) -> PackedScene:
 	if DisplayServer.get_name() == "headless":
@@ -4863,7 +5021,9 @@ func _build_world() -> void:
 	battlefield_sun = DirectionalLight3D.new()
 	battlefield_sun.rotation_degrees = Vector3(-55, -35, 0)
 	battlefield_sun.shadow_enabled = true
-	battlefield_sun.light_energy = 1.15
+	battlefield_sun.light_energy = 1.28
+	battlefield_sun.shadow_bias = 0.035
+	battlefield_sun.shadow_normal_bias = 1.15
 	battlefield_sun.directional_shadow_max_distance = 90.0
 	add_child(battlefield_sun)
 
@@ -4974,6 +5134,7 @@ func _build_world() -> void:
 	_build_asset_based_rail_and_fort_pass()
 	_initialize_battlefield_particles()
 	_build_breakable_environment()
+	_build_high_fidelity_environment_pass()
 
 	# Combined-arms battlefield expansion.
 	_make_static_box(

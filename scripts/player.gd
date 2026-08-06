@@ -219,6 +219,8 @@ var weapon_kick_offset := 0.0
 var recoil_rotation_impulse := Vector3.ZERO
 var recoil_position_impulse := Vector3.ZERO
 var muzzle_smoke_texture: Texture2D
+var camera_inertia := Vector2.ZERO
+var previous_look_input := Vector2.ZERO
 
 var server_logged_first_input := false
 
@@ -3642,6 +3644,10 @@ func _update_first_person_animation(delta: float) -> void:
 	if weapon_view == null or not _is_local_player():
 		return
 	visual_animation_time += delta
+	camera_inertia = camera_inertia.lerp(
+		Vector2.ZERO,
+		1.0 - exp(-8.0 * delta)
+	)
 	var speed: float = Vector2(velocity.x, velocity.z).length()
 	var moving: bool = speed > 0.8 and is_on_floor()
 	var sprinting: bool = moving and sprint_requested and replicated_stamina > 1.0 and not aim_requested
@@ -3666,6 +3672,11 @@ func _update_first_person_animation(delta: float) -> void:
 	else:
 		target_rotation.y += sin(visual_animation_time * 1.4) * 0.008
 		target_rotation.x += cos(visual_animation_time * 1.1) * 0.006
+
+	target_rotation.y += camera_inertia.x * 0.008
+	target_rotation.x += camera_inertia.y * 0.006
+	target_position.x += camera_inertia.x * 0.004
+	target_position.y -= absf(camera_inertia.y) * 0.002
 	weapon_view.position = weapon_view.position.lerp(target_position, clampf(delta * 10.0,0.0,1.0))
 	weapon_view.rotation = weapon_view.rotation.lerp(target_rotation, clampf(delta * 9.0,0.0,1.0))
 

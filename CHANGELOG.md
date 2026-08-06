@@ -1,9 +1,11 @@
 # Changelog
 
-## 4.4.0
-- Added spring recoil animation
-- Added muzzle smoke
-- Added impact particle bursts
-- Added explosion debris and shockwaves
-- Added breakable windows and doors
-- Preserved protocol 341 and connection-string `+`
+## 4.5.0
+- Added four 1024px PBR material sets
+- Added stone church, rail warehouse, artillery, and prop-cluster GLBs
+- Added high-resolution environment overlays
+- Added conditional SSAO, SSIL, and color grading
+- Improved sunlight and shadow bias
+- Added first-person camera inertia
+- Preserved protocol 341
+- Preserved explicit connection-string `+`
