@@ -1,10 +1,7 @@
 # Changelog
 
-## 5.5.0
-- Replaced oversized townhouse shells with aligned wall segments
-- Added doorway gaps and lintels matching visible façades
-- Added collision to western gray/plaster route walls
-- Reduced landmark collision footprints
-- Added collision-extent audit warnings
-- Improved bot entrance waypoints and low-obstacle detection
-- Preserved protocol 341 and explicit connection-string `+`
+## 5.5.1
+- Fixed unexpected indentation in `_bot_obstacle_ahead()`
+- Normalized route-hint expression indentation
+- Preserved all v5.5.0 collision-alignment features
+- Preserved protocol 341 and connection-string `+`

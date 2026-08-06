@@ -2316,7 +2316,7 @@ func _bot_obstacle_ahead(direction: Vector3) -> bool:
 		high_query
 	)
 
-		if not high_hit.is_empty():
+	if not high_hit.is_empty():
 		return false
 
 	var low_position: Vector3 = Vector3(
@@ -3740,8 +3740,8 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 		)
 	else:
 		et_route_hint_label.text = (
-		"NORTH STREET · CENTRAL ROAD · SOUTH FLANK · SEWER"
-		if int(main.get("objective_stage")) == 0
+			"NORTH STREET · CENTRAL ROAD · SOUTH FLANK · SEWER"
+			if int(main.get("objective_stage")) == 0
 			else "RAIL YARD · FORT APPROACH · SOUTH ANNEX"
 		)
 
