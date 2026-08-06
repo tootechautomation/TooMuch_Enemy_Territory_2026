@@ -19,7 +19,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.9.0"
+const BUILD_VERSION := "5.9.1"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -110,6 +110,7 @@ var players: Dictionary = {}
 var squad_shared_targets: Dictionary = {}
 var squad_target_claims: Dictionary = {}
 var squad_order_revision := 0
+var squad_claim_reset_ms := 0
 var player_teams: Dictionary = {}
 var player_names: Dictionary = {}
 var supply_packs: Dictionary = {}
@@ -6462,10 +6463,14 @@ func bot_shared_enemy(observer: Node3D) -> Node3D:
 	if observer == null:
 		return null
 
+	var now: int = Time.get_ticks_msec()
+	if now >= squad_claim_reset_ms:
+		squad_target_claims.clear()
+		squad_claim_reset_ms = now + 900
+
 	var team_id: int = int(observer.get("team"))
 	var squad_id: int = bot_squad_id(observer)
 	var key: String = _squad_key(team_id, squad_id)
-	var now: int = Time.get_ticks_msec()
 
 	if squad_shared_targets.has(key):
 		var shared: Dictionary = Dictionary(
@@ -6584,7 +6589,14 @@ func bot_squad_support_goal(
 	elif class_id == 3:
 		offset *= 1.20
 
-	return escort.global_position + offset
+	var support_goal: Vector3 = escort.global_position + offset
+	if support_goal.distance_to(bot.global_position) < 1.25:
+		return null
+	if escort.velocity.length() < 0.10:
+		var objective_goal: Vector3 = bot_goal_position(bot)
+		if objective_goal.distance_to(bot.global_position) > 5.0:
+			return objective_goal
+	return support_goal
 
 func bot_tactical_anchor(
 	bot: Node3D,

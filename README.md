@@ -1,44 +1,40 @@
 # Frontline: Objective
 
-## Version 5.9.0 Squad Coordination & Combat Orders
+## Version 5.9.1 Squad Movement & Tactical Map Hotfix
 
-### Persistent squads
-Bots are grouped into four-member squads. Each squad has:
-- Stable squad membership derived from peer ID
-- A living squad leader
-- Shared enemy contacts
-- Shared attack or defense orders
-- Formation offsets around the leader or engineer
+### Bot movement fix
+`SquadCoordinator.squad_id()` returned the result of `/` from a function typed
+as `int`. Godot 4 division returns a float, which could interrupt every bot AI
+tick.
 
-### Class coordination
-- Soldiers escort engineers and squad leaders.
-- Medics stay closer to engineers and wounded teammates.
-- Field Ops hold wider support spacing.
-- Engineers remain free to interact directly with objectives.
-- Scouts retain their independent long-range anchors.
+Fixed:
+```gdscript
+return int(posmod(peer_id, 8) / SQUAD_SIZE)
+```
 
-### Shared enemy contacts
-When one bot sees an enemy, the contact is shared with its squad for 2.8
-seconds. Target scoring penalizes enemies already claimed by many bots, which
-reduces the tendency for every bot to chase one target.
+The formation row calculation is also explicitly converted to int.
 
-### Combat orders
-Orders update with the match state:
-- Build and secure bridge
-- Hold bridge approaches
-- Capture command post
-- Protect dynamite
-- Defuse dynamite
-- Breach bunker
-- Defend bunker
+Additional safeguards:
+- Formation roles are clamped to 0-3.
+- Near-zero support goals are ignored.
+- A stationary escort no longer freezes the squad away from the objective.
+- Target-claim counts reset every 0.9 seconds.
 
-The local HUD now displays the active team order beside the available routes.
+### Tactical map control fix
+Both the tactical map and class menu were bound to M.
+
+New controls:
+- `M`: spawn/team/class menu
+- `K`: tactical map
+- `Escape`: close tactical map or deployed spawn menu
+
+The map and spawn menu now dismiss one another. Respawning and deploying also
+force the tactical map closed.
 
 ### Compatibility
-- Build: v5.9.0
+- Build: v5.9.1
 - Protocol: 341
-- Explicit connection-message `+` retained
-- v5.8 tactical-director refactor retained
-- Cache-independent VPS startup retained
+- Explicit connection-message `+` retained.
+- All v5.9 squad coordination features remain.
 
-Expected status: `Connected: v5.9.0 protocol 341`
+Expected status: `Connected: v5.9.1 protocol 341`

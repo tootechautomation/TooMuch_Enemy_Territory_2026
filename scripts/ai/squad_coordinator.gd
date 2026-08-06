@@ -4,21 +4,22 @@ class_name SquadCoordinator
 const SQUAD_SIZE := 4
 
 static func squad_id(peer_id: int) -> int:
-	return posmod(peer_id, 8) / SQUAD_SIZE
+	return int(posmod(peer_id, 8) / SQUAD_SIZE)
 
 static func formation_offset(
 	peer_id: int,
 	squad_role: int,
 	leader_forward: Vector3
 ) -> Vector3:
-	var forward := leader_forward
+	squad_role = clampi(squad_role, 0, SQUAD_SIZE - 1)
+	var forward: Vector3 = leader_forward
 	forward.y = 0.0
 	if forward.length() <= 0.01:
 		forward = Vector3.FORWARD
 	forward = forward.normalized()
 
-	var right := Vector3(-forward.z, 0.0, forward.x)
-	var row: int = squad_role / 2
+	var right: Vector3 = Vector3(-forward.z, 0.0, forward.x)
+	var row: int = int(squad_role / 2)
 	var side: float = -1.0 if squad_role % 2 == 0 else 1.0
 	var spread: float = 2.2 + float(row) * 0.8
 	var trailing: float = 2.8 + float(row) * 2.0

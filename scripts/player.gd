@@ -216,6 +216,7 @@ var rank_progress_label: Label
 var tactical_map_panel: PanelContainer
 var tactical_map_label: Label
 var tactical_map_open := false
+var tactical_map_toggle_latched := false
 var et_hud_root: Control
 var et_status_label: Label
 var et_health_label: Label
@@ -444,6 +445,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_cycle_spectator_target()
 
 	if event.is_action_pressed("ui_cancel"):
+		if tactical_map_open:
+			_set_tactical_map_open(false)
+			return
+		if spawn_menu_open and has_deployed:
+			_hide_spawn_menu()
+			return
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _physics_process(delta: float) -> void:
@@ -499,27 +506,48 @@ func _physics_process(delta: float) -> void:
 		_update_identity_visibility()
 	if multiplayer.is_server(): _server_simulate(delta)
 
-func _poll_spawn_menu_toggle() -> void:
-	if Input.is_action_just_pressed("tactical_map"):
-		tactical_map_open = not tactical_map_open
-		if tactical_map_panel != null:
-			tactical_map_panel.visible = tactical_map_open
+func _set_tactical_map_open(open_value: bool) -> void:
+	tactical_map_open = open_value
+	if tactical_map_panel != null:
+		tactical_map_panel.visible = tactical_map_open
+
+	if tactical_map_open:
+		if spawn_menu_open and has_deployed:
+			_hide_spawn_menu()
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
 		Input.mouse_mode = (
 			Input.MOUSE_MODE_VISIBLE
-			if tactical_map_open
+			if spawn_menu_open
 			else Input.MOUSE_MODE_CAPTURED
-		)
+	)
 
-	var pressed: bool = Input.is_action_pressed("spawn_menu")
+func _poll_spawn_menu_toggle() -> void:
+	var map_pressed: bool = Input.is_action_pressed(
+		"tactical_map"
+	)
+	if map_pressed and not tactical_map_toggle_latched:
+		tactical_map_toggle_latched = true
+		_set_tactical_map_open(not tactical_map_open)
+	elif not map_pressed:
+		tactical_map_toggle_latched = false
 
-	if pressed and not menu_toggle_latched:
+	var menu_pressed: bool = Input.is_action_pressed(
+		"spawn_menu"
+	)
+	if menu_pressed and not menu_toggle_latched:
 		menu_toggle_latched = true
+
+		# Opening class selection always dismisses the tactical map.
+		if tactical_map_open:
+			_set_tactical_map_open(false)
+
 		if spawn_menu_open:
 			if has_deployed:
 				_hide_spawn_menu()
 		else:
 			_show_spawn_menu()
-	elif not pressed:
+	elif not menu_pressed:
 		menu_toggle_latched = false
 
 func _collect_and_send_input() -> void:
@@ -1630,6 +1658,8 @@ func server_respawn(spawn_position: Vector3) -> void:
 	_activate_spawn_protection()
 	alive = true
 	downed = false
+	if tactical_map_open:
+		_set_tactical_map_open(false)
 	is_reloading = false
 	visible = true
 
@@ -4343,7 +4373,7 @@ func _build_hud() -> void:
 	tactical_map_panel.add_child(tactical_box)
 
 	var tactical_title := Label.new()
-	tactical_title.text = "TACTICAL MAP · M TO CLOSE"
+	tactical_title.text = "TACTICAL MAP · K TO CLOSE"
 	tactical_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tactical_title.add_theme_font_size_override("font_size", 25)
 	tactical_box.add_child(tactical_title)
@@ -5101,7 +5131,7 @@ func _update_hud() -> void:
 		if replicated_ability_cooldown_ms <= 0
 		else "%.1fs" % cooldown
 	)
-	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  Smoke %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  M: map  MMB: ping  B: smoke  C: barricade  V: rally  F: freecam\nBlue=Attackers  Red=Defenders  Accent=Class" % [
+	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  Smoke %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  K: map  MMB: ping  B: smoke  C: barricade  V: rally  F: freecam\nBlue=Attackers  Red=Defenders  Accent=Class" % [
 		player_name,
 		"Attackers" if team == 0 else "Defenders",
 		"%s · %s" % [life_text, stance_text],

@@ -48,5 +48,5 @@ deploy_rally={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":8
 
 tactical_map={
 "deadzone": 0.5,
-"events": [Object(InputEventKey,"physical_keycode":77)]
+"events": [Object(InputEventKey,"physical_keycode":75)]
 }

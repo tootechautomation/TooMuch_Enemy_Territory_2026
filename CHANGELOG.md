@@ -1,12 +1,12 @@
 # Changelog
 
-## 5.9.0
-- Added `scripts/ai/squad_coordinator.gd`
-- Added persistent four-member bot squads
-- Added squad leaders and formation offsets
-- Added shared enemy contacts
-- Added target-claim penalties to distribute fire
-- Added soldier, medic, and Field Ops escort behavior
-- Added dynamic attack and defense orders
-- Added squad order text to the HUD
+## 5.9.1
+- Fixed float-to-int squad ID runtime failure
+- Fixed float-to-int formation row calculation
+- Added squad-goal movement fallbacks
+- Added periodic target-claim reset
+- M remains spawn/class menu
+- K is now tactical map
+- Escape closes tactical map
+- Respawn and deployment close tactical map
 - Preserved protocol 341 and explicit connection-string `+`
