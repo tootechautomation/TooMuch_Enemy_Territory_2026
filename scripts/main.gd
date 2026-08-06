@@ -3,6 +3,9 @@ extends Node
 const TacticalDirectorScript = preload(
 	"res://scripts/ai/tactical_director.gd"
 )
+const SquadCoordinatorScript = preload(
+	"res://scripts/ai/squad_coordinator.gd"
+)
 
 const PlayerScene = preload("res://scenes/player.tscn")
 const GrenadeScene = preload("res://scenes/grenade.tscn")
@@ -16,7 +19,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.8.0"
+const BUILD_VERSION := "5.9.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -104,6 +107,9 @@ var visual_field_gun_scene: PackedScene
 var visual_prop_cluster_scene: PackedScene
 
 var players: Dictionary = {}
+var squad_shared_targets: Dictionary = {}
+var squad_target_claims: Dictionary = {}
+var squad_order_revision := 0
 var player_teams: Dictionary = {}
 var player_names: Dictionary = {}
 var supply_packs: Dictionary = {}
@@ -6388,7 +6394,197 @@ func _configure_bot(bot_id: int, class_id: int) -> void:
 
 	bot.set("is_bot", true)
 	bot.set("player_class", class_id)
+	var squad_role: int = posmod(bot_id, 4)
+	bot.set("bot_squad_role", squad_role)
+	bot.set("bot_role_initialized", true)
 	bot.call("server_apply_class", class_id)
+
+func bot_squad_id(bot: Node3D) -> int:
+	if bot == null:
+		return 0
+	return SquadCoordinatorScript.squad_id(
+		int(bot.get("peer_id"))
+	)
+
+func _squad_key(team_id: int, squad_id: int) -> String:
+	return "%d:%d" % [team_id, squad_id]
+
+func bot_squad_order(bot: Node3D) -> String:
+	if bot == null:
+		return "REGROUP"
+	return SquadCoordinatorScript.order_name(
+		int(bot.get("team")),
+		objective_stage,
+		dynamite_armed,
+		command_post_control
+	)
+
+func squad_order_text(team_id: int) -> String:
+	return SquadCoordinatorScript.order_name(
+		team_id,
+		objective_stage,
+		dynamite_armed,
+		command_post_control
+	)
+
+func _valid_shared_target(
+	target_id: int,
+	observer_team: int
+) -> Node3D:
+	if not players.has(target_id):
+		return null
+	var target: Node3D = players[target_id] as Node3D
+	if target == null:
+		return null
+	if int(target.get("team")) == observer_team:
+		return null
+	if not bool(target.get("alive")):
+		return null
+	if bool(target.get("downed")):
+		return null
+	return target
+
+func report_squad_enemy(
+	observer: Node3D,
+	target: Node3D
+) -> void:
+	if observer == null or target == null:
+		return
+	var team_id: int = int(observer.get("team"))
+	var squad_id: int = bot_squad_id(observer)
+	var key: String = _squad_key(team_id, squad_id)
+	squad_shared_targets[key] = {
+		"target_id": int(target.get("peer_id")),
+		"expires_ms": Time.get_ticks_msec() + 2800
+	}
+
+func bot_shared_enemy(observer: Node3D) -> Node3D:
+	if observer == null:
+		return null
+
+	var team_id: int = int(observer.get("team"))
+	var squad_id: int = bot_squad_id(observer)
+	var key: String = _squad_key(team_id, squad_id)
+	var now: int = Time.get_ticks_msec()
+
+	if squad_shared_targets.has(key):
+		var shared: Dictionary = Dictionary(
+			squad_shared_targets[key]
+		)
+		if now <= int(shared.get("expires_ms", 0)):
+			var shared_target: Node3D = _valid_shared_target(
+				int(shared.get("target_id", -1)),
+				team_id
+			)
+			if shared_target != null:
+				return shared_target
+		squad_shared_targets.erase(key)
+
+	var best: Node3D = null
+	var best_score := -INF
+	for candidate_value in players.values():
+		var candidate: Node3D = candidate_value as Node3D
+		if candidate == null or candidate == observer:
+			continue
+		if int(candidate.get("team")) == team_id:
+			continue
+		if not bool(candidate.get("alive")):
+			continue
+		if bool(candidate.get("downed")):
+			continue
+
+		var candidate_id: int = int(candidate.get("peer_id"))
+		var claimed_count: int = int(
+			squad_target_claims.get(candidate_id, 0)
+		)
+		var score: float = SquadCoordinatorScript.target_score(
+			observer,
+			candidate,
+			claimed_count
+		)
+		if score > best_score:
+			best_score = score
+			best = candidate
+
+	if best != null:
+		var best_id: int = int(best.get("peer_id"))
+		squad_target_claims[best_id] = (
+			int(squad_target_claims.get(best_id, 0)) + 1
+		)
+		report_squad_enemy(observer, best)
+	return best
+
+func bot_squad_leader(bot: Node3D) -> Node3D:
+	if bot == null:
+		return null
+	var team_id: int = int(bot.get("team"))
+	var squad_id: int = bot_squad_id(bot)
+	var best: Node3D = null
+	var best_id := 2147483647
+
+	for candidate_value in players.values():
+		var candidate: Node3D = candidate_value as Node3D
+		if candidate == null:
+			continue
+		if int(candidate.get("team")) != team_id:
+			continue
+		if bot_squad_id(candidate) != squad_id:
+			continue
+		if not bool(candidate.get("alive")):
+			continue
+		if bool(candidate.get("downed")):
+			continue
+		var candidate_id: int = int(candidate.get("peer_id"))
+		if candidate_id < best_id:
+			best_id = candidate_id
+			best = candidate
+	return best
+
+func bot_squad_support_goal(
+	bot: Node3D,
+	class_id: int
+) -> Variant:
+	if bot == null:
+		return null
+
+	var team_id: int = int(bot.get("team"))
+	var squad_id: int = bot_squad_id(bot)
+	var escort: Node3D = null
+
+	for candidate_value in players.values():
+		var candidate: Node3D = candidate_value as Node3D
+		if candidate == null or candidate == bot:
+			continue
+		if int(candidate.get("team")) != team_id:
+			continue
+		if bot_squad_id(candidate) != squad_id:
+			continue
+		if not bool(candidate.get("alive")):
+			continue
+		if bool(candidate.get("downed")):
+			continue
+		if int(candidate.get("player_class")) == 2:
+			escort = candidate
+			break
+
+	if escort == null:
+		escort = bot_squad_leader(bot)
+	if escort == null or escort == bot:
+		return null
+
+	var forward: Vector3 = -escort.global_transform.basis.z
+	var offset: Vector3 = SquadCoordinatorScript.formation_offset(
+		int(bot.get("peer_id")),
+		int(bot.get("bot_squad_role")),
+		forward
+	)
+
+	if class_id == 1:
+		offset *= 0.72
+	elif class_id == 3:
+		offset *= 1.20
+
+	return escort.global_position + offset
 
 func bot_tactical_anchor(
 	bot: Node3D,
@@ -6553,6 +6749,9 @@ func _reset_round() -> void:
 	for rally_team in rally_points.keys():
 		remove_rally_point(int(rally_team))
 	objective_stage = 0
+	squad_shared_targets.clear()
+	squad_target_claims.clear()
+	squad_order_revision += 1
 	bridge_progress = 0
 	defuse_progress = 0
 	dynamite_armed = false

@@ -114,6 +114,8 @@ var bot_cover_refresh_ms := 0
 var bot_last_threat_position := Vector3.ZERO
 var bot_last_support_ms := 0
 var bot_hold_position_until_ms := 0
+var bot_squad_support_refresh_ms := 0
+var bot_cached_squad_goal := Vector3.ZERO
 var bot_grenade_accumulator := 2.0
 var bot_squad_role := 0
 var bot_role_initialized := false
@@ -1622,6 +1624,8 @@ func server_respawn(spawn_position: Vector3) -> void:
 	bot_hold_position_until_ms = 0
 	bot_route.clear()
 	bot_waypoint_index = 0
+	bot_cached_squad_goal = Vector3.ZERO
+	bot_squad_support_refresh_ms = 0
 	_apply_server_crouch(false)
 	_activate_spawn_protection()
 	alive = true
@@ -2107,6 +2111,33 @@ func _bot_should_hold_fire(target: Node3D) -> bool:
 		return true
 	return false
 
+func _bot_squad_support_goal(main: Node) -> Variant:
+	if (
+		main == null
+		or not main.has_method("bot_squad_support_goal")
+	):
+		return null
+
+	var now: int = Time.get_ticks_msec()
+	if (
+		now >= bot_squad_support_refresh_ms
+		or bot_cached_squad_goal == Vector3.ZERO
+	):
+		var result: Variant = main.call(
+			"bot_squad_support_goal",
+			self,
+			player_class
+		)
+		if result is Vector3:
+			bot_cached_squad_goal = Vector3(result)
+		else:
+			bot_cached_squad_goal = Vector3.ZERO
+		bot_squad_support_refresh_ms = now + 1200
+
+	if bot_cached_squad_goal == Vector3.ZERO:
+		return null
+	return bot_cached_squad_goal
+
 func _server_bot_tick(delta: float) -> void:
 	var main: Node = get_parent()
 	if main == null:
@@ -2200,7 +2231,10 @@ func _server_bot_tick(delta: float) -> void:
 			movement_goal = objective_goal
 			has_movement_goal = true
 
-	target_player = main.call("nearest_enemy", self) as Node3D
+	target_player = main.call(
+		"bot_shared_enemy",
+		self
+	) as Node3D
 
 	if target_player != null:
 		var enemy_distance: float = global_position.distance_to(
@@ -2215,6 +2249,12 @@ func _server_bot_tick(delta: float) -> void:
 			enemy_distance <= combat_range
 			and _bot_has_line_of_sight(target_player)
 		):
+			if main.has_method("report_squad_enemy"):
+				main.call(
+					"report_squad_enemy",
+					self,
+					target_player
+				)
 			_bot_face_position(target_player.global_position)
 
 			if (
@@ -2282,6 +2322,21 @@ func _server_bot_tick(delta: float) -> void:
 		elif not has_movement_goal:
 			movement_goal = target_player.global_position
 			has_movement_goal = true
+
+	if (
+		not has_movement_goal
+		and player_class in [
+			PlayerClass.SOLDIER,
+			PlayerClass.MEDIC,
+			PlayerClass.FIELD_OPS
+		]
+	):
+		var squad_goal: Variant = _bot_squad_support_goal(main)
+		if squad_goal is Vector3:
+			var support_position: Vector3 = Vector3(squad_goal)
+			if global_position.distance_to(support_position) > 4.0:
+				movement_goal = support_position
+				has_movement_goal = true
 
 	if not has_movement_goal:
 		if now >= bot_route_repath_ms:
@@ -4043,11 +4098,20 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 			"COLLISION AUDIT ACTIVE AFTER RESTART"
 		)
 	else:
-		et_route_hint_label.text = (
-			"NORTH STREET · CENTRAL ROAD · SOUTH FLANK · SEWER"
+		var route_text := (
+			"NORTH · CENTER · SOUTH · SEWER"
 			if int(main.get("objective_stage")) == 0
-			else "RAIL YARD · FORT APPROACH · SOUTH ANNEX"
+			else "RAIL YARD · FORT · SOUTH ANNEX"
 		)
+		var squad_order := "REGROUP"
+		if main.has_method("squad_order_text"):
+			squad_order = str(
+				main.call("squad_order_text", team)
+			)
+		et_route_hint_label.text = "%s · ORDER: %s" % [
+			route_text,
+			squad_order
+		]
 
 	et_team_label.text = "%s · %s" % [
 		team_name,
