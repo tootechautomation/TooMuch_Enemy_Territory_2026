@@ -1,46 +1,34 @@
 # Frontline: Objective
 
-## Version 7.4.0 Persistent Player Profile & Cross-Server Settings
+## Version 7.4.1 Player Profile Parser Hotfix
 
-### Custom player names
-The connection screen now includes a player-name field. The server validates
-the name and synchronizes it to scoreboards, kill feeds, HUD labels and other
-clients.
+The v7.4.0 profile panel used `class_name` as a loop variable. `class_name` is
+a reserved GDScript keyword, so `main.gd` failed to parse.
 
-The generated `Player########` name remains only as a brief connection
-fallback until the verified profile arrives.
+Fixed implementation:
 
-### Persistent settings
-Profiles are stored locally in:
-
-```text
-user://frontline_profile.cfg
+```gdscript
+var profile_class_names: Array[String] = [
+    "Soldier",
+    "Medic",
+    "Engineer",
+    "Field Ops",
+    "Scout"
+]
+for profile_class_name in profile_class_names:
+    profile_class_option.add_item(profile_class_name)
 ```
 
-The same profile is used automatically across compatible servers.
-
-Saved:
-- Player name
+All v7.4 profile features remain:
+- Custom persistent player name
+- Cross-server local profile
 - Preferred team and class
 - Mouse sensitivity
 - Field of view
 - HUD scale
-- Master, effects and music volume
-- Last server IP and port
+- Audio settings
+- Last server address and port
+- F8 profile/settings panel
 
-### Settings panel
-Press `F8` before joining or during play to open the settings panel. Changes
-apply immediately and are saved for future sessions.
-
-### Server safety
-Player names are sanitized to 2–20 characters. Exact duplicate names receive a
-numeric suffix. Clients cannot rename another peer because the server uses the
-actual RPC sender ID.
-
-### Compatibility
-- Build: v7.4.0
-- Protocol: 341
-- Explicit connection-message `+` retained
-- Existing servers require the matching v7.4 client build
-
-Expected status: `Connected: v7.4.0 protocol 341`
+Build: v7.4.1
+Protocol: 341

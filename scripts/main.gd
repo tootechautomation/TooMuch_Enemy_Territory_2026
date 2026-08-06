@@ -36,7 +36,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.4.0"
+const BUILD_VERSION := "7.4.1"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -4453,14 +4453,15 @@ func _build_profile_panel() -> void:
 	class_label.custom_minimum_size = Vector2(180, 32)
 	class_row.add_child(class_label)
 	profile_class_option = OptionButton.new()
-	for class_name in [
+	var profile_class_names: Array[String] = [
 		"Soldier",
 		"Medic",
 		"Engineer",
 		"Field Ops",
 		"Scout"
-	]:
-		profile_class_option.add_item(class_name)
+	]
+	for profile_class_name in profile_class_names:
+		profile_class_option.add_item(profile_class_name)
 	profile_class_option.selected = int(
 		local_profile.get("preferred_class", 0)
 	)
