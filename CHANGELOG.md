@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.13.0
+- Added three independently moving procedural overcast layers
+- Added bounded wind-driven rain and wet-ground mist
+- Added gradual weather modulation of fog, ambient light, sun energy, and color temperature
+- Added original looping rain ambience through the SFX bus
+- Added restrained deterministic distant-lightning flashes during heavy weather
+- Preserved visibility, gameplay, networking, prior atmosphere progression, and protocol 341
+
+
 ## 8.12.0
 - Added ten visible bridge-construction stages tied to engineer progress
 - Added a detailed command-post field table, radio, controls, antenna, and map board

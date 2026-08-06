@@ -42,6 +42,9 @@ const CinematicEnvironmentPassScript = preload(
 const ObjectiveSetpieceFidelityScript = preload(
 	"res://scripts/visuals/objective_setpiece_fidelity.gd"
 )
+const DynamicWeatherSystemScript = preload(
+	"res://scripts/visuals/dynamic_weather_system.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -75,7 +78,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.12.0"
+const BUILD_VERSION := "8.13.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -301,6 +304,7 @@ var alley_detail_pass: Node3D
 var combat_effects_manager: Node3D
 var cinematic_environment_pass: Node3D
 var objective_setpiece_fidelity: Node3D
+var dynamic_weather_system: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -2900,6 +2904,16 @@ func _build_alley_detail_pass() -> void:
 	add_child(alley_detail_pass)
 	if alley_detail_pass.has_method("build"):
 		alley_detail_pass.call("build")
+
+func _build_dynamic_weather_system() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if dynamic_weather_system != null:
+		return
+	dynamic_weather_system = DynamicWeatherSystemScript.new()
+	dynamic_weather_system.name = "DynamicWeatherSystem"
+	add_child(dynamic_weather_system)
+	dynamic_weather_system.call("build", self)
 
 func _build_cinematic_environment_pass() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -8589,6 +8603,7 @@ func _build_world() -> void:
 	_ensure_combat_effects_manager()
 	_apply_wwii_material_library()
 	_build_battlefield_atmosphere()
+	_build_dynamic_weather_system()
 	_build_battlefield_dressing_pass()
 	_build_combat_atmosphere_pass()
 	_build_map_expansion_pass()
