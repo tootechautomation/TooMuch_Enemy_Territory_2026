@@ -1,5 +1,12 @@
 extends CharacterBody3D
 
+const ExternalAssetRegistryScript = preload(
+	"res://scripts/assets/asset_registry.gd"
+)
+const ExternalAssetLoaderScript = preload(
+	"res://scripts/assets/external_asset_loader.gd"
+)
+
 const RadarCompassScript = preload("res://scripts/radar_compass.gd")
 
 
@@ -62,6 +69,9 @@ var fp_rifle_scene: PackedScene
 var fp_pistol_scene: PackedScene
 var allied_character_scene: PackedScene
 var axis_character_scene: PackedScene
+var external_character_model: Node3D
+var external_character_animator: AnimationPlayer
+var external_character_animation: StringName = &""
 var fp_gunmetal_albedo: Texture2D
 var fp_gunmetal_normal: Texture2D
 var fp_gunmetal_roughness: Texture2D
@@ -432,6 +442,7 @@ func _ready() -> void:
 	bot_last_position = global_position
 	_build_spotted_marker()
 	_build_identity_visuals()
+	_build_external_character_model()
 	_refresh_identity_visuals(true)
 	_apply_first_person_body_visibility()
 	target_position = global_position
@@ -1770,6 +1781,113 @@ func _class_short_name(class_id: int) -> String:
 		PlayerClass.SCOUT: return "SCOUT"
 		_: return "CLASS"
 
+func _build_external_character_model() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return false
+
+	var scene: PackedScene = (
+		ExternalAssetRegistryScript.available_character(team)
+	)
+	if scene == null:
+		return false
+
+	if external_character_model != null:
+		external_character_model.queue_free()
+
+	external_character_model = (
+		ExternalAssetLoaderScript.instantiate_scene(
+			self,
+			scene,
+			"ExternalCharacterModel",
+			Vector3(0.0, -1.0, 0.0),
+			0.0,
+			Vector3.ONE
+		)
+	)
+	if external_character_model == null:
+		return false
+
+	ExternalAssetLoaderScript.configure_character_model(
+		external_character_model
+	)
+	external_character_animator = (
+		ExternalAssetLoaderScript.animation_player(
+			external_character_model
+		)
+	)
+
+	var fallback_body: Node3D = get_node_or_null("Body") as Node3D
+	var fallback_character: Node3D = (
+		get_node_or_null("CharacterVisual") as Node3D
+	)
+	if fallback_body != null:
+		fallback_body.visible = false
+	if fallback_character != null:
+		fallback_character.visible = false
+	return true
+
+func _update_external_character_animation() -> void:
+	if external_character_model == null:
+		return
+
+	external_character_model.visible = (
+		not _is_local_player()
+		and alive
+	)
+
+	var candidates: Array[StringName]
+	if not alive or downed:
+		candidates = [
+			&"death",
+			&"Death",
+			&"downed",
+			&"Downed"
+		]
+	elif is_reloading:
+		candidates = [
+			&"reload",
+			&"Reload",
+			&"rifle_reload"
+		]
+	elif is_crouching:
+		candidates = [
+			&"crouch_walk",
+			&"Crouch_Walk",
+			&"crouch_idle",
+			&"Crouch_Idle"
+		]
+	else:
+		var speed: float = Vector2(
+			velocity.x,
+			velocity.z
+		).length()
+		if speed > WALK_SPEED * 1.25:
+			candidates = [
+				&"run",
+				&"Run",
+				&"sprint",
+				&"Sprint"
+			]
+		elif speed > 0.25:
+			candidates = [
+				&"walk",
+				&"Walk",
+				&"rifle_walk"
+			]
+		else:
+			candidates = [
+				&"idle",
+				&"Idle",
+				&"rifle_idle"
+			]
+
+	external_character_animation = (
+		ExternalAssetLoaderScript.play_first_available(
+			external_character_animator,
+			candidates
+		)
+	)
+
 func _build_identity_visuals() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -1830,8 +1948,11 @@ func _refresh_identity_visuals(force: bool = false) -> void:
 	if not force and team == last_visual_team and player_class == last_visual_class:
 		return
 
+	var team_changed: bool = team != last_visual_team
 	last_visual_team = team
 	last_visual_class = player_class
+	if team_changed:
+		_build_external_character_model()
 	var team_color: Color = _team_color(team)
 	var accent_color: Color = _class_accent_color(player_class)
 
@@ -4883,6 +5004,7 @@ func _visual_part(node_name: String) -> Node3D:
 	return character_visual.get_node_or_null(node_name) as Node3D
 
 func _update_world_character_animation(delta: float) -> void:
+	_update_external_character_animation()
 	var character_visual: Node3D = (
 		get_node_or_null("CharacterVisual") as Node3D
 	)

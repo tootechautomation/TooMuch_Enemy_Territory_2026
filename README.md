@@ -1,40 +1,46 @@
 # Frontline: Objective
 
-## Version 6.1.1 Stability Hotfix
+## Version 7.0.0 Real Asset Pipeline Foundation
 
-### Scoreboard
-Fixed an infinite recursion in `round_awards_text()`. The function appended
-itself to its own output, causing the stack overflow whenever TAB requested the
-scoreboard.
+### Real characters
+The game can now instantiate optional rigged Allied and Axis GLB models. When a
+real model is present, the procedural body is hidden automatically.
 
-TAB now requests a finite scoreboard and awards summary.
+The animation adapter searches common animation names for:
+- Idle
+- Walk
+- Run or sprint
+- Crouch
+- Reload
+- Death or downed
 
-### Bot movement
-Removed the competing second route system and timer-driven waypoint changes.
+### Real environment
+Optional village houses, ruined buildings, warehouse, chainlink fence, and
+military crate GLBs can now be loaded from `assets/external`.
 
-Bots now:
-- Use one authoritative route goal
-- Advance waypoints only after reaching them
-- Move directly in world space with CharacterBody3D
-- Rotate smoothly toward the active goal
-- Strafe after 1.5 seconds of physical blockage
-- Request validated recovery after a prolonged stall
-- Apply a bounded server-side nudge only if recovery returns the same position
+### Collision reliability
+- Wooden fences now have authoritative StaticBody3D collision on the VPS.
+- Placeholder townhouses now use solid inset fallback volumes, preventing
+  players and bots from passing through brick façades.
+- Real imported environment assets can later use authored collision scenes.
 
-### Visual realism
-The included generated textures improve material detail, but procedural
-capsules and boxes cannot match the earlier concept render.
+### Asset workflow
+A curated manifest and verifier are included:
 
-A full realism asset plan is included at:
-`assets/models/REALISM_ASSET_PLAN.md`
+```text
+assets/external/asset_manifest.json
+assets/external/README.md
+tools/verify_external_assets.py
+```
 
-The next visual phase requires licensed rigged soldier models and a modular
-environment kit. Texture-only changes are insufficient.
+CC0 sources are preferred for distributable builds. CGTrader models can be used
+when their individual license permits game incorporation, but raw source assets
+should not be redistributed unless explicitly allowed.
 
 ### Compatibility
-- Build: v6.1.1
+- Build: v7.0.0
 - Protocol: 341
 - Explicit connection-message `+` retained
-- Cache-independent VPS startup retained
+- Missing external assets safely use procedural fallbacks
 
-Expected status: `Connected: v6.1.1 protocol 341`
+Expected status: `Connected: v7.0.0 protocol 341`

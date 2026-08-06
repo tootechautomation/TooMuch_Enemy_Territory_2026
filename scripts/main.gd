@@ -1,5 +1,12 @@
 extends Node
 
+const ExternalAssetRegistryScript = preload(
+	"res://scripts/assets/asset_registry.gd"
+)
+const ExternalAssetLoaderScript = preload(
+	"res://scripts/assets/external_asset_loader.gd"
+)
+
 const TacticalDirectorScript = preload(
 	"res://scripts/ai/tactical_director.gd"
 )
@@ -19,7 +26,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "6.1.1"
+const BUILD_VERSION := "7.0.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -349,6 +356,7 @@ func _ready() -> void:
 		visual_prop_cluster_scene = _load_optional_scene("res://assets/models/crate_barrel_cluster.glb")
 
 	_build_world()
+	_spawn_external_environment_assets()
 	_build_round_results_ui()
 	_update_objective_visuals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -836,6 +844,28 @@ func _make_wooden_fence(
 	root.position = position
 	root.rotation.y = rotation_y
 	add_child(root)
+
+	# One authoritative fence body exists on both graphical and headless
+	# instances. Visual rails and posts remain client-side decoration.
+	var collision_body := StaticBody3D.new()
+	collision_body.name = "%s_Collision" % node_name
+	collision_body.collision_layer = 1
+	collision_body.collision_mask = 1
+	root.add_child(collision_body)
+
+	var fence_collision := CollisionShape3D.new()
+	var fence_shape := BoxShape3D.new()
+	fence_shape.size = Vector3(
+		maxf(0.8, float(length) * 1.35),
+		1.50,
+		0.30
+	)
+	fence_collision.shape = fence_shape
+	fence_collision.position = Vector3(0.0, 0.75, 0.0)
+	collision_body.add_child(fence_collision)
+
+	if DisplayServer.get_name() == "headless":
+		return
 
 	var wood_material := StandardMaterial3D.new()
 	wood_material.albedo_color = Color(0.25, 0.15, 0.075)
@@ -1893,64 +1923,41 @@ func _add_interior_cover(
 		)
 
 func _build_structure_collision_pass() -> void:
-	# Imported village façades are aligned to the visible asset footprints.
-	# Measurements are intentionally inset from the old broad proxy shells.
-	_create_aligned_facade_collision(
-		"TownhouseA_AlignedCollision",
-		Vector3(-51.0, 0.0, -27.0),
-		deg_to_rad(8.0),
-		8.4,
-		6.4,
-		7.7,
-		-3.20,
-		0.0,
-		2.2,
-		2.9,
-		false,
-		true
-	)
-	_create_aligned_facade_collision(
-		"TownhouseB_AlignedCollision",
-		Vector3(-52.0, 0.0, -8.0),
-		deg_to_rad(-4.0),
-		8.8,
-		6.7,
-		7.8,
-		-3.56,
-		0.0,
-		1.85,
-		2.65,
-		true,
-		true
-	)
-	_create_aligned_facade_collision(
-		"TownhouseC_AlignedCollision",
-		Vector3(-50.0, 0.0, 13.0),
-		deg_to_rad(7.0),
-		8.4,
-		6.3,
-		7.7,
-		-3.18,
-		0.0,
-		2.2,
-		2.9,
-		false,
-		true
-	)
-	_create_aligned_facade_collision(
-		"TownhouseD_AlignedCollision",
-		Vector3(-49.0, 0.0, 34.0),
-		deg_to_rad(-9.0),
-		8.7,
-		6.8,
-		7.9,
-		-3.84,
-		0.0,
-		1.85,
-		2.65,
-		true,
-		true
-	)
+	# Fallback townhouse models use solid, inset authoritative volumes.
+	# External modular buildings should ship their own authored collision,
+	# but these safety volumes prevent walking through placeholder façades.
+	for building_data in [
+		[
+			"TownhouseA_SolidFallback",
+			Vector3(-51.0, 0.0, -27.0),
+			Vector3(7.8, 7.4, 5.9),
+			deg_to_rad(8.0)
+		],
+		[
+			"TownhouseB_SolidFallback",
+			Vector3(-52.0, 0.0, -8.0),
+			Vector3(8.2, 7.5, 6.1),
+			deg_to_rad(-4.0)
+		],
+		[
+			"TownhouseC_SolidFallback",
+			Vector3(-50.0, 0.0, 13.0),
+			Vector3(7.8, 7.4, 5.9),
+			deg_to_rad(7.0)
+		],
+		[
+			"TownhouseD_SolidFallback",
+			Vector3(-49.0, 0.0, 34.0),
+			Vector3(8.1, 7.5, 6.2),
+			deg_to_rad(-9.0)
+		]
+	]:
+		_create_solid_collision_proxy(
+			str(building_data[0]),
+			Vector3(building_data[1]),
+			Vector3(building_data[2]),
+			float(building_data[3])
+		)
 
 	# Gray/plaster route walls visible near the western staging and village.
 	# These were graphical meshes without matching authoritative bodies.
@@ -2179,6 +2186,77 @@ func server_recover_out_of_bounds_player(
 		peer_id,
 		team_id,
 		current_position
+	)
+
+func _spawn_external_environment_assets() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var placements: Array = [
+		[
+			"village_house_a",
+			"ExternalVillageHouseA",
+			Vector3(-51.0, 0.0, -27.0),
+			deg_to_rad(8.0),
+			Vector3.ONE
+		],
+		[
+			"village_house_b",
+			"ExternalVillageHouseB",
+			Vector3(-52.0, 0.0, -8.0),
+			deg_to_rad(-4.0),
+			Vector3.ONE
+		],
+		[
+			"ruined_house",
+			"ExternalRuinedHouse",
+			Vector3(-50.0, 0.0, 13.0),
+			deg_to_rad(7.0),
+			Vector3.ONE
+		],
+		[
+			"warehouse",
+			"ExternalWarehouse",
+			Vector3(47.0, 0.0, -18.0),
+			deg_to_rad(-2.0),
+			Vector3.ONE
+		],
+		[
+			"chainlink_fence",
+			"ExternalChainlinkFence",
+			Vector3(29.0, 0.0, -34.0),
+			0.0,
+			Vector3.ONE
+		],
+		[
+			"military_crate",
+			"ExternalMilitaryCrate",
+			Vector3(8.0, 0.0, -5.0),
+			0.25,
+			Vector3.ONE
+		]
+	]
+
+	for placement in placements:
+		var scene: PackedScene = (
+			ExternalAssetRegistryScript.environment_scene(
+				str(placement[0])
+			)
+		)
+		if scene == null:
+			continue
+		ExternalAssetLoaderScript.instantiate_scene(
+			self,
+			scene,
+			str(placement[1]),
+			Vector3(placement[2]),
+			float(placement[3]),
+			Vector3(placement[4])
+		)
+
+	print(
+		"External asset availability: %s"
+		% ExternalAssetRegistryScript.availability_report()
 	)
 
 func _load_optional_scene(path: String) -> PackedScene:

@@ -1,0 +1,74 @@
+{
+  "version": "7.0.0",
+  "notes": [
+    "Only include assets whose individual license permits game use.",
+    "Do not commit or redistribute CGTrader source files unless the license explicitly permits it.",
+    "CC0 sources may be bundled, modified, and distributed."
+  ],
+  "slots": {
+    "characters/allied_soldier.glb": {
+      "purpose": "Allied rigged soldier",
+      "required": false
+    },
+    "characters/axis_soldier.glb": {
+      "purpose": "Axis rigged soldier",
+      "required": false
+    },
+    "environment/village_house_a.glb": {
+      "purpose": "Village house replacement",
+      "required": false
+    },
+    "environment/village_house_b.glb": {
+      "purpose": "Second village house",
+      "required": false
+    },
+    "environment/ruined_house.glb": {
+      "purpose": "Ruined structure",
+      "required": false
+    },
+    "environment/warehouse.glb": {
+      "purpose": "Rail warehouse",
+      "required": false
+    },
+    "environment/chainlink_fence.glb": {
+      "purpose": "Fence replacement",
+      "required": false
+    },
+    "props/military_crate.glb": {
+      "purpose": "Military crate",
+      "required": false
+    }
+  },
+  "sources": [
+    {
+      "name": "Kenney Modular Buildings",
+      "license": "CC0",
+      "page": "https://kenney.nl/assets/modular-buildings",
+      "recommended_use": "Modular village and town structures"
+    },
+    {
+      "name": "Quaternius Universal Animation Library",
+      "license": "CC0",
+      "page": "https://quaternius.com/packs/universalanimationlibrary.html",
+      "recommended_use": "Humanoid animation retargeting"
+    },
+    {
+      "name": "Poly Haven Modular Chainlink Fence",
+      "license": "CC0",
+      "page": "https://polyhaven.com/a/modular_chainlink_fence",
+      "recommended_use": "Fence and gate replacement"
+    },
+    {
+      "name": "Poly Haven Modular Factory Facade",
+      "license": "CC0",
+      "page": "https://polyhaven.com/a/modular_factory_facade",
+      "recommended_use": "Warehouse and industrial fa\u00e7ade"
+    },
+    {
+      "name": "CGTrader WWII category",
+      "license": "Verify each listing; often Royalty Free",
+      "page": "https://www.cgtrader.com/3d-models/world-war-ii",
+      "recommended_use": "Rigged soldiers, weapons, vehicles; manual import only"
+    }
+  ]
+}
