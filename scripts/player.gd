@@ -3962,18 +3962,14 @@ func _rebuild_first_person_weapon() -> void:
 		child.queue_free()
 
 	var is_pistol: bool = current_weapon_index == 1
-	var receiver_length: float = 0.62 if is_pistol else 0.86
-	var barrel_length: float = 0.34 if is_pistol else 0.66
-	receiver_length = float = 0.62 if is_pistol else 0.86
-	barrel_length = float = 0.34 if is_pistol else 0.66
+	var receiver_length: float = 0.72
+	var barrel_length: float = 0.55
 	var primary_profile: int = player_class
 	weapon_view.position = _base_weapon_position()
 
 	if _build_imported_first_person_weapon(is_pistol):
 		return
 
-	receiver_length = float = 0.72
-	barrel_length = float = 0.55
 	var receiver_height: float = 0.16
 	var receiver_width: float = 0.16
 
@@ -4118,7 +4114,6 @@ func _rebuild_first_person_weapon() -> void:
 	muzzle_flash.material_override = flash_material
 	muzzle_flash.visible = false
 	weapon_view.add_child(muzzle_flash)
-
 
 func _initialize_optional_client_systems() -> void:
 	if not _is_local_player():

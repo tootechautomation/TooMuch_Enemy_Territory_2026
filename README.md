@@ -1,24 +1,34 @@
 # Frontline: Objective
 
-## Version 7.7.1 First-Person Weapon Parser Hotfix
+## Version 7.7.2 Weapon Dimension Syntax Hotfix
 
-The v7.7 stock, handguard and sight additions referenced `receiver_length` and
-`barrel_length` after those variables had gone out of scope.
+Version 7.7.1 accidentally produced invalid statements such as:
 
-Both dimensions are now declared once in the shared scope of
-`_rebuild_first_person_weapon()` and are available to:
+```gdscript
+receiver_length = float = 0.62
+barrel_length = float = 0.34
+```
 
-- Imported weapon positioning
-- Procedural receiver construction
-- Buttstock placement
-- Handguard placement
-- Front sight placement
-- Muzzle flash placement
+The first-person weapon function now uses clean shared defaults:
 
-All v7.7 procedural soldier and WWII environment improvements remain enabled.
+```gdscript
+var is_pistol: bool = current_weapon_index == 1
+var receiver_length: float = 0.72
+var barrel_length: float = 0.55
+```
+
+The pistol branch then uses ordinary assignments:
+
+```gdscript
+if is_pistol:
+    receiver_length = 0.34
+    barrel_length = 0.28
+```
+
+All v7.7 realism improvements remain enabled.
 
 Compatibility:
 
-- Build: v7.7.1
+- Build: v7.7.2
 - Protocol: 341
 - Explicit connection-message `+` retained
