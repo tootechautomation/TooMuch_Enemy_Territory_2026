@@ -1,21 +1,5 @@
 extends Node
 
-const ExactTownhouseScene: PackedScene = preload(
-	"res://assets/models/wwii_townhouse.glb"
-)
-const ExactRuinedTownhouseScene: PackedScene = preload(
-	"res://assets/models/wwii_townhouse_ruined.glb"
-)
-const ExactChurchScene: PackedScene = preload(
-	"res://assets/models/stone_church.glb"
-)
-const ExactWarehouseScene: PackedScene = preload(
-	"res://assets/models/rail_warehouse.glb"
-)
-const ExactBunkerScene: PackedScene = preload(
-	"res://assets/models/concrete_bunker.glb"
-)
-
 const PlayerScene = preload("res://scenes/player.tscn")
 const GrenadeScene = preload("res://scenes/grenade.tscn")
 const SupplyPackScript = preload("res://scripts/supply_pack.gd")
@@ -28,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.6.0"
+const BUILD_VERSION := "5.6.1"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -1514,144 +1498,6 @@ func _build_map_expansion_pass() -> void:
 			Color(0.31,0.24,0.15), float(cover_data[1])
 		)
 
-func _set_generated_collision_contract(node: Node) -> int:
-	var body_count := 0
-	if node is StaticBody3D:
-		var body := node as StaticBody3D
-		body.collision_layer = 1
-		body.collision_mask = 1
-		body_count += 1
-
-	for child in node.get_children():
-		body_count += _set_generated_collision_contract(child)
-	return body_count
-
-func _generate_exact_mesh_collision_recursive(node: Node) -> int:
-	var generated_count := 0
-
-	if node is MeshInstance3D:
-		var mesh_instance := node as MeshInstance3D
-		if mesh_instance.mesh != null:
-			var before_children: int = mesh_instance.get_child_count()
-			mesh_instance.create_trimesh_collision()
-			var after_children: int = mesh_instance.get_child_count()
-			if after_children > before_children:
-				generated_count += after_children - before_children
-
-	for child in node.get_children():
-		if child is StaticBody3D:
-			continue
-		generated_count += _generate_exact_mesh_collision_recursive(child)
-
-	return generated_count
-
-func _create_exact_scene_collision(
-	scene: PackedScene,
-	node_name: String,
-	position: Vector3,
-	rotation_y: float,
-	scale_value: Vector3
-) -> Node3D:
-	if scene == null:
-		push_error(
-			"Exact collision scene missing: %s"
-			% node_name
-		)
-		return null
-
-	var instance: Node = scene.instantiate()
-	if not instance is Node3D:
-		instance.queue_free()
-		push_error(
-			"Exact collision scene is not Node3D: %s"
-			% node_name
-		)
-		return null
-
-	var root := instance as Node3D
-	root.name = node_name
-	root.position = position
-	root.rotation.y = rotation_y
-	root.scale = scale_value
-	add_child(root)
-
-	# The duplicate scene supplies collision only. It is hidden visually on
-	# graphical clients, while mesh resources remain available to the
-	# headless server for trimesh generation.
-	root.visible = false
-
-	var generated_count: int = (
-		_generate_exact_mesh_collision_recursive(root)
-	)
-	var body_count: int = _set_generated_collision_contract(root)
-
-	if generated_count == 0 or body_count == 0:
-		push_error(
-			"Exact collision generation failed for %s "
-			+ "(generated=%d, bodies=%d)"
-			% [node_name, generated_count, body_count]
-		)
-	else:
-		print(
-			"Exact structure collision ready: %s "
-			+ "generated=%d bodies=%d"
-			% [node_name, generated_count, body_count]
-		)
-
-	structure_collision_roots.append(root)
-	return root
-
-func _build_exact_imported_structure_collision() -> void:
-	_create_exact_scene_collision(
-		ExactRuinedTownhouseScene,
-		"ExactTownhouseA",
-		Vector3(-51.0, 0.0, -27.0),
-		deg_to_rad(8.0),
-		Vector3(1.05, 1.05, 1.05)
-	)
-	_create_exact_scene_collision(
-		ExactTownhouseScene,
-		"ExactTownhouseB",
-		Vector3(-52.0, 0.0, -8.0),
-		deg_to_rad(-4.0),
-		Vector3(1.15, 1.10, 1.10)
-	)
-	_create_exact_scene_collision(
-		ExactRuinedTownhouseScene,
-		"ExactTownhouseC",
-		Vector3(-50.0, 0.0, 13.0),
-		deg_to_rad(7.0),
-		Vector3(1.05, 1.05, 1.05)
-	)
-	_create_exact_scene_collision(
-		ExactTownhouseScene,
-		"ExactTownhouseD",
-		Vector3(-49.0, 0.0, 34.0),
-		deg_to_rad(-9.0),
-		Vector3(1.10, 1.12, 1.10)
-	)
-	_create_exact_scene_collision(
-		ExactChurchScene,
-		"ExactStoneChurch",
-		Vector3(-42.0, 0.0, 9.0),
-		deg_to_rad(7.0),
-		Vector3.ONE * 0.92
-	)
-	_create_exact_scene_collision(
-		ExactWarehouseScene,
-		"ExactRailWarehouse",
-		Vector3(47.0, 0.0, -18.0),
-		deg_to_rad(-2.0),
-		Vector3.ONE
-	)
-	_create_exact_scene_collision(
-		ExactBunkerScene,
-		"ExactFortBunker",
-		Vector3(33.0, 0.0, 28.0),
-		PI,
-		Vector3.ONE
-	)
-
 func _collision_box(
 	parent: Node3D,
 	node_name: String,
@@ -1995,6 +1841,65 @@ func _add_interior_cover(
 		)
 
 func _build_structure_collision_pass() -> void:
+	# Imported village façades are aligned to the visible asset footprints.
+	# Measurements are intentionally inset from the old broad proxy shells.
+	_create_aligned_facade_collision(
+		"TownhouseA_AlignedCollision",
+		Vector3(-51.0, 0.0, -27.0),
+		deg_to_rad(8.0),
+		8.4,
+		6.4,
+		7.7,
+		-3.20,
+		0.0,
+		2.2,
+		2.9,
+		false,
+		true
+	)
+	_create_aligned_facade_collision(
+		"TownhouseB_AlignedCollision",
+		Vector3(-52.0, 0.0, -8.0),
+		deg_to_rad(-4.0),
+		8.8,
+		6.7,
+		7.8,
+		-3.56,
+		0.0,
+		1.85,
+		2.65,
+		true,
+		true
+	)
+	_create_aligned_facade_collision(
+		"TownhouseC_AlignedCollision",
+		Vector3(-50.0, 0.0, 13.0),
+		deg_to_rad(7.0),
+		8.4,
+		6.3,
+		7.7,
+		-3.18,
+		0.0,
+		2.2,
+		2.9,
+		false,
+		true
+	)
+	_create_aligned_facade_collision(
+		"TownhouseD_AlignedCollision",
+		Vector3(-49.0, 0.0, 34.0),
+		deg_to_rad(-9.0),
+		8.7,
+		6.8,
+		7.9,
+		-3.84,
+		0.0,
+		1.85,
+		2.65,
+		true,
+		true
+	)
+
 	# Gray/plaster route walls visible near the western staging and village.
 	# These were graphical meshes without matching authoritative bodies.
 	_create_wall_segment_collision(
@@ -2008,6 +1913,38 @@ func _build_structure_collision_pass() -> void:
 		Vector3(-40.6, 2.4, -18.8),
 		Vector3(9.4, 4.8, 0.28),
 		deg_to_rad(2.0)
+	)
+
+	# Large imported landmarks.
+	_create_collision_shell(
+		"Church_ServerCollision",
+		Vector3(-42.0,0.0,9.0),
+		Vector3(9.2,8.8,17.2),
+		deg_to_rad(7.0),
+		2.2,
+		3.4,
+		true,
+		false
+	)
+	_create_collision_shell(
+		"Warehouse_ServerCollision",
+		Vector3(47.0,0.0,-18.0),
+		Vector3(17.2,7.0,9.2),
+		deg_to_rad(-2.0),
+		5.0,
+		4.4,
+		true,
+		false
+	)
+	_create_collision_shell(
+		"FortBunker_ServerCollision",
+		Vector3(33.0,0.0,28.0),
+		Vector3(7.7,4.5,5.9),
+		PI,
+		1.5,
+		2.3,
+		true,
+		false
 	)
 
 	# Rail cars and vehicle props.
@@ -6810,7 +6747,6 @@ func _build_world() -> void:
 	_build_combat_atmosphere_pass()
 	_build_map_expansion_pass()
 	_build_expanded_ground_collision()
-	_build_exact_imported_structure_collision()
 	_build_structure_collision_pass()
 	_validate_structure_collision_layout()
 
