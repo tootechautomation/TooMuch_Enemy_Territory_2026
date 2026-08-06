@@ -1,12 +1,10 @@
 # Frontline: Objective
 
-## Version 8.14.0 — Period Tactical Interface
+## Version 8.15.0 — Cinematic Combat Feedback
 
-The HUD, spawn menu, connection screen, scoreboard, profile settings, progression panels, and dynamically created controls now share a cohesive WWII tactical visual language. Dark steel-and-canvas panels, brass objective accents, clearer button states, readable input fields, role-aware progress bars, stronger label shadows, and consistent spacing replace the default Godot-control appearance.
+Combat now produces restrained modern screen-space feedback driven entirely by existing replicated player state. Damage creates a brief peripheral red response and light chromatic separation. Suppression and sustained heavy fire introduce controlled desaturation, fine noise, and pressure at the screen edge. Low health adds a pulsing tunnel effect, incapacitation deepens desaturation and peripheral darkness, and healing creates a short recovery cue.
 
-A restrained edge vignette and fine animated grain integrate the interface with the battlefield without obstructing the center of the screen. The styling system discovers controls created after deployment, so multiplayer HUD and menu elements remain consistent throughout a session and at different supported resolutions.
+The crosshair and center sight picture remain clear. Effects interpolate smoothly, ignore mouse input, run only for the local graphical player, and do not add network fields or alter damage, weapon handling, accuracy, movement, healing, revive rules, or server authority.
 
-No HUD information, bindings, input behavior, gameplay, networking, or protocol values changed.
-
-Build: v8.14.0
+Build: v8.15.0
 Protocol: 341

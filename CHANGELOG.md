@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.15.0
+- Added peripheral damage response and restrained chromatic separation
+- Added suppression and heavy-fire desaturation, grain, edge pressure, and mild softening
+- Added pulsing low-health tunnel vision and incapacitated-state treatment
+- Added a short peripheral recovery cue when health increases
+- Kept the center sight picture clear and the overlay mouse-transparent
+- Used existing replicated state only; preserved gameplay, networking, prior milestones, and protocol 341
+
+
 ## 8.14.0
 - Added cohesive steel, canvas, and brass styling across HUD and menus
 - Added clear button states, readable fields, and role-aware progress bars

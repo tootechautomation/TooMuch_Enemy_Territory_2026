@@ -23,6 +23,9 @@ const FirstPersonWeaponFidelityScript = preload(
 const ThirdPersonPoseFidelityScript = preload(
 	"res://scripts/visuals/third_person_pose_fidelity.gd"
 )
+const CombatCameraFeedbackScript = preload(
+	"res://scripts/visuals/combat_camera_feedback.gd"
+)
 
 
 enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
@@ -224,6 +227,7 @@ var weapon_audio: AudioStreamPlayer
 var reload_audio: AudioStreamPlayer
 var footstep_audio: AudioStreamPlayer3D
 var confirm_audio: AudioStreamPlayer
+var combat_camera_feedback: Node
 var footstep_accumulator := 0.0
 var current_surface_name := "ground"
 var landing_was_airborne := false
@@ -618,6 +622,7 @@ func _physics_process(delta: float) -> void:
 		_collect_and_send_input()
 		_update_spectator_camera()
 		_update_hud()
+		_update_combat_camera_feedback(delta)
 		_apply_first_person_body_visibility()
 		_update_identity_visibility()
 		_update_footstep_audio(delta)
@@ -4266,9 +4271,32 @@ func _initialize_optional_client_systems() -> void:
 	if not _is_local_player():
 		return
 
+	_build_combat_camera_feedback()
 	_build_audio_players()
 	if radar_panel != null:
 		radar_panel.visible = true
+
+func _build_combat_camera_feedback() -> void:
+	if DisplayServer.get_name() == "headless" or combat_camera_feedback != null:
+		return
+	combat_camera_feedback = CombatCameraFeedbackScript.new()
+	combat_camera_feedback.name = "CombatCameraFeedback"
+	add_child(combat_camera_feedback)
+	combat_camera_feedback.call("initialize")
+
+func _update_combat_camera_feedback(delta: float) -> void:
+	if combat_camera_feedback == null:
+		return
+	combat_camera_feedback.call(
+		"update_state",
+		delta,
+		health,
+		_class_health(player_class),
+		replicated_suppression_ms,
+		replicated_heavy_fire_ms,
+		downed,
+		alive
+	)
 
 func _safe_load_audio(path: String) -> AudioStream:
 	if not ResourceLoader.exists(path):
