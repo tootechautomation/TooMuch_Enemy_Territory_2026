@@ -66,7 +66,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.4.0"
+const BUILD_VERSION := "8.5.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -352,6 +352,7 @@ func _ready() -> void:
 	InputBindingManagerScript.apply_bindings(
 		Dictionary(local_profile.get("keybindings", {}))
 	)
+	_ensure_audio_buses()
 	_apply_profile_audio_settings()
 
 	# Structural scenes must be loaded on both the graphical client and the
@@ -653,6 +654,7 @@ func _initialize_battlefield_ambience() -> void:
 		return
 	ambience_player = AudioStreamPlayer.new()
 	ambience_player.stream = resource as AudioStream
+	ambience_player.bus = "Music"
 	ambience_player.volume_db = -24.0
 	add_child(ambience_player)
 	ambience_player.play()
@@ -4718,6 +4720,16 @@ func _set_bus_volume(bus_name: String, value: float) -> void:
 		_linear_to_db(value)
 	)
 
+func _ensure_audio_buses() -> void:
+	var required_buses: Array[String] = ["SFX", "Music"]
+	for bus_name: String in required_buses:
+		if AudioServer.get_bus_index(bus_name) >= 0:
+			continue
+		AudioServer.add_bus()
+		var new_bus_index := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(new_bus_index, bus_name)
+		AudioServer.set_bus_send(new_bus_index, "Master")
+
 func _apply_profile_audio_settings() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -6837,6 +6849,7 @@ func explode_grenade(
 			explosion_audio.stream = (
 				explosion_resource as AudioStream
 			)
+			explosion_audio.bus = "SFX"
 			explosion_audio.global_position = explosion_position
 			explosion_audio.max_distance = 45.0
 			explosion_audio.volume_db = -2.0

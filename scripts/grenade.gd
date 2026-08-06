@@ -41,6 +41,7 @@ func configure(
 			if beep_resource is AudioStream:
 				beep_audio = AudioStreamPlayer3D.new()
 				beep_audio.stream = beep_resource as AudioStream
+				beep_audio.bus = "SFX"
 				beep_audio.max_distance = 22.0
 				beep_audio.volume_db = -4.0
 				add_child(beep_audio)

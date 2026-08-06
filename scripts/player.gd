@@ -4286,21 +4286,25 @@ func _build_audio_players() -> void:
 	)
 
 	weapon_audio = AudioStreamPlayer.new()
+	weapon_audio.bus = "SFX"
 	weapon_audio.volume_db = -5.0
 	add_child(weapon_audio)
 
 	reload_audio = AudioStreamPlayer.new()
 	reload_audio.stream = reload_sound
+	reload_audio.bus = "SFX"
 	reload_audio.volume_db = -7.0
 	add_child(reload_audio)
 
 	footstep_audio = AudioStreamPlayer3D.new()
 	footstep_audio.stream = footstep_sound
+	footstep_audio.bus = "SFX"
 	footstep_audio.max_distance = 18.0
 	footstep_audio.volume_db = -10.0
 	add_child(footstep_audio)
 
 	confirm_audio = AudioStreamPlayer.new()
+	confirm_audio.bus = "SFX"
 	confirm_audio.volume_db = -8.0
 	add_child(confirm_audio)
 

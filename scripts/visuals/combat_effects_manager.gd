@@ -3,10 +3,14 @@ class_name CombatEffectsManager
 
 const MAX_ACTIVE_EFFECT_ROOTS := 72
 const MAX_ACTIVE_DECALS := 64
+const MAX_ACTIVE_IMPACT_AUDIO := 28
+const IMPACT_AUDIO_MIX_RATE := 22050
 
 var active_effect_roots: Array[Node] = []
 var active_decals: Array[Decal] = []
+var active_impact_audio: Array[AudioStreamPlayer3D] = []
 var impact_texture_cache: Dictionary = {}
+var impact_audio_cache: Dictionary = {}
 
 func spawn_surface_impact(
 	world_root: Node,
@@ -32,6 +36,7 @@ func spawn_surface_impact(
 	root.position = position_value
 	add_child(root)
 	_track_effect_root(root)
+	_play_surface_impact_audio(position_value, category)
 
 	if not hit_player:
 		_spawn_impact_decal(position_value, normal, category)
@@ -129,6 +134,135 @@ func spawn_surface_impact(
 			)
 
 	_cleanup_after(root, 1.45)
+
+func _play_surface_impact_audio(
+	world_position: Vector3,
+	category: String
+) -> void:
+	var stream := _impact_audio_stream(category)
+	if stream == null:
+		return
+
+	var player := AudioStreamPlayer3D.new()
+	player.name = "SurfaceImpactAudio_%s" % category
+	player.stream = stream
+	player.bus = "SFX"
+	player.max_distance = 34.0 if category == "metal" else 25.0
+	player.unit_size = 2.4
+	player.volume_db = _impact_audio_volume(category)
+	player.pitch_scale = randf_range(0.92, 1.08)
+	add_child(player)
+	player.global_position = world_position
+	active_impact_audio.append(player)
+
+	while active_impact_audio.size() > MAX_ACTIVE_IMPACT_AUDIO:
+		var oldest: AudioStreamPlayer3D = (
+			active_impact_audio.pop_front() as AudioStreamPlayer3D
+		)
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
+
+	player.finished.connect(
+		func() -> void:
+			active_impact_audio.erase(player)
+			if is_instance_valid(player):
+				player.queue_free()
+	)
+	player.play()
+
+func _impact_audio_volume(category: String) -> float:
+	match category:
+		"metal":
+			return -4.0
+		"brick", "concrete", "stone":
+			return -6.0
+		"wood":
+			return -7.0
+		"flesh":
+			return -10.0
+		_:
+			return -8.0
+
+func _impact_audio_stream(category: String) -> AudioStreamWAV:
+	if impact_audio_cache.has(category):
+		return impact_audio_cache[category] as AudioStreamWAV
+
+	var duration := 0.19
+	var base_frequency := 620.0
+	var overtone_frequency := 1240.0
+	var decay_rate := 27.0
+	var noise_mix := 0.68
+
+	match category:
+		"metal":
+			duration = 0.27
+			base_frequency = 2350.0
+			overtone_frequency = 4100.0
+			decay_rate = 15.5
+			noise_mix = 0.38
+		"wood":
+			duration = 0.16
+			base_frequency = 310.0
+			overtone_frequency = 690.0
+			decay_rate = 30.0
+			noise_mix = 0.54
+		"brick":
+			duration = 0.20
+			base_frequency = 760.0
+			overtone_frequency = 1680.0
+			decay_rate = 23.0
+			noise_mix = 0.72
+		"concrete", "stone":
+			duration = 0.21
+			base_frequency = 980.0
+			overtone_frequency = 2050.0
+			decay_rate = 24.0
+			noise_mix = 0.64
+		"ground":
+			duration = 0.18
+			base_frequency = 145.0
+			overtone_frequency = 330.0
+			decay_rate = 21.0
+			noise_mix = 0.82
+		"flesh":
+			duration = 0.13
+			base_frequency = 185.0
+			overtone_frequency = 370.0
+			decay_rate = 34.0
+			noise_mix = 0.70
+
+	var sample_count := int(duration * float(IMPACT_AUDIO_MIX_RATE))
+	var pcm := PackedByteArray()
+	pcm.resize(sample_count * 2)
+
+	for sample_index in range(sample_count):
+		var time_value := float(sample_index) / float(IMPACT_AUDIO_MIX_RATE)
+		var envelope := exp(-time_value * decay_rate)
+		var attack := clampf(time_value * 900.0, 0.0, 1.0)
+		var noise_seed := sin(float(sample_index) * 12.9898 + 4.1414)
+		var noise_value := fposmod(noise_seed * 43758.5453, 2.0) - 1.0
+		var tonal_value := (
+			sin(TAU * base_frequency * time_value) * 0.66
+			+ sin(TAU * overtone_frequency * time_value) * 0.34
+		)
+		var transient := (
+			noise_value * noise_mix
+			+ tonal_value * (1.0 - noise_mix)
+		)
+		var sample_value := clampf(
+			transient * envelope * attack * 0.82,
+			-1.0,
+			1.0
+		)
+		pcm.encode_s16(sample_index * 2, int(sample_value * 32767.0))
+
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = IMPACT_AUDIO_MIX_RATE
+	stream.stereo = false
+	stream.data = pcm
+	impact_audio_cache[category] = stream
+	return stream
 
 func spawn_explosion_polish(
 	position_value: Vector3,

@@ -1,5 +1,17 @@
 # Changelog
 
+## 8.5.0
+- Added positional surface-impact audio for every replicated bullet hit
+- Added distinct metal, wood, brick, concrete, stone, ground, and flesh profiles
+- Added randomized pitch variation to reduce repetitive combat sound
+- Cached synthesized impact streams instead of generating audio per shot
+- Added a bounded 28-player impact-audio pool for sustained firefights
+- Created functional SFX and Music buses for the existing profile sliders
+- Routed weapons, reloads, footsteps, hit confirms, grenades, and explosions to SFX
+- Routed battlefield ambience to Music
+- Preserved all v8.4 persistent decals and directional impact effects
+- Preserved protocol 341 and explicit connection-string `+`
+
 ## 8.4.0
 - Made impact decals independent of short-lived particle roots
 - Extended bullet-hole visibility to the intended bounded lifetime

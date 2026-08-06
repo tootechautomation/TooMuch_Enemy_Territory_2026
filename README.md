@@ -1,15 +1,17 @@
 # Frontline: Objective
 
-## Version 8.4.0 Persistent Surface Impact Realism
+## Version 8.5.0 Spatial Surface Impact Audio
 
-Bullet impacts now leave independently managed decals that remain visible for
-their full lifetime instead of being removed with the short-lived particle
-root. Impact textures are cached, randomized, and include radial fracture
-detail. Debris now travels away from the struck surface, and metal hits add
-short emissive ricochet streaks.
+Every replicated bullet impact now produces positional audio matched to its
+surface. Metal rings, wood thumps, masonry cracks, concrete snaps, ground hits,
+and restrained player impacts each use a different synthesized sound profile.
+Small pitch variation prevents rapid fire from sounding mechanically repeated.
 
-The effect and decal pools remain bounded for long matches. The v8.3.2
-world-root compatibility fix is preserved.
+Impact audio streams are generated once and cached. Active positional players
+are capped for sustained firefights. The Effects and Music profile sliders now
+control functional SFX and Music buses, including all existing combat sounds
+and battlefield ambience. All v8.4 persistent decals, directional debris,
+ricochet visuals, and protocol compatibility remain enabled.
 
-Build: v8.4.0
+Build: v8.5.0
 Protocol: 341
