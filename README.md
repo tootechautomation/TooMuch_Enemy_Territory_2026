@@ -1,10 +1,10 @@
 # Frontline: Objective
 
-## Version 8.15.0 — Cinematic Combat Feedback
+## Version 8.16.0 — Scalable Visual Quality
 
-Combat now produces restrained modern screen-space feedback driven entirely by existing replicated player state. Damage creates a brief peripheral red response and light chromatic separation. Suppression and sustained heavy fire introduce controlled desaturation, fine noise, and pressure at the screen edge. Low health adds a pulsing tunnel effect, incapacitation deepens desaturation and peripheral darkness, and healing creates a short recovery cue.
+The upgraded presentation now includes five runtime graphics modes: Auto, Cinematic, High, Balanced, and Performance. Cinematic remains the default active quality in Auto mode. Auto steps down only after eight sustained seconds below 43 FPS and restores quality only after twenty sustained seconds above 57 FPS, preventing rapid visual oscillation.
 
-The crosshair and center sight picture remain clear. Effects interpolate smoothly, ignore mouse input, run only for the local graphical player, and do not add network fields or alter damage, weapon handling, accuracy, movement, healing, revive rules, or server authority.
+F6 cycles modes at any time and displays the active tier. The selection is saved locally. Presets coordinate MSAA, TAA, FXAA, SSAO, SSIL, glow, volumetric fog, directional-shadow range, and expensive atmospheric layers. Gameplay geometry, structural collision, player visibility, objective markers, and combat effects essential to readability are never removed.
 
-Build: v8.15.0
+Build: v8.16.0
 Protocol: 341

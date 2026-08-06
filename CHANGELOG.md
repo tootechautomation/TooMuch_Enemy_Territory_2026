@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.16.0
+- Added Auto, Cinematic, High, Balanced, and Performance graphics modes
+- Added F6 mode cycling, active-tier display, and local persistence
+- Added conservative sustained-FPS adaptation and gradual quality recovery
+- Coordinated antialiasing, SSAO, SSIL, glow, volumetric fog, shadows, and optional atmosphere
+- Restricted visibility changes to named optional atmospheric effects only
+- Preserved gameplay geometry, state-driven visibility, networking, previous milestones, and protocol 341
+
+
 ## 8.15.0
 - Added peripheral damage response and restrained chromatic separation
 - Added suppression and heavy-fire desaturation, grain, edge pressure, and mild softening

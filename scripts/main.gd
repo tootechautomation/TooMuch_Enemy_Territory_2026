@@ -48,6 +48,9 @@ const DynamicWeatherSystemScript = preload(
 const PeriodInterfaceFidelityScript = preload(
 	"res://scripts/visuals/period_interface_fidelity.gd"
 )
+const VisualQualityManagerScript = preload(
+	"res://scripts/visuals/visual_quality_manager.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -81,7 +84,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.15.0"
+const BUILD_VERSION := "8.16.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -309,6 +312,7 @@ var cinematic_environment_pass: Node3D
 var objective_setpiece_fidelity: Node3D
 var dynamic_weather_system: Node3D
 var period_interface_fidelity: Node
+var visual_quality_manager: Node
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -482,6 +486,7 @@ func _ready() -> void:
 	_spawn_external_environment_assets()
 	_update_external_asset_overlay()
 	_apply_high_visual_quality()
+	_initialize_visual_quality_manager()
 	_build_round_results_ui()
 	_initialize_period_interface_fidelity()
 	_update_objective_visuals()
@@ -500,6 +505,16 @@ func _ready() -> void:
 			visual_bunker_scene != null
 		]
 	)
+
+func _initialize_visual_quality_manager() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if visual_quality_manager != null:
+		return
+	visual_quality_manager = VisualQualityManagerScript.new()
+	visual_quality_manager.name = "VisualQualityManager"
+	add_child(visual_quality_manager)
+	visual_quality_manager.call("initialize", self)
 
 func _initialize_period_interface_fidelity() -> void:
 	if DisplayServer.get_name() == "headless":
