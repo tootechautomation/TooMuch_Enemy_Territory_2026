@@ -1,10 +1,11 @@
 # Changelog
 
-## 4.6.0
-- Hid the complete local third-person body in first person
-- Preserved full third-person characters for remote players and bots
-- Added original ET-inspired objective HUD
-- Added framed team-separated TAB results screen
-- Added compact health, stamina, rank, weapon, ammo, and objective blocks
+## 4.7.0
+- Added third-person arm and leg locomotion animation
+- Added walk, sprint, crouch, bob, and gear motion
+- Added original circular compass/radar frame
+- Added live compass heading and objective distance
+- Restyled kill feed and TAB typography
+- Preserved first-person body hiding
 - Preserved protocol 341
 - Preserved explicit connection-string `+`

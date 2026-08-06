@@ -210,6 +210,12 @@ var et_timer_label: Label
 var et_team_label: Label
 var et_crosshair_ring: Label
 var scoreboard_panel: PanelContainer
+var radar_frame_texture: Texture2D
+var radar_frame_rect: TextureRect
+var et_compass_label: Label
+var et_objective_distance_label: Label
+var visual_stride_phase := 0.0
+var visual_last_speed := 0.0
 var bot_route_index := 0
 var bot_route_repath_ms := 0
 var compass_label: Label
@@ -376,6 +382,9 @@ func _ready() -> void:
 		fp_wood_normal = _load_optional_texture("res://assets/pbr/wood_normal.png")
 		fp_wood_roughness = _load_optional_texture("res://assets/pbr/wood_roughness.png")
 		muzzle_smoke_texture = _load_optional_texture("res://assets/fx/muzzle_smoke.png")
+		radar_frame_texture = _load_optional_texture(
+			"res://assets/hud/radar_compass_frame.png"
+		)
 
 	_initialize_loadout()
 	if is_bot and not bot_role_initialized:
@@ -3355,6 +3364,28 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 	)
 	et_objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
+	et_compass_label = Label.new()
+	et_compass_label.position = Vector2(532, 95)
+	et_compass_label.custom_minimum_size = Vector2(216, 26)
+	et_compass_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	et_compass_label.add_theme_font_size_override("font_size", 16)
+	et_compass_label.add_theme_color_override(
+		"font_color",
+		Color(0.86, 0.82, 0.62)
+	)
+	et_hud_root.add_child(et_compass_label)
+
+	et_objective_distance_label = Label.new()
+	et_objective_distance_label.position = Vector2(540, 121)
+	et_objective_distance_label.custom_minimum_size = Vector2(200, 24)
+	et_objective_distance_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	et_objective_distance_label.add_theme_font_size_override("font_size", 15)
+	et_objective_distance_label.add_theme_color_override(
+		"font_color",
+		Color(0.96, 0.82, 0.30)
+	)
+	et_hud_root.add_child(et_objective_distance_label)
+
 	var left_box := _make_et_panel(
 		et_hud_root,
 		Vector2(18, 570),
@@ -3451,6 +3482,44 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 		]
 	)
 	et_objective_label.text = str(main.call("objective_status_text"))
+
+	var heading_degrees: float = fposmod(
+		rad_to_deg(rotation.y) + 180.0,
+		360.0
+	)
+	var cardinal := "N"
+	if heading_degrees >= 22.5 and heading_degrees < 67.5:
+		cardinal = "NE"
+	elif heading_degrees < 112.5:
+		cardinal = "E"
+	elif heading_degrees < 157.5:
+		cardinal = "SE"
+	elif heading_degrees < 202.5:
+		cardinal = "S"
+	elif heading_degrees < 247.5:
+		cardinal = "SW"
+	elif heading_degrees < 292.5:
+		cardinal = "W"
+	elif heading_degrees < 337.5:
+		cardinal = "NW"
+	et_compass_label.text = "%s · %03d°" % [
+		cardinal,
+		int(round(heading_degrees))
+	]
+
+	var objective_position := global_position
+	if int(main.get("objective_stage")) == 0:
+		var bridge_site := main.get_node_or_null("BridgeBuildSite") as Node3D
+		if bridge_site != null:
+			objective_position = bridge_site.global_position
+	else:
+		var objective_node := main.get_node_or_null("Objective") as Node3D
+		if objective_node != null:
+			objective_position = objective_node.global_position
+	et_objective_distance_label.text = "OBJECTIVE %dm" % int(round(
+		global_position.distance_to(objective_position)
+	))
+
 	et_team_label.text = "%s · %s" % [
 		team_name,
 		str(names[player_class]).to_upper()
@@ -3733,22 +3802,31 @@ func _build_hud() -> void:
 
 	radar_panel = Control.new()
 	radar_panel.name = "TacticalRadar"
-	radar_panel.position = Vector2(1035, 480)
+	radar_panel.position = Vector2(1038, 18)
 	radar_panel.size = Vector2(220, 220)
 	radar_panel.visible = false
 	layer.add_child(radar_panel)
 
-	var radar_background := ColorRect.new()
-	radar_background.color = Color(0.02, 0.04, 0.06, 0.78)
-	radar_background.size = Vector2(220, 220)
-	radar_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	radar_panel.add_child(radar_background)
+	radar_frame_rect = TextureRect.new()
+	radar_frame_rect.texture = radar_frame_texture
+	radar_frame_rect.position = Vector2(-8, -8)
+	radar_frame_rect.size = Vector2(236, 236)
+	radar_frame_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	radar_frame_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	radar_frame_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	radar_panel.add_child(radar_frame_rect)
 
-	var radar_border := Label.new()
-	radar_border.text = "TACTICAL MAP\n┌──────────────┐\n│              │\n│              │\n│              │\n│      ▲       │\n│              │\n│              │\n│              │\n└──────────────┘"
-	radar_border.position = Vector2(10, 4)
-	radar_border.add_theme_font_size_override("font_size", 15)
-	radar_panel.add_child(radar_border)
+	var radar_title := Label.new()
+	radar_title.text = "FIELD COMPASS"
+	radar_title.position = Vector2(48, 4)
+	radar_title.custom_minimum_size = Vector2(125, 22)
+	radar_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	radar_title.add_theme_font_size_override("font_size", 13)
+	radar_title.add_theme_color_override(
+		"font_color",
+		Color(0.90, 0.86, 0.68)
+	)
+	radar_panel.add_child(radar_title)
 
 	radar_objective = Label.new()
 	radar_objective.text = "◆"
@@ -3762,7 +3840,22 @@ func _build_hud() -> void:
 	scoreboard.add_theme_font_size_override("font_size", 17)
 	scoreboard.visible = false
 	layer.add_child(scoreboard)
-	feed = Label.new(); feed.position = Vector2(930, 24); feed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; feed.custom_minimum_size = Vector2(320, 150); layer.add_child(feed)
+	feed = Label.new()
+	feed.position = Vector2(815, 265)
+	feed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	feed.custom_minimum_size = Vector2(445, 160)
+	feed.add_theme_font_size_override("font_size", 17)
+	feed.add_theme_color_override(
+		"font_color",
+		Color(0.95, 0.93, 0.84)
+	)
+	feed.add_theme_color_override(
+		"font_shadow_color",
+		Color(0.0, 0.0, 0.0, 0.92)
+	)
+	feed.add_theme_constant_override("shadow_offset_x", 2)
+	feed.add_theme_constant_override("shadow_offset_y", 2)
+	layer.add_child(feed)
 
 	# Framed TAB results panel.
 	scoreboard_panel = PanelContainer.new()
@@ -3782,7 +3875,17 @@ func _build_hud() -> void:
 	scoreboard.reparent(scoreboard_panel)
 	scoreboard.position = Vector2.ZERO
 	scoreboard.custom_minimum_size = Vector2(970, 570)
-	scoreboard.add_theme_font_size_override("font_size", 16)
+	scoreboard.add_theme_font_size_override("font_size", 17)
+	scoreboard.add_theme_color_override(
+		"font_color",
+		Color(0.93, 0.91, 0.82)
+	)
+	scoreboard.add_theme_color_override(
+		"font_shadow_color",
+		Color(0.0, 0.0, 0.0, 0.90)
+	)
+	scoreboard.add_theme_constant_override("shadow_offset_x", 2)
+	scoreboard.add_theme_constant_override("shadow_offset_y", 2)
 
 	_build_et_style_hud(layer)
 
@@ -3959,61 +4062,112 @@ func _update_first_person_animation(delta: float) -> void:
 	weapon_view.position = weapon_view.position.lerp(target_position, clampf(delta * 10.0,0.0,1.0))
 	weapon_view.rotation = weapon_view.rotation.lerp(target_rotation, clampf(delta * 9.0,0.0,1.0))
 
+func _visual_part(node_name: String) -> Node3D:
+	var character_visual: Node3D = (
+		get_node_or_null("CharacterVisual") as Node3D
+	)
+	if character_visual == null:
+		return null
+	return character_visual.get_node_or_null(node_name) as Node3D
+
 func _update_world_character_animation(delta: float) -> void:
-	if class_accent_mesh == null:
+	var character_visual: Node3D = (
+		get_node_or_null("CharacterVisual") as Node3D
+	)
+	if character_visual == null:
 		return
 
-	var speed: float = Vector2(
-		velocity.x,
-		velocity.z
-	).length()
-	var animation_clock: float = (
-		float(Time.get_ticks_msec()) / 1000.0
-	)
-	var speed_ratio: float = clampf(
-		speed / SPRINT_SPEED,
-		0.0,
-		1.0
-	)
-
-	var target_roll := 0.0
-	var target_yaw_offset := 0.0
-	var target_vertical_offset := 0.0
-
-	if alive and speed > 0.45:
-		var stride_frequency: float = lerpf(
-			5.5,
-			9.0,
-			speed_ratio
-		)
-		target_roll = (
-			sin(animation_clock * stride_frequency)
-			* lerpf(0.025, 0.075, speed_ratio)
-		)
-		target_yaw_offset = (
-			cos(animation_clock * stride_frequency * 0.5)
-			* 0.018
-		)
-		target_vertical_offset = (
-			absf(sin(animation_clock * stride_frequency))
-			* lerpf(0.008, 0.026, speed_ratio)
-		)
-
-	class_accent_mesh.rotation.z = lerpf(
-		class_accent_mesh.rotation.z,
-		target_roll,
-		1.0 - exp(-10.0 * delta)
-	)
-	class_accent_mesh.rotation.y = lerpf(
-		class_accent_mesh.rotation.y,
-		target_yaw_offset,
+	var speed: float = Vector2(velocity.x, velocity.z).length()
+	var speed_ratio: float = clampf(speed / SPRINT_SPEED, 0.0, 1.0)
+	var target_phase_speed: float = lerpf(4.8, 9.4, speed_ratio)
+	visual_stride_phase += delta * target_phase_speed
+	visual_last_speed = lerpf(
+		visual_last_speed,
+		speed,
 		1.0 - exp(-8.0 * delta)
 	)
-	class_accent_mesh.position.y = lerpf(
-		class_accent_mesh.position.y,
-		target_vertical_offset,
+
+	var moving: bool = alive and visual_last_speed > 0.35
+	var stride: float = sin(visual_stride_phase)
+	var opposite_stride: float = sin(visual_stride_phase + PI)
+	var stride_amount: float = (
+		lerpf(0.10, 0.48, speed_ratio)
+		if moving
+		else 0.0
+	)
+	var arm_amount: float = stride_amount * 0.82
+	var crouch_offset: float = -0.34 if is_crouching else 0.0
+	var body_bob: float = (
+		absf(sin(visual_stride_phase * 2.0))
+		* lerpf(0.005, 0.035, speed_ratio)
+		if moving
+		else 0.0
+	)
+
+	character_visual.position.y = lerpf(
+		character_visual.position.y,
+		crouch_offset + body_bob,
 		1.0 - exp(-12.0 * delta)
 	)
+	character_visual.rotation.z = lerpf(
+		character_visual.rotation.z,
+		stride * 0.025 * speed_ratio,
+		1.0 - exp(-9.0 * delta)
+	)
+
+	var arm_l := _visual_part("ArmL")
+	var arm_r := _visual_part("ArmR")
+	var leg_l := _visual_part("LegL")
+	var leg_r := _visual_part("LegR")
+	var pack := _visual_part("Pack")
+	var head := _visual_part("Head")
+	var helmet := _visual_part("Helmet")
+
+	if arm_l != null:
+		arm_l.rotation.x = lerpf(
+			arm_l.rotation.x,
+			opposite_stride * arm_amount,
+			1.0 - exp(-13.0 * delta)
+		)
+	if arm_r != null:
+		arm_r.rotation.x = lerpf(
+			arm_r.rotation.x,
+			stride * arm_amount,
+			1.0 - exp(-13.0 * delta)
+		)
+	if leg_l != null:
+		leg_l.rotation.x = lerpf(
+			leg_l.rotation.x,
+			stride * stride_amount,
+			1.0 - exp(-14.0 * delta)
+		)
+	if leg_r != null:
+		leg_r.rotation.x = lerpf(
+			leg_r.rotation.x,
+			opposite_stride * stride_amount,
+			1.0 - exp(-14.0 * delta)
+		)
+	if pack != null:
+		pack.rotation.z = lerpf(
+			pack.rotation.z,
+			-stride * 0.035 * speed_ratio,
+			1.0 - exp(-8.0 * delta)
+		)
+	if head != null:
+		head.rotation.y = lerpf(
+			head.rotation.y,
+			stride * 0.025 * speed_ratio,
+			1.0 - exp(-10.0 * delta)
+		)
+	if helmet != null:
+		helmet.rotation.y = head.rotation.y if head != null else 0.0
+
+	if class_accent_mesh != null:
+		class_accent_mesh.rotation.z = lerpf(
+			class_accent_mesh.rotation.z,
+			stride * 0.035 * speed_ratio,
+			1.0 - exp(-10.0 * delta)
+		)
 
 func _update_hud() -> void:
 	if hud == null:
