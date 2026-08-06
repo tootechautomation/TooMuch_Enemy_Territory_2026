@@ -1,13 +1,9 @@
 # Changelog
 
-## 3.7.0
-- Added captureable supply depot side objective
-- Added recurring ticket resupply
-- Added Field Ops team rally points
-- Added temporary validated rally respawns
-- Added rally contesting and expiration
-- Added bot artillery danger avoidance
-- Added mission-event banners
-- Expanded tactical operations HUD
-- Corrected connection message with explicit `+`
-- Preserved protocol 341 compatibility
+## 3.7.1
+
+- Fixed undeclared `rally_cooldown_until_ms`
+- Fixed undeclared `mission_banner`
+- Added validation for both v3.7 player members
+- Preserved explicit connection-string concatenation
+- Preserved protocol 341

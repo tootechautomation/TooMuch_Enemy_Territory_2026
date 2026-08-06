@@ -178,6 +178,8 @@ var spectator_freecam_position := Vector3.ZERO
 var heavy_fire_until_ms := 0
 var replicated_heavy_fire_ms := 0
 var class_mode_label: Label
+var rally_cooldown_until_ms := 0
+var mission_banner: Label
 var compass_label: Label
 var medal_icon: TextureRect
 var medal_label: Label
