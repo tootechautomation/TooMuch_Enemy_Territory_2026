@@ -4,19 +4,23 @@ var attacker_skins: Array[Resource] = []
 var defender_skins: Array[Resource] = []
 var uniform_texture: Texture2D
 
+var visual_root: Node3D
+var torso_root: Node3D
+var head_root: Node3D
+var left_arm_root: Node3D
+var right_arm_root: Node3D
+var left_leg_root: Node3D
+var right_leg_root: Node3D
+var weapon_root: Node3D
+
+var animation_time := 0.0
+var last_team := -1
+var last_class := -1
+
 func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		set_process(false)
 		return
-
-	var player = get_parent()
-	var uniform_path := (
-		"res://assets/pbr/generated/uniform_allied_albedo.png"
-		if int(player.team) == 0
-		else "res://assets/pbr/generated/uniform_axis_albedo.png"
-	)
-	if ResourceLoader.exists(uniform_path):
-		uniform_texture = load(uniform_path) as Texture2D
 
 	attacker_skins = _load_skin_resources([
 		"res://data/skins/attacker_ranger.tres",
@@ -26,322 +30,522 @@ func _ready() -> void:
 		"res://data/skins/defender_steel.tres",
 		"res://data/skins/defender_winter.tres"
 	])
-	call_deferred("_build_character")
+
+	call_deferred("_rebuild_character")
+	set_process(true)
+
+func _process(delta: float) -> void:
+	var actor = get_parent()
+	if actor == null:
+		return
+
+	if (
+		int(actor.team) != last_team
+		or int(actor.player_class) != last_class
+	):
+		_rebuild_character()
+
+	if visual_root == null:
+		return
+
+	animation_time += delta
+	_animate_character(delta)
 
 func _load_skin_resources(paths: Array[String]) -> Array[Resource]:
 	var result: Array[Resource] = []
-	for path in paths:
-		if not ResourceLoader.exists(path):
+	for resource_path in paths:
+		if not ResourceLoader.exists(resource_path):
 			continue
-		var resource: Resource = load(path)
+		var resource: Resource = load(resource_path)
 		if resource != null:
 			result.append(resource)
 	return result
 
-func _add_class_armband(
-	parent: Node3D,
-	accent: Color
-) -> void:
-	var band := MeshInstance3D.new()
-	band.name = "ClassArmband"
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.105
-	mesh.bottom_radius = 0.105
-	mesh.height = 0.16
-	mesh.radial_segments = 18
-	band.mesh = mesh
-	band.rotation_degrees.z = 90.0
-	band.position = Vector3(-0.34, 1.12, 0.0)
+func _rebuild_character() -> void:
+	for child in get_children():
+		child.queue_free()
 
-	var material := StandardMaterial3D.new()
-	material.albedo_color = accent.darkened(0.08)
-	material.roughness = 0.82
-	material.emission_enabled = true
-	material.emission = accent * 0.08
-	band.material_override = material
-	parent.add_child(band)
+	var actor = get_parent()
+	if actor == null:
+		return
 
-func _build_character() -> void:
-	var player = get_parent()
+	last_team = int(actor.team)
+	last_class = int(actor.player_class)
+
 	var skins: Array[Resource] = (
-		attacker_skins if player.team == 0 else defender_skins
+		attacker_skins
+		if last_team == 0
+		else defender_skins
 	)
 	if skins.is_empty():
 		return
 
-	var skin: Resource = skins[posmod(player.peer_id, skins.size())]
-	var old_body := player.get_node_or_null("Body")
-	if old_body:
+	var skin: Resource = skins[
+		posmod(int(actor.peer_id), skins.size())
+	]
+
+	var uniform_path := (
+		"res://assets/pbr/generated/uniform_allied_albedo.png"
+		if last_team == 0
+		else "res://assets/pbr/generated/uniform_axis_albedo.png"
+	)
+	uniform_texture = (
+		load(uniform_path) as Texture2D
+		if ResourceLoader.exists(uniform_path)
+		else null
+	)
+
+	var old_body := actor.get_node_or_null("Body")
+	if old_body != null:
 		old_body.visible = false
 
-	# Rounded torso and pelvis.
-	_add_capsule(
-		"Torso",
-		Vector3(0.0, 0.24, 0.0),
-		0.38,
-		0.92,
-		skin.primary_color
-	)
-	_add_capsule(
-		"Vest",
-		Vector3(0.0, 0.28, -0.19),
-		0.40,
-		0.62,
-		skin.secondary_color
-	)
-	_add_capsule(
-		"Pelvis",
-		Vector3(0.0, -0.31, 0.0),
-		0.34,
-		0.34,
-		skin.secondary_color.darkened(0.05)
-	)
+	visual_root = Node3D.new()
+	visual_root.name = "ArticulatedSoldier"
+	visual_root.position = Vector3(0.0, -0.04, 0.0)
+	add_child(visual_root)
 
-	# Arms and legs use cylinders with rounded joints.
-	_add_limb(
-		"ArmL",
-		Vector3(-0.49, 0.20, 0.0),
-		Vector3(0.0, 0.0, 5.0),
-		0.13,
-		0.80,
-		skin.primary_color
-	)
-	_add_limb(
-		"ArmR",
-		Vector3(0.49, 0.20, 0.0),
-		Vector3(0.0, 0.0, -5.0),
-		0.13,
-		0.80,
-		skin.primary_color
-	)
-	_add_limb(
-		"LegL",
-		Vector3(-0.19, -0.76, 0.0),
-		Vector3.ZERO,
-		0.15,
-		0.82,
-		skin.secondary_color.darkened(0.08)
-	)
-	_add_limb(
-		"LegR",
-		Vector3(0.19, -0.76, 0.0),
-		Vector3.ZERO,
-		0.15,
-		0.82,
-		skin.secondary_color.darkened(0.08)
-	)
+	torso_root = Node3D.new()
+	torso_root.name = "TorsoJoint"
+	torso_root.position = Vector3(0.0, 0.18, 0.0)
+	visual_root.add_child(torso_root)
 
-	_add_sphere(
-		"Head",
-		Vector3(0.0, 0.94, 0.0),
-		Vector3(0.28, 0.31, 0.27),
+	head_root = Node3D.new()
+	head_root.name = "HeadJoint"
+	head_root.position = Vector3(0.0, 0.83, 0.0)
+	torso_root.add_child(head_root)
+
+	left_arm_root = Node3D.new()
+	left_arm_root.name = "LeftShoulderJoint"
+	left_arm_root.position = Vector3(-0.38, 0.42, 0.0)
+	torso_root.add_child(left_arm_root)
+
+	right_arm_root = Node3D.new()
+	right_arm_root.name = "RightShoulderJoint"
+	right_arm_root.position = Vector3(0.38, 0.42, 0.0)
+	torso_root.add_child(right_arm_root)
+
+	left_leg_root = Node3D.new()
+	left_leg_root.name = "LeftHipJoint"
+	left_leg_root.position = Vector3(-0.18, -0.38, 0.0)
+	visual_root.add_child(left_leg_root)
+
+	right_leg_root = Node3D.new()
+	right_leg_root.name = "RightHipJoint"
+	right_leg_root.position = Vector3(0.18, -0.38, 0.0)
+	visual_root.add_child(right_leg_root)
+
+	_build_torso(skin)
+	_build_head(skin)
+	_build_arm(left_arm_root, skin, false)
+	_build_arm(right_arm_root, skin, true)
+	_build_leg(left_leg_root, skin, false)
+	_build_leg(right_leg_root, skin, true)
+	_build_equipment(skin)
+	_build_weapon(skin)
+	_build_class_gear(skin)
+
+func _build_torso(skin: Resource) -> void:
+	_add_capsule(
+		torso_root,
+		"TunicTorso",
+		Vector3.ZERO,
+		0.35,
+		0.76,
+		skin.primary_color,
+		Vector3(1.0, 1.0, 0.78)
+	)
+	_add_box(
+		torso_root,
+		"ChestWebbing",
+		Vector3(0.0, 0.02, -0.24),
+		Vector3(0.54, 0.48, 0.075),
+		skin.accent_color.darkened(0.22)
+	)
+	_add_box(
+		torso_root,
+		"TunicSkirt",
+		Vector3(0.0, -0.39, 0.0),
+		Vector3(0.65, 0.32, 0.35),
+		skin.primary_color.darkened(0.06)
+	)
+	_add_box(
+		torso_root,
+		"Collar",
+		Vector3(0.0, 0.39, -0.07),
+		Vector3(0.43, 0.13, 0.25),
+		skin.primary_color.darkened(0.12)
+	)
+	_add_box(
+		torso_root,
+		"Belt",
+		Vector3(0.0, -0.30, -0.01),
+		Vector3(0.68, 0.12, 0.37),
+		skin.accent_color.darkened(0.25)
+	)
+	for x_value in [-0.25, 0.25]:
+		_add_box(
+			torso_root,
+			"AmmoPouch",
+			Vector3(x_value, -0.31, -0.24),
+			Vector3(0.19, 0.25, 0.13),
+			skin.accent_color.darkened(0.12)
+		)
+
+func _build_head(skin: Resource) -> void:
+	var skin_color := (
 		Color(0.60, 0.43, 0.31)
+		if posmod(int(get_parent().peer_id), 3) != 1
+		else Color(0.43, 0.29, 0.20)
 	)
-	_add_helmet(
-		Vector3(0.0, 1.08, 0.0),
+	_add_sphere(
+		head_root,
+		"Head",
+		Vector3(0.0, 0.08, 0.0),
+		Vector3(0.26, 0.31, 0.25),
+		skin_color
+	)
+	_add_box(
+		head_root,
+		"Nose",
+		Vector3(0.0, 0.08, -0.245),
+		Vector3(0.065, 0.11, 0.075),
+		skin_color.lightened(0.04)
+	)
+	for x_value in [-0.085, 0.085]:
+		_add_sphere(
+			head_root,
+			"Eye",
+			Vector3(x_value, 0.13, -0.235),
+			Vector3(0.027, 0.020, 0.015),
+			Color(0.10, 0.09, 0.07)
+		)
+
+	var helmet := _add_sphere(
+		head_root,
+		"SteelHelmet",
+		Vector3(0.0, 0.26, 0.0),
+		Vector3(0.36, 0.20, 0.35),
 		skin.helmet_color
 	)
-
-	# Human facial and neck proportions.
+	helmet.scale.y = 0.72
 	_add_cylinder(
-		"Neck",
-		Vector3(0.0, 0.73, 0.0),
-		0.12,
-		0.22,
-		Color(0.54, 0.38, 0.28)
+		head_root,
+		"HelmetRim",
+		Vector3(0.0, 0.18, -0.015),
+		0.37,
+		0.055,
+		skin.helmet_color.darkened(0.09),
+		Vector3.ZERO
 	)
-	_add_rounded_box(
-		"Nose",
-		Vector3(0.0, 0.95, -0.265),
-		Vector3(0.075, 0.12, 0.09),
-		Color(0.62, 0.44, 0.32)
+	_add_box(
+		head_root,
+		"HelmetStrapL",
+		Vector3(-0.18, -0.01, -0.03),
+		Vector3(0.025, 0.35, 0.025),
+		Color(0.13, 0.10, 0.06)
 	)
-	_add_rounded_box(
-		"Collar",
-		Vector3(0.0, 0.62, -0.08),
-		Vector3(0.50, 0.16, 0.30),
-		skin.primary_color.darkened(0.10)
-	)
-
-	# Separate upper and lower limb forms improve the human silhouette.
-	_add_capsule(
-		"ForearmL",
-		Vector3(-0.50, -0.15, -0.04),
-		0.115,
-		0.42,
-		skin.primary_color.darkened(0.04)
-	)
-	_add_capsule(
-		"ForearmR",
-		Vector3(0.50, -0.15, -0.04),
-		0.115,
-		0.42,
-		skin.primary_color.darkened(0.04)
-	)
-	_add_capsule(
-		"ShinL",
-		Vector3(-0.19, -1.02, -0.01),
-		0.13,
-		0.42,
-		skin.secondary_color.darkened(0.11)
-	)
-	_add_capsule(
-		"ShinR",
-		Vector3(0.19, -1.02, -0.01),
-		0.13,
-		0.42,
-		skin.secondary_color.darkened(0.11)
+	_add_box(
+		head_root,
+		"HelmetStrapR",
+		Vector3(0.18, -0.01, -0.03),
+		Vector3(0.025, 0.35, 0.025),
+		Color(0.13, 0.10, 0.06)
 	)
 
-	# WWII tunic skirt, shoulder structure, straps and web equipment.
-	_add_rounded_box(
-		"TunicSkirt",
-		Vector3(0.0, -0.18, 0.0),
-		Vector3(0.70, 0.36, 0.38),
-		skin.primary_color.darkened(0.05)
-	)
-	_add_rounded_box(
-		"ShoulderL",
-		Vector3(-0.43, 0.46, 0.0),
-		Vector3(0.25, 0.20, 0.34),
-		skin.primary_color
-	)
-	_add_rounded_box(
-		"ShoulderR",
-		Vector3(0.43, 0.46, 0.0),
-		Vector3(0.25, 0.20, 0.34),
-		skin.primary_color
-	)
-	_add_rounded_box(
-		"StrapL",
-		Vector3(-0.20, 0.28, -0.225),
-		Vector3(0.075, 0.76, 0.045),
-		skin.accent_color.darkened(0.15)
-	)
-	_add_rounded_box(
-		"StrapR",
-		Vector3(0.20, 0.28, -0.225),
-		Vector3(0.075, 0.76, 0.045),
-		skin.accent_color.darkened(0.15)
+func _build_arm(
+	root: Node3D,
+	skin: Resource,
+	right_side: bool
+) -> void:
+	var side := 1.0 if right_side else -1.0
+	var upper := Node3D.new()
+	upper.name = "UpperArm"
+	upper.position = Vector3(side * 0.03, -0.27, 0.0)
+	root.add_child(upper)
+	_add_capsule(
+		upper,
+		"Sleeve",
+		Vector3.ZERO,
+		0.125,
+		0.52,
+		skin.primary_color,
+		Vector3(0.90, 1.0, 0.90)
 	)
 
-	# Boots, gloves, belt, pouches, and backpack add silhouette detail.
+	var elbow := Node3D.new()
+	elbow.name = "ElbowJoint"
+	elbow.position = Vector3(0.0, -0.45, 0.0)
+	root.add_child(elbow)
 	_add_capsule(
-		"BootL",
-		Vector3(-0.19, -1.18, -0.05),
-		0.17,
-		0.28,
-		Color(0.08, 0.08, 0.07)
-	)
-	_add_capsule(
-		"BootR",
-		Vector3(0.19, -1.18, -0.05),
-		0.17,
-		0.28,
-		Color(0.08, 0.08, 0.07)
+		elbow,
+		"Forearm",
+		Vector3(0.0, -0.20, -0.02),
+		0.105,
+		0.42,
+		skin.primary_color.darkened(0.03),
+		Vector3(0.88, 1.0, 0.88)
 	)
 	_add_sphere(
-		"GloveL",
-		Vector3(-0.50, -0.22, 0.0),
-		Vector3(0.15, 0.15, 0.15),
-		Color(0.10, 0.10, 0.09)
+		elbow,
+		"Hand",
+		Vector3(0.0, -0.43, -0.03),
+		Vector3(0.11, 0.14, 0.10),
+		Color(0.57, 0.40, 0.29)
 	)
-	_add_sphere(
-		"GloveR",
-		Vector3(0.50, -0.22, 0.0),
-		Vector3(0.15, 0.15, 0.15),
-		Color(0.10, 0.10, 0.09)
+
+func _build_leg(
+	root: Node3D,
+	skin: Resource,
+	right_side: bool
+) -> void:
+	var thigh := Node3D.new()
+	thigh.name = "Thigh"
+	thigh.position = Vector3(0.0, -0.30, 0.0)
+	root.add_child(thigh)
+	_add_capsule(
+		thigh,
+		"TrousersUpper",
+		Vector3.ZERO,
+		0.145,
+		0.58,
+		skin.secondary_color.darkened(0.06),
+		Vector3(0.95, 1.0, 0.90)
 	)
-	_add_rounded_box(
-		"Belt",
-		Vector3(0.0, -0.27, 0.0),
-		Vector3(0.74, 0.15, 0.38),
-		skin.accent_color
+
+	var knee := Node3D.new()
+	knee.name = "KneeJoint"
+	knee.position = Vector3(0.0, -0.60, 0.0)
+	root.add_child(knee)
+	_add_capsule(
+		knee,
+		"TrousersLower",
+		Vector3(0.0, -0.22, 0.0),
+		0.125,
+		0.46,
+		skin.secondary_color.darkened(0.09),
+		Vector3(0.92, 1.0, 0.88)
 	)
-	_add_rounded_box(
-		"Pack",
-		Vector3(0.0, 0.20, 0.31),
-		Vector3(0.54, 0.64, 0.20),
-		skin.secondary_color.darkened(0.12)
+	_add_box(
+		knee,
+		"LeatherBoot",
+		Vector3(0.0, -0.49, -0.055),
+		Vector3(0.24, 0.28, 0.38),
+		Color(0.055, 0.047, 0.038)
 	)
-	_add_rounded_box(
-		"PouchL",
-		Vector3(-0.27, -0.31, -0.22),
-		Vector3(0.20, 0.25, 0.12),
-		skin.accent_color.darkened(0.10)
-	)
-	_add_rounded_box(
-		"PouchR",
-		Vector3(0.27, -0.31, -0.22),
-		Vector3(0.20, 0.25, 0.12),
-		skin.accent_color.darkened(0.10)
+
+func _build_equipment(skin: Resource) -> void:
+	_add_box(
+		torso_root,
+		"Backpack",
+		Vector3(0.0, 0.01, 0.31),
+		Vector3(0.52, 0.60, 0.20),
+		skin.secondary_color.darkened(0.15)
 	)
 	_add_cylinder(
+		torso_root,
 		"Canteen",
-		Vector3(-0.37, -0.35, 0.22),
-		0.11,
-		0.30,
-		Color(0.24, 0.28, 0.19)
+		Vector3(-0.39, -0.31, 0.19),
+		0.10,
+		0.27,
+		Color(0.22, 0.26, 0.17),
+		Vector3.ZERO
 	)
-	_add_rounded_box(
+	_add_box(
+		torso_root,
 		"EntrenchingTool",
-		Vector3(0.34, 0.05, 0.40),
-		Vector3(0.16, 0.56, 0.08),
-		Color(0.20, 0.16, 0.09)
+		Vector3(0.35, -0.03, 0.38),
+		Vector3(0.14, 0.52, 0.07),
+		Color(0.19, 0.14, 0.075)
 	)
 
-	# Class-specific gear.
-	match int(player.player_class):
+func _build_weapon(skin: Resource) -> void:
+	weapon_root = Node3D.new()
+	weapon_root.name = "FallbackWeapon"
+	weapon_root.position = Vector3(0.05, 0.03, -0.42)
+	weapon_root.rotation_degrees = Vector3(-4.0, 0.0, -3.0)
+	torso_root.add_child(weapon_root)
+
+	var metal := Color(0.095, 0.105, 0.105)
+	var wood := Color(0.27, 0.14, 0.065)
+	_add_box(
+		weapon_root,
+		"Receiver",
+		Vector3(0.0, 0.0, 0.0),
+		Vector3(0.13, 0.14, 0.68),
+		metal
+	)
+	_add_cylinder(
+		weapon_root,
+		"Barrel",
+		Vector3(0.0, 0.0, -0.56),
+		0.025,
+		0.58,
+		metal,
+		Vector3(90.0, 0.0, 0.0)
+	)
+	_add_box(
+		weapon_root,
+		"WoodStock",
+		Vector3(0.0, 0.03, 0.46),
+		Vector3(0.18, 0.20, 0.43),
+		wood
+	)
+	_add_box(
+		weapon_root,
+		"Magazine",
+		Vector3(0.0, -0.15, -0.05),
+		Vector3(0.11, 0.28, 0.18),
+		metal.darkened(0.05)
+	)
+	_add_box(
+		weapon_root,
+		"FrontSight",
+		Vector3(0.0, -0.07, -0.82),
+		Vector3(0.025, 0.13, 0.035),
+		metal
+	)
+
+func _build_class_gear(skin: Resource) -> void:
+	var actor = get_parent()
+	match int(actor.player_class):
 		1:
-			_add_rounded_box(
-				"MedicBag",
-				Vector3(0.0, 0.15, 0.38),
-				Vector3(0.62, 0.55, 0.18),
-				Color(0.70, 0.72, 0.66)
+			_add_box(
+				torso_root,
+				"MedicSatchel",
+				Vector3(0.0, 0.02, 0.40),
+				Vector3(0.58, 0.46, 0.18),
+				Color(0.58, 0.60, 0.54)
+			)
+			_add_box(
+				torso_root,
+				"MedicPatch",
+				Vector3(0.0, 0.03, -0.285),
+				Vector3(0.16, 0.16, 0.025),
+				Color(0.75, 0.12, 0.10)
 			)
 		2:
-			_add_rounded_box(
+			_add_box(
+				torso_root,
 				"EngineerToolbox",
-				Vector3(0.0, -0.12, 0.38),
-				Vector3(0.58, 0.32, 0.22),
-				Color(0.42, 0.30, 0.14)
+				Vector3(0.0, -0.16, 0.40),
+				Vector3(0.56, 0.31, 0.20),
+				Color(0.34, 0.22, 0.10)
 			)
 		3:
+			_add_box(
+				torso_root,
+				"RadioPack",
+				Vector3(0.0, 0.08, 0.43),
+				Vector3(0.48, 0.58, 0.25),
+				Color(0.16, 0.18, 0.12)
+			)
 			_add_cylinder(
+				torso_root,
 				"RadioAntenna",
-				Vector3(0.24, 0.73, 0.34),
-				0.025,
-				0.92,
-				Color(0.09, 0.09, 0.08)
+				Vector3(0.23, 0.60, 0.46),
+				0.018,
+				1.00,
+				Color(0.07, 0.07, 0.06),
+				Vector3.ZERO
 			)
 		4:
 			_add_cylinder(
-				"ScoutScope",
-				Vector3(0.34, 0.22, -0.34),
-				0.065,
-				0.38,
-				Color(0.08, 0.09, 0.09),
-				Vector3(90.0, 0.0, 0.0)
+				weapon_root,
+				"Scope",
+				Vector3(0.0, -0.12, -0.12),
+				0.05,
+				0.30,
+				Color(0.07, 0.075, 0.075),
+				Vector3(0.0, 0.0, 90.0)
 			)
 		_:
 			pass
+
+func _animate_character(delta: float) -> void:
+	var actor = get_parent()
+	var speed := Vector2(actor.velocity.x, actor.velocity.z).length()
+	var moving := speed > 0.20
+	var running := speed > 5.0
+	var crouching := bool(actor.is_crouching)
+	var downed := bool(actor.downed)
+	var alive := bool(actor.alive)
+
+	if not alive or downed:
+		visual_root.rotation_degrees.z = lerpf(
+			visual_root.rotation_degrees.z,
+			82.0,
+			minf(1.0, delta * 5.0)
+		)
+		return
+
+	visual_root.rotation_degrees.z = lerpf(
+		visual_root.rotation_degrees.z,
+		0.0,
+		minf(1.0, delta * 7.0)
+	)
+
+	var gait_speed := 11.0 if running else 7.0
+	var gait := sin(animation_time * gait_speed)
+	var opposite := sin(animation_time * gait_speed + PI)
+	var amplitude := (
+		34.0 if running
+		else 22.0 if moving
+		else 2.0
+	)
+	var crouch_offset := -0.34 if crouching else 0.0
+
+	visual_root.position.y = lerpf(
+		visual_root.position.y,
+		-0.04 + crouch_offset,
+		minf(1.0, delta * 8.0)
+	)
+	torso_root.rotation_degrees.x = (
+		-10.0 if running
+		else -5.0 if moving
+		else 0.0
+	)
+	torso_root.position.y = 0.18 + (
+		absf(gait) * 0.028 if moving else 0.0
+	)
+
+	left_leg_root.rotation_degrees.x = gait * amplitude
+	right_leg_root.rotation_degrees.x = opposite * amplitude
+
+	if weapon_root != null:
+		left_arm_root.rotation_degrees.x = -46.0 + gait * 5.0
+		right_arm_root.rotation_degrees.x = -50.0 + opposite * 4.0
+		left_arm_root.rotation_degrees.z = -18.0
+		right_arm_root.rotation_degrees.z = 18.0
+		weapon_root.rotation_degrees.x = (
+			-10.0 if bool(actor.aim_requested) else -4.0
+		)
+	else:
+		left_arm_root.rotation_degrees.x = opposite * amplitude * 0.75
+		right_arm_root.rotation_degrees.x = gait * amplitude * 0.75
+
+	head_root.rotation_degrees.y = (
+		sin(animation_time * 0.7) * 2.0
+		if not moving
+		else 0.0
+	)
 
 func _material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
 	if uniform_texture != null:
 		material.albedo_texture = uniform_texture
-		material.uv1_scale = Vector3(2.5, 2.5, 2.5)
-	material.roughness = 0.90
-	material.metallic = 0.03
+		material.uv1_scale = Vector3(3.0, 3.0, 3.0)
+	material.roughness = 0.88
+	material.metallic = 0.02
 	return material
 
-func _add_rounded_box(
+func _add_box(
+	parent: Node3D,
 	node_name: String,
 	position_value: Vector3,
 	size: Vector3,
 	color: Color
-) -> void:
+) -> MeshInstance3D:
 	var part := MeshInstance3D.new()
 	part.name = node_name
 	part.position = position_value
@@ -349,107 +553,70 @@ func _add_rounded_box(
 	mesh.size = size
 	part.mesh = mesh
 	part.material_override = _material(color)
-	add_child(part)
+	parent.add_child(part)
+	return part
 
 func _add_capsule(
-	node_name: String,
-	position_value: Vector3,
-	radius: float,
-	height: float,
-	color: Color
-) -> void:
-	var part := MeshInstance3D.new()
-	part.name = node_name
-	part.position = position_value
-	var mesh := CapsuleMesh.new()
-	mesh.radius = radius
-	mesh.height = maxf(height, radius * 2.0)
-	mesh.radial_segments = 16
-	mesh.rings = 8
-	part.mesh = mesh
-	part.material_override = _material(color)
-	add_child(part)
-
-func _add_cylinder(
+	parent: Node3D,
 	node_name: String,
 	position_value: Vector3,
 	radius: float,
 	height: float,
 	color: Color,
-	rotation_degrees_value: Vector3 = Vector3.ZERO
-) -> void:
+	scale_value: Vector3 = Vector3.ONE
+) -> MeshInstance3D:
 	var part := MeshInstance3D.new()
 	part.name = node_name
 	part.position = position_value
-	part.rotation_degrees = rotation_degrees_value
+	part.scale = scale_value
+	var mesh := CapsuleMesh.new()
+	mesh.radius = radius
+	mesh.height = maxf(height, radius * 2.0)
+	mesh.radial_segments = 20
+	mesh.rings = 10
+	part.mesh = mesh
+	part.material_override = _material(color)
+	parent.add_child(part)
+	return part
+
+func _add_cylinder(
+	parent: Node3D,
+	node_name: String,
+	position_value: Vector3,
+	radius: float,
+	height: float,
+	color: Color,
+	rotation_value: Vector3
+) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	part.name = node_name
+	part.position = position_value
+	part.rotation_degrees = rotation_value
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = radius
 	mesh.bottom_radius = radius * 1.06
 	mesh.height = height
-	mesh.radial_segments = 16
+	mesh.radial_segments = 20
 	part.mesh = mesh
 	part.material_override = _material(color)
-	add_child(part)
-
-func _add_limb(
-	node_name: String,
-	position_value: Vector3,
-	rotation_degrees_value: Vector3,
-	radius: float,
-	height: float,
-	color: Color
-) -> void:
-	_add_cylinder(
-		node_name,
-		position_value,
-		radius,
-		height,
-		color,
-		rotation_degrees_value
-	)
-
-func _add_helmet(
-	position_value: Vector3,
-	color: Color
-) -> void:
-	var helmet := MeshInstance3D.new()
-	helmet.name = "Helmet"
-	helmet.position = position_value
-	helmet.scale = Vector3(1.0, 0.62, 1.0)
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.35
-	mesh.height = 0.70
-	mesh.radial_segments = 20
-	mesh.rings = 10
-	helmet.mesh = mesh
-	helmet.material_override = _material(color)
-	add_child(helmet)
-
-	var rim := MeshInstance3D.new()
-	rim.name = "HelmetRim"
-	rim.position = position_value + Vector3(0.0, -0.08, -0.03)
-	var rim_mesh := CylinderMesh.new()
-	rim_mesh.top_radius = 0.39
-	rim_mesh.bottom_radius = 0.39
-	rim_mesh.height = 0.06
-	rim_mesh.radial_segments = 20
-	rim.mesh = rim_mesh
-	rim.material_override = _material(color.darkened(0.08))
-	add_child(rim)
+	parent.add_child(part)
+	return part
 
 func _add_sphere(
+	parent: Node3D,
 	node_name: String,
 	position_value: Vector3,
 	scale_value: Vector3,
 	color: Color
-) -> void:
+) -> MeshInstance3D:
 	var part := MeshInstance3D.new()
 	part.name = node_name
 	part.position = position_value
 	part.scale = scale_value
 	var mesh := SphereMesh.new()
-	mesh.radial_segments = 20
-	mesh.rings = 10
+	mesh.radial_segments = 24
+	mesh.rings = 12
 	part.mesh = mesh
 	part.material_override = _material(color)
-	add_child(part)
+	parent.add_child(part)
+	return part

@@ -367,6 +367,56 @@ func _build_imported_first_person_weapon(
 	weapon_view.add_child(imported_root)
 	_apply_first_person_materials(imported_root)
 
+	if not is_pistol:
+		var buttstock := MeshInstance3D.new()
+		var buttstock_mesh := BoxMesh.new()
+		buttstock_mesh.size = Vector3(0.22, 0.27, 0.48)
+		buttstock.mesh = buttstock_mesh
+		buttstock.position = Vector3(
+			0.0,
+			0.015,
+			receiver_length * 0.5 + 0.22
+		)
+		buttstock.rotation_degrees.x = -4.0
+		buttstock.material_override = wood
+		weapon_view.add_child(buttstock)
+
+		var handguard := MeshInstance3D.new()
+		var handguard_mesh := CylinderMesh.new()
+		handguard_mesh.top_radius = 0.07
+		handguard_mesh.bottom_radius = 0.085
+		handguard_mesh.height = 0.48
+		handguard_mesh.radial_segments = 18
+		handguard.mesh = handguard_mesh
+		handguard.rotation_degrees.x = 90.0
+		handguard.position = Vector3(
+			0.0,
+			0.015,
+			-(receiver_length * 0.50 + 0.16)
+		)
+		handguard.material_override = wood
+		weapon_view.add_child(handguard)
+
+		var rear_sight := MeshInstance3D.new()
+		var rear_sight_mesh := BoxMesh.new()
+		rear_sight_mesh.size = Vector3(0.12, 0.08, 0.045)
+		rear_sight.mesh = rear_sight_mesh
+		rear_sight.position = Vector3(0.0, -0.12, 0.14)
+		rear_sight.material_override = metal
+		weapon_view.add_child(rear_sight)
+
+		var front_sight := MeshInstance3D.new()
+		var front_sight_mesh := BoxMesh.new()
+		front_sight_mesh.size = Vector3(0.025, 0.12, 0.035)
+		front_sight.mesh = front_sight_mesh
+		front_sight.position = Vector3(
+			0.0,
+			-0.10,
+			-(receiver_length * 0.5 + barrel_length * 0.68)
+		)
+		front_sight.material_override = metal
+		weapon_view.add_child(front_sight)
+
 	muzzle_flash = MeshInstance3D.new()
 	var flash_mesh := SphereMesh.new()
 	flash_mesh.radius = 0.045 if is_pistol else 0.065
@@ -3962,11 +4012,13 @@ func _rebuild_first_person_weapon() -> void:
 	)
 	if weapon_texture != null:
 		metal.albedo_texture = weapon_texture
-	metal.albedo_color = Color(0.72, 0.74, 0.76)
-	metal.roughness = 0.48
+	metal.albedo_color = Color(0.11, 0.12, 0.12)
+	metal.roughness = 0.36
+	metal.metallic = 0.72
 
 	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color(0.28, 0.16, 0.08)
+	wood.albedo_color = Color(0.24, 0.115, 0.045)
+	wood.roughness = 0.68
 
 	var receiver := MeshInstance3D.new()
 	var receiver_mesh := BoxMesh.new()
