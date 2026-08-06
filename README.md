@@ -1,18 +1,16 @@
 # Frontline: Objective
 
-## Version 7.5.0 Player Identity, Keybinds & Server Profiles
+## Version 7.6.0 Persistent Progression & Match History
 
-- Persistent keybindings with in-game key capture
-- Recent and favorite server selection
-- Per-server preferred team and class
-- Persistent non-secret player identity ID
-- Profile export and import
-- Existing custom name, FOV, HUD and audio preferences retained
+Servers persist casual career records in
+`user://frontline_server_progression.cfg`.
 
-The profile is stored at `user://frontline_profile.cfg`.
+Press F7 to view the current server career and the latest matches stored in the
+portable client profile. Career totals include matches, wins, losses, kills,
+deaths, assists, objective score, XP and best-round XP.
 
-The player ID helps a server recognize a returning installation. It is not
-secure authentication and must not be treated as a password.
+The persistent player ID remains a convenience identifier, not secure
+authentication.
 
-Build: v7.5.0
+Build: v7.6.0
 Protocol: 341

@@ -6,6 +6,9 @@ const PlayerProfileScript = preload(
 const InputBindingManagerScript = preload(
 	"res://scripts/profile/input_binding_manager.gd"
 )
+const ServerProgressionStoreScript = preload(
+	"res://scripts/profile/server_progression_store.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -39,7 +42,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.5.0"
+const BUILD_VERSION := "7.6.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -139,6 +142,12 @@ var squad_claim_reset_ms := 0
 var player_teams: Dictionary = {}
 var player_names: Dictionary = {}
 var player_identity_ids: Dictionary = {}
+var progression_store
+var local_progression: Dictionary = {}
+var progression_canvas: CanvasLayer
+var progression_panel: PanelContainer
+var progression_label: Label
+var progression_visible := false
 var supply_packs: Dictionary = {}
 var grenades: Dictionary = {}
 var next_grenade_id := 1
@@ -306,6 +315,9 @@ var forward_spawn_points := {
 func _ready() -> void:
 	profile_manager = PlayerProfileScript.new()
 	local_profile = profile_manager.load_profile()
+	progression_store = ServerProgressionStoreScript.new()
+	if DisplayServer.get_name() == "headless":
+		progression_store.load_database()
 	InputBindingManagerScript.apply_bindings(
 		Dictionary(local_profile.get("keybindings", {}))
 	)
@@ -448,6 +460,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_set_profile_panel_visible(
 				not profile_panel_visible
 			)
+			get_viewport().set_input_as_handled()
+		elif key_code == KEY_F7:
+			_set_progression_visible(not progression_visible)
+			get_viewport().set_input_as_handled()
+		elif key_code == KEY_ESCAPE and progression_visible:
+			_set_progression_visible(false)
 			get_viewport().set_input_as_handled()
 		elif key_code == KEY_ESCAPE and profile_panel_visible:
 			_set_profile_panel_visible(false)
@@ -4298,6 +4316,8 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 		get_tree().quit(1)
 		return
 	multiplayer.multiplayer_peer = peer
+	if progression_store != null:
+		progression_store.load_database()
 	print(
 		"Frontline Objective v%s protocol %d listening on UDP %d" % [
 			BUILD_VERSION,
@@ -4749,6 +4769,89 @@ func _set_profile_panel_visible(visible_value: bool) -> void:
 		else Input.MOUSE_MODE_CAPTURED
 	)
 
+func _build_progression_panel() -> void:
+	if DisplayServer.get_name() == "headless" or progression_panel != null:
+		return
+	progression_canvas = CanvasLayer.new()
+	progression_canvas.layer = 124
+	add_child(progression_canvas)
+	progression_panel = PanelContainer.new()
+	progression_panel.position = Vector2(110,70)
+	progression_panel.custom_minimum_size = Vector2(660,540)
+	progression_panel.visible = false
+	progression_canvas.add_child(progression_panel)
+	var box := VBoxContainer.new()
+	progression_panel.add_child(box)
+	var title := Label.new()
+	title.text = "CAREER & MATCH HISTORY"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size",25)
+	box.add_child(title)
+	progression_label = Label.new()
+	progression_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	progression_label.add_theme_font_size_override("font_size",15)
+	box.add_child(progression_label)
+	var close_button := Button.new()
+	close_button.text = "CLOSE · F7"
+	close_button.pressed.connect(
+		func() -> void:
+			_set_progression_visible(false)
+	)
+	box.add_child(close_button)
+	_update_progression_panel()
+
+func _history_text() -> String:
+	var history: Array = Array(local_profile.get("match_history",[]))
+	if history.is_empty():
+		return "No completed matches stored on this client."
+	var lines: Array[String] = []
+	var number := 1
+	for raw_entry in history:
+		if not raw_entry is Dictionary:
+			continue
+		var entry: Dictionary = Dictionary(raw_entry)
+		lines.append(
+			"%d. %s · %dK/%dD/%dA · OBJ %d · %d XP"
+			% [
+				number,
+				"WIN" if bool(entry.get("won",false)) else "LOSS",
+				int(entry.get("kills",0)),
+				int(entry.get("deaths",0)),
+				int(entry.get("assists",0)),
+				int(entry.get("objective",0)),
+				int(entry.get("xp",0))
+			]
+		)
+		number += 1
+		if number > 8:
+			break
+	return "\n".join(lines)
+
+func _update_progression_panel() -> void:
+	if progression_label == null:
+		return
+	var career := (
+		ServerProgressionStoreScript.summary(local_progression)
+		if not local_progression.is_empty()
+		else "No server career record received yet."
+	)
+	progression_label.text = (
+		"CURRENT SERVER CAREER\n" + career
+		+ "\n\nRECENT MATCHES\n" + _history_text()
+	)
+
+func _set_progression_visible(value: bool) -> void:
+	_build_progression_panel()
+	if progression_panel == null:
+		return
+	progression_visible = value
+	progression_panel.visible = value
+	Input.mouse_mode = (
+		Input.MOUSE_MODE_VISIBLE
+		if value else Input.MOUSE_MODE_CAPTURED
+	)
+	_update_progression_panel()
+
 func _refresh_connection_server_list() -> void:
 	if connection_server_list == null:
 		return
@@ -4809,6 +4912,7 @@ func _add_current_server_to_favorites() -> void:
 
 func _show_connection_menu() -> void:
 	_build_profile_panel()
+	_build_progression_panel()
 	if connection_panel != null and is_instance_valid(connection_panel):
 		connection_panel.visible = true
 		if status_label != null:
@@ -5523,6 +5627,11 @@ func request_player_profile(
 	)
 	if safe_identity.length() >= 16:
 		player_identity_ids[sender_id] = safe_identity
+		if progression_store != null:
+			receive_progression.rpc_id(
+				sender_id,
+				progression_store.record_for(safe_identity)
+			)
 
 	var safe_name: String = PlayerProfileScript.sanitize_player_name(
 		requested_name
@@ -5552,6 +5661,21 @@ func apply_player_name(peer_id: int, safe_name: String) -> void:
 		var player: Node3D = players[peer_id] as Node3D
 		if player != null:
 			player.set("player_name", safe_name)
+
+@rpc("authority", "call_remote", "reliable")
+func receive_progression(record: Dictionary) -> void:
+	local_progression = record.duplicate(true)
+	_update_progression_panel()
+
+@rpc("authority", "call_remote", "reliable")
+func receive_round_history(
+	summary: Dictionary,
+	record: Dictionary
+) -> void:
+	local_progression = record.duplicate(true)
+	if profile_manager != null:
+		local_profile = profile_manager.append_match(summary)
+	_update_progression_panel()
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_player_team_and_class(
@@ -6463,11 +6587,51 @@ func spawn_supply_pack(
 func remove_supply_pack(pack_id: int) -> void:
 	if supply_packs.has(pack_id): supply_packs[pack_id].queue_free(); supply_packs.erase(pack_id)
 
+func _winner_team(message: String) -> int:
+	if message.to_upper().begins_with("ATTACKERS WIN"):
+		return 0
+	if message.to_upper().begins_with("DEFENDERS WIN"):
+		return 1
+	return -1
+
+func _commit_progression(message: String) -> void:
+	if not multiplayer.is_server() or progression_store == null:
+		return
+	var winner := _winner_team(message)
+	for peer_value in players:
+		var peer_id := int(peer_value)
+		var actor: Node3D = players[peer_id] as Node3D
+		if actor == null or bool(actor.get("is_bot")):
+			continue
+		var identity := str(player_identity_ids.get(peer_id,""))
+		if identity.length() < 16:
+			continue
+		var won := winner >= 0 and int(actor.get("team")) == winner
+		var stats := {
+			"kills": int(actor.get("kills")),
+			"deaths": int(actor.get("deaths")),
+			"assists": int(actor.get("assists")),
+			"objective": int(actor.get("objective_points")),
+			"xp": int(actor.get("round_xp"))
+		}
+		var record: Dictionary = progression_store.commit(
+			identity,
+			str(actor.get("player_name")),
+			stats,
+			won
+		)
+		var summary := stats.duplicate(true)
+		summary["server"] = "Frontline Server"
+		summary["result"] = message
+		summary["won"] = won
+		receive_round_history.rpc_id(peer_id,summary,record)
+
 func _end_match(message: String) -> void:
 	if match_over:
 		return
 
 	match_over = true
+	_commit_progression(message)
 	round_restart_remaining = ROUND_RESTART_SECONDS
 	announce.rpc(message)
 	show_round_results.rpc(

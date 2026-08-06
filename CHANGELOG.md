@@ -1,10 +1,9 @@
 # Changelog
 
-## 7.5.0
-- Added persistent keybinding manager
-- Added key capture UI
-- Added recent and favorite servers
-- Added per-server team/class preferences
-- Added persistent player identity ID
-- Added profile backup import/export
+## 7.6.0
+- Added persistent server career records
+- Added lifetime combat, objective, win/loss and XP totals
+- Added client-side recent match history
+- Added F7 career panel
+- Added returning-player progression synchronization
 - Preserved protocol 341 and explicit connection-string `+`

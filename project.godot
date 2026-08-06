@@ -52,3 +52,5 @@ tactical_map={
 }
 
 profile_settings={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":4194339)]}
+
+career_progression={"deadzone":0.5,"events":[Object(InputEventKey,"physical_keycode":4194338)]}

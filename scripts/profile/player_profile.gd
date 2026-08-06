@@ -2,7 +2,7 @@ extends RefCounted
 class_name PlayerProfile
 
 const PROFILE_PATH := "user://frontline_profile.cfg"
-const PROFILE_VERSION := 2
+const PROFILE_VERSION := 3
 
 const DEFAULTS := {
 	"player_name": "Soldier",
@@ -20,7 +20,8 @@ const DEFAULTS := {
 	"recent_servers": [],
 	"favorite_servers": [],
 	"server_preferences": {},
-	"keybindings": {}
+	"keybindings": {},
+	"match_history": []
 }
 
 var values: Dictionary = DEFAULTS.duplicate(true)
@@ -131,6 +132,9 @@ func _sanitize_values() -> void:
 		Dictionary(values.get("keybindings", {}))
 		if values.get("keybindings", {}) is Dictionary
 		else {}
+	)
+	values["match_history"] = _sanitize_history(
+		values.get("match_history", [])
 	)
 
 static func sanitize_player_name(raw_name: String) -> String:
@@ -277,6 +281,46 @@ static func _sanitize_server_list(raw_value: Variant) -> Array:
 			"label": str(
 				entry.get("label", "%s:%d" % [address, port])
 			).substr(0, 160)
+		})
+		if result.size() >= 20:
+			break
+	return result
+
+func append_match(summary: Dictionary) -> Dictionary:
+	var history: Array = Array(values.get("match_history",[]))
+	history.push_front({
+		"server": str(summary.get("server","Frontline Server")).substr(0,160),
+		"result": str(summary.get("result","Completed")).substr(0,80),
+		"won": bool(summary.get("won",false)),
+		"kills": maxi(0,int(summary.get("kills",0))),
+		"deaths": maxi(0,int(summary.get("deaths",0))),
+		"assists": maxi(0,int(summary.get("assists",0))),
+		"objective": maxi(0,int(summary.get("objective",0))),
+		"xp": maxi(0,int(summary.get("xp",0)))
+	})
+	while history.size() > 20:
+		history.pop_back()
+	values["match_history"] = history
+	save_profile()
+	return values.duplicate(true)
+
+static func _sanitize_history(raw_value: Variant) -> Array:
+	var result: Array = []
+	if not raw_value is Array:
+		return result
+	for raw_entry in raw_value:
+		if not raw_entry is Dictionary:
+			continue
+		var entry: Dictionary = Dictionary(raw_entry)
+		result.append({
+			"server": str(entry.get("server","Frontline Server")).substr(0,160),
+			"result": str(entry.get("result","Completed")).substr(0,80),
+			"won": bool(entry.get("won",false)),
+			"kills": maxi(0,int(entry.get("kills",0))),
+			"deaths": maxi(0,int(entry.get("deaths",0))),
+			"assists": maxi(0,int(entry.get("assists",0))),
+			"objective": maxi(0,int(entry.get("objective",0))),
+			"xp": maxi(0,int(entry.get("xp",0)))
 		})
 		if result.size() >= 20:
 			break
