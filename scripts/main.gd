@@ -19,7 +19,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "6.1.0"
+const BUILD_VERSION := "6.1.1"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -6284,11 +6284,11 @@ func round_awards_text() -> String:
 	lines.append("")
 	lines.append("Current Objective: %s" % objective_status_text())
 	lines.append("Sector Control: %s" % sector_status_text())
-	lines.append("Round Awards Preview:")
-	lines.append(round_awards_text())
 	return "\n".join(lines)
 
 func scoreboard_text() -> String:
+	# Keep scoreboard generation self-contained. Do not call scoreboard_text()
+	# or recursively append round_awards_text() from either formatter.
 	var class_names: Array[String] = [
 		"Soldier",
 		"Medic",

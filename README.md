@@ -1,35 +1,40 @@
 # Frontline: Objective
 
-## Version 6.1.0 Authoritative Bot Drive & PBR Surface Pass
+## Version 6.1.1 Stability Hotfix
+
+### Scoreboard
+Fixed an infinite recursion in `round_awards_text()`. The function appended
+itself to its own output, causing the stack overflow whenever TAB requested the
+scoreboard.
+
+TAB now requests a finite scoreboard and awards summary.
 
 ### Bot movement
-The custom bot velocity path has been removed from active use.
+Removed the competing second route system and timer-driven waypoint changes.
 
-Bots now feed a forward movement command into the same `_server_simulate()`
-function used by human players. This gives bots the same CharacterBody3D
-movement, collision, gravity, jumping, floor handling, and server authority.
+Bots now:
+- Use one authoritative route goal
+- Advance waypoints only after reaching them
+- Move directly in world space with CharacterBody3D
+- Rotate smoothly toward the active goal
+- Strafe after 1.5 seconds of physical blockage
+- Request validated recovery after a prolonged stall
+- Apply a bounded server-side nudge only if recovery returns the same position
 
-Bots request validated recovery after two seconds without displacement.
+### Visual realism
+The included generated textures improve material detail, but procedural
+capsules and boxes cannot match the earlier concept render.
 
-### Original PBR texture pack
-Added original generated textures for Allied and Axis uniform cloth, red brick,
-aged plaster, cobblestone, wood, and aged metal. These assets are original and
-do not copy Wolfenstein artwork.
+A full realism asset plan is included at:
+`assets/models/REALISM_ASSET_PLAN.md`
 
-### Character realism
-Procedural soldiers now use fabric texture detail, but they remain procedural
-geometry. Truly realistic people require licensed rigged humanoid models.
-
-Optional model slots:
-- `assets/models/allied_soldier.glb`
-- `assets/models/axis_soldier.glb`
-
-A model requirements document is included.
+The next visual phase requires licensed rigged soldier models and a modular
+environment kit. Texture-only changes are insufficient.
 
 ### Compatibility
-- Build: v6.1.0
+- Build: v6.1.1
 - Protocol: 341
 - Explicit connection-message `+` retained
 - Cache-independent VPS startup retained
 
-Expected status: `Connected: v6.1.0 protocol 341`
+Expected status: `Connected: v6.1.1 protocol 341`

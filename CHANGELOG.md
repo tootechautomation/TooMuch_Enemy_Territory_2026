@@ -1,10 +1,11 @@
 # Changelog
 
-## 6.1.0
-- Routed bot locomotion through human server movement simulation
-- Added two-second hard-stuck recovery
-- Added original uniform fabric textures
-- Added brick, plaster, cobblestone, wood, and aged-metal textures
-- Added generated surface material selection
-- Added realistic-character GLB requirements manifest
+## 6.1.1
+- Removed recursive `round_awards_text()` call
+- Fixed TAB scoreboard stack overflow
+- Removed duplicate local bot route system
+- Removed timer-driven bot waypoint switching
+- Added deterministic world-space bot movement
+- Added lateral unsticking and bounded emergency nudge
+- Added realistic asset integration plan
 - Preserved protocol 341 and explicit connection-string `+`

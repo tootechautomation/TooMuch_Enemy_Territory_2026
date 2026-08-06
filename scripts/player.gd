@@ -121,6 +121,9 @@ var bot_cached_squad_goal := Vector3.ZERO
 var bot_active_move_goal := Vector3.ZERO
 var bot_has_active_move_goal := false
 var bot_hard_stuck_seconds := 0.0
+var bot_last_route_distance := INF
+var bot_route_stall_seconds := 0.0
+var bot_emergency_nudge_ms := 0
 var bot_grenade_accumulator := 2.0
 var bot_squad_role := 0
 var bot_role_initialized := false
@@ -1694,6 +1697,9 @@ func server_respawn(spawn_position: Vector3) -> void:
 	bot_active_move_goal = Vector3.ZERO
 	bot_has_active_move_goal = false
 	bot_hard_stuck_seconds = 0.0
+	bot_last_route_distance = INF
+	bot_route_stall_seconds = 0.0
+	bot_emergency_nudge_ms = 0
 	_apply_server_crouch(false)
 	_activate_spawn_protection()
 	alive = true
@@ -2401,10 +2407,9 @@ func _server_bot_tick(delta: float) -> void:
 			has_movement_goal = true
 
 	if not has_movement_goal:
-		if now >= bot_route_repath_ms:
-			bot_route_repath_ms = now + 3500
-			bot_route_index += 1
-
+		var objective_goal: Vector3 = Vector3(
+			main.call("bot_goal_position", self)
+		)
 		var routed_goal: Vector3 = Vector3(
 			main.call(
 				"bot_route_waypoint",
@@ -2412,9 +2417,17 @@ func _server_bot_tick(delta: float) -> void:
 				bot_route_index
 			)
 		)
-		var objective_goal: Vector3 = Vector3(
-			main.call("bot_goal_position", self)
-		)
+
+		if global_position.distance_to(routed_goal) <= 3.25:
+			bot_route_index += 1
+			routed_goal = Vector3(
+				main.call(
+					"bot_route_waypoint",
+					self,
+					bot_route_index
+				)
+			)
+
 		movement_goal = (
 			objective_goal
 			if global_position.distance_to(objective_goal) <= 20.0
@@ -2458,7 +2471,7 @@ func _server_bot_tick(delta: float) -> void:
 
 	bot_has_active_move_goal = has_movement_goal
 	if has_movement_goal:
-		bot_active_move_goal = _bot_route_goal(movement_goal)
+		bot_active_move_goal = movement_goal
 	else:
 		bot_active_move_goal = global_position
 
@@ -2596,10 +2609,11 @@ func _bot_try_stuck_recovery() -> void:
 
 func _bot_drive_with_server_movement(delta: float) -> void:
 	if not bot_has_active_move_goal:
-		input_vector = Vector2.ZERO
-		sprint_requested = false
-		aim_requested = false
-		_server_simulate(delta)
+		velocity.x = 0.0
+		velocity.z = 0.0
+		if not is_on_floor():
+			velocity.y -= gravity * delta
+		move_and_slide()
 		return
 
 	var world_direction: Vector3 = (
@@ -2608,39 +2622,81 @@ func _bot_drive_with_server_movement(delta: float) -> void:
 	world_direction.y = 0.0
 	var distance: float = world_direction.length()
 
-	if distance <= 0.85:
-		input_vector = Vector2.ZERO
-		sprint_requested = false
-		_server_simulate(delta)
+	if distance <= 0.75:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		if not is_on_floor():
+			velocity.y -= gravity * delta
+		move_and_slide()
 		return
 
 	world_direction = world_direction.normalized()
-	rotation.y = atan2(-world_direction.x, -world_direction.z)
-	input_vector = Vector2(0.0, -1.0)
-	sprint_requested = distance > 8.0
-	crouch_requested = false
-	aim_requested = false
-	jump_requested = (
-		is_on_floor()
-		and Time.get_ticks_msec() >= bot_next_jump_ms
-		and _bot_obstacle_ahead(world_direction)
+	var desired_yaw: float = atan2(
+		-world_direction.x,
+		-world_direction.z
 	)
-	if jump_requested:
+	rotation.y = lerp_angle(rotation.y, desired_yaw, 0.35)
+
+	var move_speed: float = (
+		SPRINT_SPEED
+		if distance > 8.0
+		else WALK_SPEED
+	)
+	velocity.x = world_direction.x * move_speed
+	velocity.z = world_direction.z * move_speed
+
+	if not is_on_floor():
+		velocity.y -= gravity * delta
+	elif (
+		Time.get_ticks_msec() >= bot_next_jump_ms
+		and _bot_obstacle_ahead(world_direction)
+	):
+		velocity.y = JUMP_SPEED
 		bot_next_jump_ms = Time.get_ticks_msec() + 1800
 
 	var before_position: Vector3 = global_position
-	_server_simulate(delta)
+	move_and_slide()
 	var moved: float = before_position.distance_to(global_position)
 
-	if moved < 0.01:
-		bot_hard_stuck_seconds += delta
-	else:
+	if moved >= 0.015:
 		bot_hard_stuck_seconds = 0.0
+		bot_route_stall_seconds = 0.0
+		bot_last_route_distance = distance
 		bot_last_position = global_position
+		return
 
-	if bot_hard_stuck_seconds >= 2.0:
+	bot_hard_stuck_seconds += delta
+	if distance >= bot_last_route_distance - 0.05:
+		bot_route_stall_seconds += delta
+	else:
+		bot_route_stall_seconds = 0.0
+	bot_last_route_distance = distance
+
+	if bot_hard_stuck_seconds >= 1.5:
 		bot_hard_stuck_seconds = 0.0
+		bot_strafe_direction *= -1.0
+		var lateral := Vector3(
+			-world_direction.z,
+			0.0,
+			world_direction.x
+		) * bot_strafe_direction
+		global_position += lateral * 0.75
+		velocity = Vector3.ZERO
+
+	if (
+		bot_route_stall_seconds >= 3.5
+		and Time.get_ticks_msec() >= bot_emergency_nudge_ms
+	):
+		bot_route_stall_seconds = 0.0
+		bot_emergency_nudge_ms = Time.get_ticks_msec() + 5000
+		var recovery_before: Vector3 = global_position
 		_bot_try_stuck_recovery()
+
+		# If validated recovery returns the same point, advance a small amount
+		# toward the route goal. This is server-authoritative and bounded.
+		if global_position.distance_to(recovery_before) < 0.25:
+			global_position += world_direction * 1.25
+			velocity = Vector3.ZERO
 
 func _bot_move_toward(
 	world_position: Vector3,
