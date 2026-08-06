@@ -26,6 +26,9 @@ const ThirdPersonPoseFidelityScript = preload(
 const CombatCameraFeedbackScript = preload(
 	"res://scripts/visuals/combat_camera_feedback.gd"
 )
+const TeamIdentityHUDScript = preload(
+	"res://scripts/visuals/team_identity_hud.gd"
+)
 
 
 enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
@@ -228,6 +231,7 @@ var reload_audio: AudioStreamPlayer
 var footstep_audio: AudioStreamPlayer3D
 var confirm_audio: AudioStreamPlayer
 var combat_camera_feedback: Node
+var team_identity_hud: Node
 var footstep_accumulator := 0.0
 var current_surface_name := "ground"
 var landing_was_airborne := false
@@ -623,6 +627,7 @@ func _physics_process(delta: float) -> void:
 		_update_spectator_camera()
 		_update_hud()
 		_update_combat_camera_feedback(delta)
+		_update_team_identity_hud()
 		_apply_first_person_body_visibility()
 		_update_identity_visibility()
 		_update_footstep_audio(delta)
@@ -2336,14 +2341,15 @@ func _update_identity_visibility() -> void:
 		return
 
 	var same_team: bool = int(local_player.get("team")) == team
+	world_nameplate.text = ("◆ " if same_team else "") + player_name
 	var distance: float = local_player.global_position.distance_to(global_position)
 	var enemy_spotted: bool = replicated_spotted_ms > 0
 
 	world_nameplate.visible = alive and not downed and (
-		(same_team and distance <= 16.0)
+		(same_team and distance <= 28.0)
 		or (enemy_spotted and distance <= 34.0)
 	)
-	world_class_label.visible = alive and not downed and same_team and distance <= 12.0
+	world_class_label.visible = alive and not downed and same_team and distance <= 20.0
 
 func _build_spotted_marker() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -4272,6 +4278,7 @@ func _initialize_optional_client_systems() -> void:
 		return
 
 	_build_combat_camera_feedback()
+	_build_team_identity_hud()
 	_build_audio_players()
 	if radar_panel != null:
 		radar_panel.visible = true
@@ -4297,6 +4304,25 @@ func _update_combat_camera_feedback(delta: float) -> void:
 		downed,
 		alive
 	)
+
+func _build_team_identity_hud() -> void:
+	if DisplayServer.get_name() == "headless" or team_identity_hud != null:
+		return
+	team_identity_hud = TeamIdentityHUDScript.new()
+	team_identity_hud.name = "TeamIdentityHUD"
+	add_child(team_identity_hud)
+	team_identity_hud.call("initialize")
+
+func _update_team_identity_hud() -> void:
+	if team_identity_hud == null:
+		return
+	var main: Node = get_parent()
+	var stage := 0
+	if main != null:
+		stage = int(main.get("objective_stage"))
+	var class_names: Array[String] = ["SOLDIER", "MEDIC", "ENGINEER", "FIELD OPS", "SCOUT"]
+	var class_name: String = class_names[clampi(player_class, 0, class_names.size() - 1)]
+	team_identity_hud.call("update_identity", team, class_name, stage, has_deployed)
 
 func _safe_load_audio(path: String) -> AudioStream:
 	if not ResourceLoader.exists(path):

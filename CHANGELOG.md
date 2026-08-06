@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.17.0
+- Added a persistent ATTACKERS or DEFENDERS panel with class, current order, and explicit team color
+- Added restrained blue or red screen-edge accents
+- Added clear deployment and team-change role announcements
+- Added friendly-only diamond identifiers and extended depth-tested friendly label ranges
+- Protected custom team borders from generic interface restyling
+- Preserved team assignment, enemy spotting rules, gameplay, networking, previous milestones, and protocol 341
+
+
 ## 8.16.1
 - Added explicit String typing for graphics mode and active-tier status text
 - Added explicit typed arrays and local variable annotations throughout the quality manager
