@@ -181,6 +181,60 @@ func _configure(
 	)
 	material.uv1_scale = uv_scale
 
+	var pbr_stem := ""
+	match seed_value:
+		101:
+			pbr_stem = "brick"
+		202:
+			pbr_stem = "damaged_plaster"
+		303:
+			pbr_stem = "concrete"
+		404:
+			pbr_stem = "limestone_blocks"
+		505:
+			pbr_stem = "wood"
+		606:
+			pbr_stem = "rusted_metal"
+		707:
+			pbr_stem = "cobblestone"
+		808:
+			pbr_stem = "mud"
+		909:
+			pbr_stem = "compacted_gravel"
+		111:
+			pbr_stem = "slate_roof"
+
+	if not pbr_stem.is_empty():
+		_apply_pbr_textures(material, pbr_stem)
+
+func _apply_pbr_textures(
+	material: StandardMaterial3D,
+	stem: String
+) -> void:
+	var root_path := "res://assets/pbr/%s" % stem
+	var albedo := _load_texture(root_path + "_albedo.png")
+	var normal := _load_texture(root_path + "_normal.png")
+	var roughness_map := _load_texture(root_path + "_roughness.png")
+
+	if albedo != null:
+		material.albedo_texture = albedo
+		material.albedo_color = Color(0.92, 0.92, 0.92, 1.0)
+	if normal != null:
+		material.normal_enabled = true
+		material.normal_texture = normal
+		material.normal_scale = 0.82
+	if roughness_map != null:
+		material.roughness_texture = roughness_map
+		material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+
+func _load_texture(path: String) -> Texture2D:
+	if not ResourceLoader.exists(path):
+		return null
+	var resource: Resource = load(path)
+	if resource is Texture2D:
+		return resource as Texture2D
+	return null
+
 func _category_for_name(lower_name: String) -> String:
 	if (
 		"brick" in lower_name

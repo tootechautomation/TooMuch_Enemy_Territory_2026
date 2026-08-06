@@ -1,5 +1,17 @@
 # Changelog
 
+## 8.6.0
+- Upgraded the desktop renderer from GL Compatibility to Forward+
+- Enabled 4x MSAA, screen-space antialiasing, and soft directional shadows
+- Enabled screen-space reflections and cinematic contrast/color grading
+- Connected existing albedo, normal, and roughness maps to the material library
+- Added true PBR surfaces for ten battlefield material categories
+- Replaced box-shaped sandbags with rounded capsule geometry
+- Replaced box rubble with low-poly irregular stone geometry
+- Preserved the GL Compatibility renderer as the mobile fallback
+- Preserved all v8.5 spatial combat audio and functional audio buses
+- Preserved protocol 341 and explicit connection-string `+`
+
 ## 8.5.0
 - Added positional surface-impact audio for every replicated bullet hit
 - Added distinct metal, wood, brick, concrete, stone, ground, and flesh profiles

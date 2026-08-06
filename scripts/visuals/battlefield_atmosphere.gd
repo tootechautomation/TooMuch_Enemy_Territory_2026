@@ -33,7 +33,13 @@ func _configure_environment(root: Node) -> void:
 		environment.ssil_radius = 3.0
 		environment.ssil_intensity = 0.85
 		environment.glow_enabled = true
-		environment.glow_intensity = 0.55
+		environment.glow_intensity = 0.38
+		environment.ssr_enabled = true
+		environment.ssr_max_steps = 48
+		environment.adjustment_enabled = true
+		environment.adjustment_brightness = 1.02
+		environment.adjustment_contrast = 1.11
+		environment.adjustment_saturation = 0.88
 		environment.fog_enabled = true
 		environment.fog_light_color = Color(0.47, 0.50, 0.49)
 		environment.fog_light_energy = 0.75

@@ -1,17 +1,17 @@
 # Frontline: Objective
 
-## Version 8.5.0 Spatial Surface Impact Audio
+## Version 8.6.0 Forward+ PBR Battlefield Upgrade
 
-Every replicated bullet impact now produces positional audio matched to its
-surface. Metal rings, wood thumps, masonry cracks, concrete snaps, ground hits,
-and restrained player impacts each use a different synthesized sound profile.
-Small pitch variation prevents rapid fire from sounding mechanically repeated.
+The desktop renderer now defaults to Forward+ so the existing SSAO, SSIL,
+screen-space reflections, volumetric fog, glow, and modern shadow pipeline are
+actually rendered. Four-times MSAA, screen-space antialiasing, soft directional
+shadows, and restrained cinematic color grading are enabled by default.
 
-Impact audio streams are generated once and cached. Active positional players
-are capped for sustained firefights. The Effects and Music profile sliders now
-control functional SFX and Music buses, including all existing combat sounds
-and battlefield ambience. All v8.4 persistent decals, directional debris,
-ricochet visuals, and protocol compatibility remain enabled.
+The material library now uses the included albedo, normal, and roughness maps
+for brick, damaged plaster, concrete, limestone, wood, rusted metal,
+cobblestone, mud, gravel, and slate. Box-shaped sandbags and rubble have been
+replaced by rounded bags and irregular stones. Mobile still uses the GL
+Compatibility fallback. All v8.5 combat audio and protocol compatibility remain.
 
-Build: v8.5.0
+Build: v8.6.0
 Protocol: 341

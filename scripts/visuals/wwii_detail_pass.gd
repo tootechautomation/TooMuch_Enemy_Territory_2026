@@ -67,6 +67,49 @@ func _mesh_cylinder(
 	parent.add_child(item)
 	return item
 
+func _mesh_sandbag(
+	parent: Node3D,
+	position_value: Vector3,
+	material: Material,
+	tilt_degrees: float
+) -> MeshInstance3D:
+	var item := MeshInstance3D.new()
+	item.name = "RoundedSandbag"
+	var mesh := CapsuleMesh.new()
+	mesh.radius = 0.17
+	mesh.height = 0.56
+	mesh.radial_segments = 16
+	mesh.rings = 8
+	item.mesh = mesh
+	item.position = position_value
+	item.rotation_degrees = Vector3(0.0, tilt_degrees, 90.0)
+	item.scale = Vector3(1.0, 1.0, 0.72)
+	item.material_override = material
+	parent.add_child(item)
+	return item
+
+func _mesh_rubble(
+	parent: Node3D,
+	position_value: Vector3,
+	size: Vector3,
+	material: Material,
+	rotation_value: Vector3
+) -> MeshInstance3D:
+	var item := MeshInstance3D.new()
+	item.name = "IrregularRubbleStone"
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.5
+	mesh.height = 1.0
+	mesh.radial_segments = 8
+	mesh.rings = 4
+	item.mesh = mesh
+	item.position = position_value
+	item.scale = size
+	item.rotation_degrees = rotation_value
+	item.material_override = material
+	parent.add_child(item)
+	return item
+
 func _build_sandbag_positions() -> void:
 	for position_data in [
 		[Vector3(-18.0, 0.0, -9.0), 0.0, 8],
@@ -102,16 +145,15 @@ func _create_sandbag_wall(
 			var offset := (
 				float(index) - float(count - 1) * 0.5
 			) * 0.52
-			var bag := _mesh_box(
+			var bag := _mesh_sandbag(
 				root,
 				Vector3(
 					offset + (0.26 if row == 1 else 0.0),
 					0.18 + float(row) * 0.25,
 					0.0
 				),
-				Vector3(0.56, 0.24, 0.34),
 				sand,
-				Vector3(0.0, 0.0, randf_range(-3.0, 3.0))
+				randf_range(-4.0, 4.0)
 			)
 			bag.scale.x = randf_range(0.92, 1.08)
 
@@ -193,7 +235,7 @@ func _build_rubble_fields() -> void:
 		root.position = center
 		add_child(root)
 		for rubble_index in range(22):
-			_mesh_box(
+			_mesh_rubble(
 				root,
 				Vector3(
 					randf_range(-2.2, 2.2),
