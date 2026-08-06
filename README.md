@@ -1,32 +1,44 @@
 # Frontline: Objective
 
-## Version 5.6.1 Headless Import Hotfix
+## Version 5.7.0 Combat AI & Objective Behavior
 
-### Critical startup fix
-The v5.6.0 build used parse-time `preload()` calls for imported GLB scenes.
-After `.godot` was deleted on the VPS, Godot had no generated `.scn` import
-artifacts available. Because `preload()` runs while parsing the script, this
-prevented `main.gd` from loading.
+### Class-aware bot tactics
+Bots now select goals according to their class and the active objective stage.
 
-This hotfix removes all parse-time GLB preloads and restores the
-cache-independent authoritative collision system from v5.5.2.
+- Soldiers pressure contested objective lanes.
+- Medics prioritize downed teammates, then wounded teammates.
+- Engineers continue to prioritize bridge, bunker, and construction actions.
+- Field Ops move toward nearby teammate clusters and support lanes.
+- Scouts hold longer-range anchors and avoid standing directly on objectives.
 
-### Included
-- Expanded ground collision
-- Playable map perimeter
-- Out-of-bounds recovery
-- Gray/plaster wall collision
-- Server-authoritative townhouse wall proxies
-- Bot routing and stuck recovery
-- Surface-aware footstep pitch and volume from v5.6.0
+### Suppression reaction
+Bots record the attacker position when damaged. While suppressed, they request
+a validated lateral cover position away from the threat instead of continuing
+to run straight forward.
 
-### Diagnostic correction
-The broken exact-collision startup messages that displayed literal `%s` and
-`%d` are removed along with the unsupported runtime import path.
+### Combat spacing
+- Scouts prefer approximately 24-meter engagement spacing.
+- Field Ops prefer approximately 13 meters.
+- Other classes retain close assault spacing.
+- Scouts briefly hold position after firing.
+- Low-health medics may disengage instead of continuing to shoot.
+
+### Objective anchors
+Added stage-specific tactical anchors for:
+- Bridge attack and defense
+- Northern, central, southern, and sewer approaches
+- Rail yard and bunker attack
+- Bunker perimeter defense
+
+Squad-role IDs distribute bots across different anchors.
+
+### Respawn reliability
+Bot threat memory, hold states, and route state are cleared after respawn.
 
 ### Compatibility
-- Build: v5.6.1
+- Build: v5.7.0
 - Protocol: 341
 - Explicit connection-message `+` retained.
+- v5.6.1 cache-independent startup and surface-aware footsteps remain.
 
-Expected status: `Connected: v5.6.1 protocol 341`
+Expected status: `Connected: v5.7.0 protocol 341`

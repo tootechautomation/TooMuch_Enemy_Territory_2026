@@ -108,6 +108,11 @@ var bot_last_recovery_ms := 0
 var out_of_bounds_recovery_cooldown_ms := 0
 var bot_waypoint_index := 0
 var bot_route: Array[Vector3] = []
+var bot_tactical_goal := Vector3.ZERO
+var bot_tactical_goal_until_ms := 0
+var bot_last_threat_position := Vector3.ZERO
+var bot_last_support_ms := 0
+var bot_hold_position_until_ms := 0
 var bot_grenade_accumulator := 2.0
 var bot_squad_role := 0
 var bot_role_initialized := false
@@ -1453,6 +1458,12 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 	health = maxi(0, health - amount)
 	if attacker_id != peer_id and attacker_id != 0:
 		_apply_suppression()
+		if is_bot and get_parent().players.has(attacker_id):
+			var threat: Node3D = (
+				get_parent().players[attacker_id] as Node3D
+			)
+			if threat != null:
+				bot_last_threat_position = threat.global_position
 
 	if attacker_id != peer_id and attacker_id != 0:
 		var existing: Dictionary = recent_damage.get(
@@ -1603,6 +1614,11 @@ func server_respawn(spawn_position: Vector3) -> void:
 	previous_vertical_velocity = 0.0
 	_reset_loadout_ammo()
 	grenades_remaining = 2
+	bot_last_threat_position = Vector3.ZERO
+	bot_tactical_goal_until_ms = 0
+	bot_hold_position_until_ms = 0
+	bot_route.clear()
+	bot_waypoint_index = 0
 	_apply_server_crouch(false)
 	_activate_spawn_protection()
 	alive = true
@@ -1956,6 +1972,127 @@ func server_class_request(index: int) -> void:
 	player_class = clampi(index, 0, 4); health = mini(health, _class_health(player_class))
 
 
+func _bot_nearest_wounded_teammate() -> Node3D:
+	var best: Node3D = null
+	var best_distance := INF
+	for player_value in get_parent().players.values():
+		var teammate: Node3D = player_value as Node3D
+		if teammate == null or teammate == self:
+			continue
+		if int(teammate.get("team")) != team:
+			continue
+		if not bool(teammate.get("alive")):
+			continue
+		if bool(teammate.get("downed")):
+			continue
+		var teammate_health: int = int(teammate.get("health"))
+		var teammate_class: int = int(
+			teammate.get("player_class")
+		)
+		var maximum_health: int = int(
+			teammate.call("_class_health", teammate_class)
+		)
+		if teammate_health >= int(maximum_health * 0.72):
+			continue
+		var distance: float = global_position.distance_to(
+			teammate.global_position
+		)
+		if distance < best_distance:
+			best_distance = distance
+			best = teammate
+	return best
+
+func _bot_nearest_support_cluster() -> Vector3:
+	var accumulated := Vector3.ZERO
+	var count := 0
+	for player_value in get_parent().players.values():
+		var teammate: Node3D = player_value as Node3D
+		if teammate == null or teammate == self:
+			continue
+		if int(teammate.get("team")) != team:
+			continue
+		if not bool(teammate.get("alive")):
+			continue
+		if bool(teammate.get("downed")):
+			continue
+		var distance: float = global_position.distance_to(
+			teammate.global_position
+		)
+		if distance > 24.0:
+			continue
+		accumulated += teammate.global_position
+		count += 1
+	if count == 0:
+		return global_position
+	return accumulated / float(count)
+
+func _bot_class_tactical_goal(main: Node) -> Vector3:
+	if (
+		main == null
+		or not main.has_method("bot_tactical_anchor")
+	):
+		return Vector3(main.call("bot_goal_position", self))
+
+	var anchor: Vector3 = Vector3(
+		main.call(
+			"bot_tactical_anchor",
+			self,
+			player_class,
+			bot_squad_role
+		)
+	)
+
+	match player_class:
+		PlayerClass.MEDIC:
+			var wounded: Node3D = _bot_nearest_wounded_teammate()
+			if wounded != null:
+				return wounded.global_position
+		PlayerClass.FIELD_OPS:
+			var cluster: Vector3 = _bot_nearest_support_cluster()
+			if cluster.distance_to(global_position) > 3.0:
+				return cluster
+		PlayerClass.SCOUT:
+			# Scouts hold their assigned sightline unless threatened.
+			if Time.get_ticks_msec() < bot_hold_position_until_ms:
+				return global_position
+		_:
+			pass
+
+	return anchor
+
+func _bot_suppression_goal(main: Node) -> Variant:
+	if suppression_remaining_ms() <= 0:
+		return null
+	if bot_last_threat_position == Vector3.ZERO:
+		return null
+	if main == null or not main.has_method("bot_cover_position"):
+		return null
+	return main.call(
+		"bot_cover_position",
+		self,
+		bot_last_threat_position
+	)
+
+func _bot_should_hold_fire(target: Node3D) -> bool:
+	if target == null:
+		return true
+	var distance: float = global_position.distance_to(
+		target.global_position
+	)
+	if player_class == PlayerClass.MEDIC and health < 35:
+		return true
+	if player_class == PlayerClass.ENGINEER:
+		var main: Node = get_parent()
+		if main != null:
+			var objective_goal: Vector3 = Vector3(
+				main.call("bot_goal_position", self)
+			)
+			if global_position.distance_to(objective_goal) < 4.2:
+				return false
+	if player_class == PlayerClass.SCOUT and distance < 5.0:
+		return true
+	return false
+
 func _server_bot_tick(delta: float) -> void:
 	var main: Node = get_parent()
 	if main == null:
@@ -1991,6 +2128,11 @@ func _server_bot_tick(delta: float) -> void:
 	var movement_goal := Vector3.ZERO
 	var has_movement_goal := false
 
+	var suppression_goal: Variant = _bot_suppression_goal(main)
+	if suppression_goal is Vector3:
+		movement_goal = Vector3(suppression_goal)
+		has_movement_goal = true
+
 	if player_class == PlayerClass.MEDIC:
 		var downed_teammate: Node3D = main.call(
 			"nearest_downed_teammate",
@@ -2008,6 +2150,25 @@ func _server_bot_tick(delta: float) -> void:
 				return
 			movement_goal = downed_teammate.global_position
 			has_movement_goal = true
+
+		if not has_movement_goal:
+			var wounded_teammate: Node3D = (
+				_bot_nearest_wounded_teammate()
+			)
+			if wounded_teammate != null:
+				var wounded_distance: float = (
+					global_position.distance_to(
+						wounded_teammate.global_position
+					)
+				)
+				if wounded_distance > 4.2:
+					movement_goal = (
+						wounded_teammate.global_position
+					)
+					has_movement_goal = true
+				elif bot_ability_accumulator <= 0.0:
+					bot_ability_accumulator = 2.0
+					_bot_try_ability()
 
 	if (
 		player_class == PlayerClass.ENGINEER
@@ -2060,9 +2221,13 @@ func _server_bot_tick(delta: float) -> void:
 				)
 
 			var desired_spacing: float = (
-				18.0
+				24.0
 				if player_class == PlayerClass.SCOUT
-				else 10.0
+				else (
+					13.0
+					if player_class == PlayerClass.FIELD_OPS
+					else 10.0
+				)
 			)
 
 			if enemy_distance < desired_spacing * 0.65:
@@ -2088,13 +2253,18 @@ func _server_bot_tick(delta: float) -> void:
 				)
 				has_movement_goal = true
 
-			if bot_fire_accumulator <= 0.0:
+			if (
+				bot_fire_accumulator <= 0.0
+				and not _bot_should_hold_fire(target_player)
+			):
 				bot_fire_accumulator = maxf(
 					0.10,
 					float(_weapon_fire_interval_ms())
 					/ 1000.0
 				)
 				_server_bot_fire(target_player)
+				if player_class == PlayerClass.SCOUT:
+					bot_hold_position_until_ms = now + 1800
 		elif not has_movement_goal:
 			movement_goal = target_player.global_position
 			has_movement_goal = true
@@ -2111,12 +2281,10 @@ func _server_bot_tick(delta: float) -> void:
 				bot_route_index
 			)
 		)
-		var objective_goal: Vector3 = Vector3(
-			main.call("bot_goal_position", self)
-		)
+		var tactical_goal: Vector3 = _bot_class_tactical_goal(main)
 		movement_goal = (
-			objective_goal
-			if global_position.distance_to(objective_goal) <= 18.0
+			tactical_goal
+			if global_position.distance_to(tactical_goal) <= 28.0
 			else routed_goal
 		)
 

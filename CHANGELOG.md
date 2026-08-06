@@ -1,10 +1,11 @@
 # Changelog
 
-## 5.6.1
-- Removed parse-time GLB preloads
-- Removed dependency on `.godot/imported/*.scn` during script parsing
-- Restored cache-independent headless server startup
-- Restored v5.5.2 authoritative structure and terrain collision
-- Retained v5.6.0 surface-aware footsteps
-- Removed malformed exact-collision diagnostics
+## 5.7.0
+- Added class-specific tactical objective anchors
+- Added medic wounded-teammate support behavior
+- Added suppression-driven cover movement
+- Added Field Ops teammate-cluster support
+- Added longer Scout engagement spacing and hold behavior
+- Added class-aware fire restraint
+- Reset bot tactical state on respawn
 - Preserved protocol 341 and explicit connection-string `+`
