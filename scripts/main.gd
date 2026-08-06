@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.0.0"
+const BUILD_VERSION := "5.1.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -1024,6 +1024,248 @@ func _build_battlefield_dressing_pass() -> void:
 		Vector3(20.0,0.0,19.0),
 		deg_to_rad(18.0),
 		"FORT  →"
+	)
+
+func _make_road_barricade(
+	node_name: String,
+	position: Vector3,
+	rotation_y: float
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.30, 0.17, 0.075)
+	wood.roughness = 0.96
+
+	for index in [-1, 0, 1]:
+		var beam := MeshInstance3D.new()
+		var beam_mesh := BoxMesh.new()
+		beam_mesh.size = Vector3(3.6, 0.18, 0.18)
+		beam.mesh = beam_mesh
+		beam.position = Vector3(
+			0.0,
+			0.52 + float(index + 1) * 0.34,
+			0.0
+		)
+		beam.rotation.z = deg_to_rad(
+			-7.0 if index % 2 == 0 else 7.0
+		)
+		beam.material_override = wood
+		root.add_child(beam)
+
+	for x in [-1.45, 1.45]:
+		var support := MeshInstance3D.new()
+		var support_mesh := BoxMesh.new()
+		support_mesh.size = Vector3(0.20, 1.65, 0.20)
+		support.mesh = support_mesh
+		support.position = Vector3(x, 0.82, 0.0)
+		support.rotation.z = deg_to_rad(
+			18.0 if x < 0.0 else -18.0
+		)
+		support.material_override = wood
+		root.add_child(support)
+
+func _make_fire_barrel(
+	node_name: String,
+	position: Vector3
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	add_child(root)
+
+	var barrel := MeshInstance3D.new()
+	var barrel_mesh := CylinderMesh.new()
+	barrel_mesh.top_radius = 0.42
+	barrel_mesh.bottom_radius = 0.44
+	barrel_mesh.height = 1.0
+	barrel.mesh = barrel_mesh
+	barrel.position.y = 0.50
+
+	var barrel_material := StandardMaterial3D.new()
+	barrel_material.albedo_color = Color(0.17, 0.18, 0.17)
+	barrel_material.metallic = 0.55
+	barrel_material.roughness = 0.72
+	barrel.material_override = barrel_material
+	root.add_child(barrel)
+
+	var fire := GPUParticles3D.new()
+	fire.name = "Fire"
+	fire.position.y = 1.12
+	fire.amount = 30
+	fire.lifetime = 0.75
+	fire.randomness = 0.62
+	fire.visibility_aabb = AABB(
+		Vector3(-1.5, -0.3, -1.5),
+		Vector3(3.0, 4.0, 3.0)
+	)
+
+	var fire_process := ParticleProcessMaterial.new()
+	fire_process.emission_shape = (
+		ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	)
+	fire_process.emission_sphere_radius = 0.22
+	fire_process.direction = Vector3(0.0, 1.0, 0.0)
+	fire_process.spread = 26.0
+	fire_process.initial_velocity_min = 0.65
+	fire_process.initial_velocity_max = 1.65
+	fire_process.gravity = Vector3(0.0, 0.40, 0.0)
+	fire_process.scale_min = 0.10
+	fire_process.scale_max = 0.32
+	fire_process.color = Color(1.0, 0.34, 0.035, 0.92)
+	fire.process_material = fire_process
+
+	var fire_quad := QuadMesh.new()
+	fire_quad.size = Vector2(0.36, 0.52)
+	var fire_material := StandardMaterial3D.new()
+	fire_material.transparency = (
+		BaseMaterial3D.TRANSPARENCY_ALPHA
+	)
+	fire_material.shading_mode = (
+		BaseMaterial3D.SHADING_MODE_UNSHADED
+	)
+	fire_material.billboard_mode = (
+		BaseMaterial3D.BILLBOARD_ENABLED
+	)
+	fire_material.albedo_color = Color(1.0, 0.26, 0.025, 0.85)
+	fire_material.emission_enabled = true
+	fire_material.emission = Color(1.0, 0.18, 0.01)
+	fire_quad.material = fire_material
+	fire.draw_pass_1 = fire_quad
+	root.add_child(fire)
+	fire.emitting = true
+
+	var light := OmniLight3D.new()
+	light.name = "FireLight"
+	light.position.y = 1.55
+	light.light_color = Color(1.0, 0.37, 0.11)
+	light.light_energy = 2.2
+	light.omni_range = 7.5
+	light.shadow_enabled = false
+	root.add_child(light)
+
+func _make_smoke_column(
+	node_name: String,
+	position: Vector3,
+	height: float = 12.0
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var smoke := GPUParticles3D.new()
+	smoke.name = node_name
+	smoke.position = position
+	smoke.amount = 52
+	smoke.lifetime = 7.5
+	smoke.randomness = 0.82
+	smoke.visibility_aabb = AABB(
+		Vector3(-5.0, -1.0, -5.0),
+		Vector3(10.0, height + 6.0, 10.0)
+	)
+
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = (
+		ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	)
+	process.emission_sphere_radius = 0.70
+	process.direction = Vector3(0.08, 1.0, 0.04)
+	process.spread = 22.0
+	process.initial_velocity_min = 0.65
+	process.initial_velocity_max = 1.55
+	process.gravity = Vector3(0.025, 0.05, 0.01)
+	process.scale_min = 0.55
+	process.scale_max = 1.85
+	process.color = Color(0.15, 0.15, 0.14, 0.44)
+	smoke.process_material = process
+
+	var quad := QuadMesh.new()
+	quad.size = Vector2(2.1, 2.1)
+	var material := StandardMaterial3D.new()
+	material.transparency = (
+		BaseMaterial3D.TRANSPARENCY_ALPHA
+	)
+	material.billboard_mode = (
+		BaseMaterial3D.BILLBOARD_ENABLED
+	)
+	material.shading_mode = (
+		BaseMaterial3D.SHADING_MODE_UNSHADED
+	)
+	material.albedo_color = Color(0.18, 0.18, 0.17, 0.40)
+	quad.material = material
+	smoke.draw_pass_1 = quad
+	add_child(smoke)
+	smoke.emitting = true
+
+func _make_objective_zone_light(
+	node_name: String,
+	position: Vector3,
+	color: Color
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var light := OmniLight3D.new()
+	light.name = node_name
+	light.position = position
+	light.light_color = color
+	light.light_energy = 1.45
+	light.omni_range = 9.0
+	light.shadow_enabled = false
+	add_child(light)
+
+func _build_combat_atmosphere_pass() -> void:
+	for barricade_data in [
+		["VillageBarricade",Vector3(-25.0,0.0,-7.0),0.10],
+		["RailBarricade",Vector3(13.0,0.0,-24.0),-0.08],
+		["FortBarricade",Vector3(27.0,0.0,17.0),0.48],
+		["SouthBarricade",Vector3(-4.0,0.0,37.0),0.0]
+	]:
+		_make_road_barricade(
+			str(barricade_data[0]),
+			Vector3(barricade_data[1]),
+			float(barricade_data[2])
+		)
+
+	for fire_position in [
+		Vector3(-31.0,0.0,-10.0),
+		Vector3(19.0,0.0,-19.0),
+		Vector3(39.0,0.0,17.0)
+	]:
+		_make_fire_barrel(
+			"FireBarrel_%s" % str(fire_position),
+			fire_position
+		)
+
+	for smoke_data in [
+		[Vector3(-48.0,0.4,28.0),14.0],
+		[Vector3(42.0,0.4,-15.0),16.0],
+		[Vector3(29.0,0.4,30.0),12.0]
+	]:
+		_make_smoke_column(
+			"SmokeColumn_%s" % str(smoke_data[0]),
+			Vector3(smoke_data[0]),
+			float(smoke_data[1])
+		)
+
+	_make_objective_zone_light(
+		"BridgeObjectiveLight",
+		Vector3(0.0,2.2,0.0),
+		Color(0.95,0.67,0.26)
+	)
+	_make_objective_zone_light(
+		"FortObjectiveLight",
+		Vector3(34.0,2.2,28.0),
+		Color(0.70,0.25,0.16)
 	)
 
 func _load_optional_scene(path: String) -> PackedScene:
@@ -4427,9 +4669,16 @@ func show_shot_effect(
 	line_mesh.surface_set_color(
 		Color(1.0, 0.82, 0.32, 0.95)
 	)
-	line_mesh.surface_add_vertex(start_position)
+	var tracer_start: Vector3 = start_position
+	var shot_length: float = start_position.distance_to(end_position)
+	if shot_length > 9.0:
+		tracer_start = end_position.lerp(
+			start_position,
+			9.0 / shot_length
+		)
+	line_mesh.surface_add_vertex(tracer_start)
 	line_mesh.surface_set_color(
-		Color(1.0, 0.42, 0.08, 0.30)
+		Color(1.0, 0.42, 0.08, 0.20)
 	)
 	line_mesh.surface_add_vertex(end_position)
 	line_mesh.surface_end()
@@ -4453,8 +4702,8 @@ func show_shot_effect(
 
 	var impact := MeshInstance3D.new()
 	var impact_mesh := SphereMesh.new()
-	impact_mesh.radius = 0.07 if not headshot else 0.11
-	impact_mesh.height = 0.14 if not headshot else 0.22
+	impact_mesh.radius = 0.035 if not headshot else 0.060
+	impact_mesh.height = 0.070 if not headshot else 0.120
 	impact.mesh = impact_mesh
 	impact.position = end_position
 
@@ -4475,7 +4724,7 @@ func show_shot_effect(
 
 	var timer := Timer.new()
 	timer.one_shot = true
-	timer.wait_time = 0.10
+	timer.wait_time = 0.075
 	timer.timeout.connect(effect_root.queue_free)
 	effect_root.add_child(timer)
 	timer.start()
@@ -5604,6 +5853,7 @@ func _build_world() -> void:
 	_build_breakable_environment()
 	_build_high_fidelity_environment_pass()
 	_build_battlefield_dressing_pass()
+	_build_combat_atmosphere_pass()
 
 	# Combined-arms battlefield expansion.
 	_make_static_box(

@@ -1,37 +1,30 @@
 # Frontline: Objective
 
-## Version 5.0.0 Visual Identity & Battlefield Detail
+## Version 5.1.0 Combat Readability & Map Atmosphere
 
-### Compass correction
-- Replaced the imported compass-frame texture with a native Godot Control.
-- The circular compass is drawn at runtime and cannot crop off-screen.
-- Uses top-right anchoring rather than fixed screen coordinates.
-- Compass ticks rotate relative to player heading.
-- Objective bearing is displayed as a gold diamond.
-- Team affiliation appears as a colored inner arc.
-- Radar markers are clamped inside the circular map boundary.
+### Combat readability
+- Long tracers now render only their final nine-meter segment.
+- Reduced tracer opacity and impact-orb size.
+- Added short-lived first-person muzzle lighting.
+- Reduced crosshair and objective-arrow dominance.
+- Headshots retain audio and medal feedback without oversized center text.
 
-### Objective guidance
-- Added a centered objective direction arrow.
-- Arrow points left, right, or forward.
-- Existing objective distance and heading remain visible.
+### Battlefield atmosphere
+- Added four wooden road barricades.
+- Added three burning barrels with particles and local lighting.
+- Added three distant smoke columns.
+- Added warm objective-zone lighting.
+- Existing fog, dust, rubble, craters, fences, poles, signs, and vehicles remain.
 
-### Battlefield detail
-- Added wooden roadside and perimeter fences.
-- Added telegraph poles and ceramic insulators.
-- Added shell craters throughout contested areas.
-- Added village, rail-depot, and fort direction signs.
-- All new dressing is graphical-client safe and headless compatible.
-
-### First-person presentation
-- Reduced imported rifle and pistol visual scale.
-- Shifted the primary weapon slightly right and down.
-- Weapon now blocks less of the center view.
-- Existing arms, recoil, sway, smoke, shell ejection, and ADS remain.
+### Visual balance
+- Fire and smoke are graphical-client only.
+- Headless servers do not construct the new particles or lights.
+- New atmosphere is positioned away from primary spawn sightlines.
+- Combat effects are intentionally shorter and less obstructive.
 
 ### Compatibility
-- Build: v5.0.0
+- Build: v5.1.0
 - Protocol: 341
 - Explicit connection-message `+` retained.
 
-Expected status: `Connected: v5.0.0 protocol 341`
+Expected status: `Connected: v5.1.0 protocol 341`

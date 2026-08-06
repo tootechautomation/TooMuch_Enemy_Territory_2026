@@ -124,6 +124,7 @@ var hit_marker: Label
 var hit_marker_until_ms := 0
 var muzzle_flash: MeshInstance3D
 var muzzle_flash_until_ms := 0
+var active_muzzle_light: OmniLight3D
 var damage_indicator: Label
 var damage_indicator_until_ms := 0
 var spawn_menu: Control
@@ -1288,7 +1289,7 @@ func confirm_hit() -> void:
 	hit_marker_until_ms = Time.get_ticks_msec() + 140
 	if hit_marker != null:
 		hit_marker.text = "×"
-		hit_marker.position = Vector2(634, 344)
+		hit_marker.position = Vector2(638, 346)
 		hit_marker.visible = true
 
 @rpc("authority", "call_remote", "reliable")
@@ -1299,14 +1300,14 @@ func confirm_headshot() -> void:
 	_play_confirm_sound(true)
 	hit_marker_until_ms = Time.get_ticks_msec() + 260
 	if hit_marker != null:
-		hit_marker.text = "HEADSHOT"
-		hit_marker.position = Vector2(580, 332)
+		hit_marker.text = "×"
+		hit_marker.position = Vector2(638, 346)
 		hit_marker.visible = true
 
 	_show_combat_medal("HEADSHOT", true)
 	elimination_notice_until_ms = Time.get_ticks_msec() + 650
 	if elimination_notice != null:
-		elimination_notice.text = "HEADSHOT"
+		elimination_notice.text = "HEADSHOT +25"
 		elimination_notice.visible = true
 
 func server_confirm_hit() -> void:
@@ -2682,6 +2683,38 @@ func _local_fire_feedback() -> void:
 
 	_spawn_local_shell_effect()
 	_spawn_muzzle_smoke()
+	_spawn_muzzle_light()
+
+func _spawn_muzzle_light() -> void:
+	if weapon_view == null or not _is_local_player():
+		return
+
+	if active_muzzle_light != null and is_instance_valid(
+		active_muzzle_light
+	):
+		active_muzzle_light.queue_free()
+
+	active_muzzle_light = OmniLight3D.new()
+	active_muzzle_light.name = "MuzzleLight"
+	active_muzzle_light.position = (
+		Vector3(0.02, 0.02, -0.68)
+		if current_weapon_index == 1
+		else Vector3(0.04, 0.02, -2.04)
+	)
+	active_muzzle_light.light_color = Color(1.0, 0.42, 0.08)
+	active_muzzle_light.light_energy = 3.0
+	active_muzzle_light.omni_range = 4.0
+	active_muzzle_light.shadow_enabled = false
+	weapon_view.add_child(active_muzzle_light)
+
+	var tween := create_tween()
+	tween.tween_property(
+		active_muzzle_light,
+		"light_energy",
+		0.0,
+		0.065
+	)
+	tween.tween_callback(active_muzzle_light.queue_free)
 
 func _spawn_muzzle_smoke() -> void:
 	if weapon_view == null or muzzle_smoke_texture == null or not _is_local_player():
@@ -3419,14 +3452,14 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 	et_hud_root.add_child(et_objective_distance_label)
 
 	et_objective_arrow_label = Label.new()
-	et_objective_arrow_label.position = Vector2(620, 146)
+	et_objective_arrow_label.position = Vector2(620, 142)
 	et_objective_arrow_label.custom_minimum_size = Vector2(40, 28)
 	et_objective_arrow_label.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
 	et_objective_arrow_label.add_theme_font_size_override(
 		"font_size",
-		25
+		19
 	)
 	et_objective_arrow_label.add_theme_color_override(
 		"font_color",
@@ -3486,10 +3519,10 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 	et_crosshair_ring = Label.new()
 	et_crosshair_ring.text = "⊕"
 	et_crosshair_ring.position = Vector2(625, 333)
-	et_crosshair_ring.add_theme_font_size_override("font_size", 34)
+	et_crosshair_ring.add_theme_font_size_override("font_size", 27)
 	et_crosshair_ring.add_theme_color_override(
 		"font_color",
-		Color(0.92, 0.92, 0.82, 0.90)
+		Color(0.92, 0.92, 0.82, 0.72)
 	)
 	et_crosshair_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	et_hud_root.add_child(et_crosshair_ring)
