@@ -11,7 +11,7 @@ const DestructibleCoverScript = preload("res://scripts/destructible_cover.gd")
 const RallyPointScript = preload("res://scripts/rally_point.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "4.2.0"
+const BUILD_VERSION := "4.3.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -60,6 +60,21 @@ var visual_townhouse_scene: PackedScene
 var visual_ruined_townhouse_scene: PackedScene
 var visual_rubble_scene: PackedScene
 var visual_sandbag_scene: PackedScene
+var pbr_concrete_albedo: Texture2D
+var pbr_concrete_normal: Texture2D
+var pbr_concrete_roughness: Texture2D
+var pbr_mud_albedo: Texture2D
+var pbr_mud_normal: Texture2D
+var pbr_mud_roughness: Texture2D
+var pbr_rust_albedo: Texture2D
+var pbr_rust_normal: Texture2D
+var pbr_rust_roughness: Texture2D
+var bullet_impact_texture: Texture2D
+var visual_rail_car_scene: PackedScene
+var visual_halftrack_scene: PackedScene
+var visual_bunker_scene: PackedScene
+var active_impact_decals: Array[Decal] = []
+var battlefield_dust: GPUParticles3D
 
 var players: Dictionary = {}
 var player_teams: Dictionary = {}
@@ -256,6 +271,19 @@ func _ready() -> void:
 		visual_sandbag_scene = _load_optional_scene(
 			"res://assets/models/sandbag_emplacement.glb"
 		)
+		pbr_concrete_albedo = _load_optional_texture("res://assets/pbr/concrete_albedo.png")
+		pbr_concrete_normal = _load_optional_texture("res://assets/pbr/concrete_normal.png")
+		pbr_concrete_roughness = _load_optional_texture("res://assets/pbr/concrete_roughness.png")
+		pbr_mud_albedo = _load_optional_texture("res://assets/pbr/mud_albedo.png")
+		pbr_mud_normal = _load_optional_texture("res://assets/pbr/mud_normal.png")
+		pbr_mud_roughness = _load_optional_texture("res://assets/pbr/mud_roughness.png")
+		pbr_rust_albedo = _load_optional_texture("res://assets/pbr/rusted_metal_albedo.png")
+		pbr_rust_normal = _load_optional_texture("res://assets/pbr/rusted_metal_normal.png")
+		pbr_rust_roughness = _load_optional_texture("res://assets/pbr/rusted_metal_roughness.png")
+		bullet_impact_texture = _load_optional_texture("res://assets/fx/bullet_impact.png")
+		visual_rail_car_scene = _load_optional_scene("res://assets/models/rail_car_detailed.glb")
+		visual_halftrack_scene = _load_optional_scene("res://assets/models/halftrack_prop.glb")
+		visual_bunker_scene = _load_optional_scene("res://assets/models/concrete_bunker.glb")
 
 	_build_world()
 	_build_round_results_ui()
@@ -433,6 +461,73 @@ func _update_immersive_visuals() -> void:
 		root.rotation.y += 0.003
 		var p: float = 1.0 + sin(atmosphere_elapsed * 2.2 + index) * 0.06
 		root.scale = Vector3(p,1.0,p)
+
+func _build_asset_based_rail_and_fort_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var rust_material := _make_pbr_material(pbr_rust_albedo, pbr_rust_normal, pbr_rust_roughness, Color(0.86,0.84,0.80), 2.4)
+	var concrete_material := _make_pbr_material(pbr_concrete_albedo, pbr_concrete_normal, pbr_concrete_roughness, Color(0.94,0.94,0.92), 2.0)
+	var mud_material := _make_pbr_material(pbr_mud_albedo, pbr_mud_normal, pbr_mud_roughness, Color(0.90,0.86,0.78), 3.2)
+	for rail_position in [Vector3(19.0,0.0,-20.5), Vector3(29.0,0.0,-20.5), Vector3(39.0,0.0,-20.5)]:
+		_spawn_visual_scene(visual_rail_car_scene, "DetailedRailCar_%s" % str(rail_position), rail_position, 0.0, Vector3.ONE, rust_material)
+	_spawn_visual_scene(visual_halftrack_scene, "HalftrackVillage", Vector3(-25.0,0.0,-8.0), deg_to_rad(14.0), Vector3.ONE, rust_material)
+	_spawn_visual_scene(visual_halftrack_scene, "HalftrackFort", Vector3(25.0,0.0,14.0), deg_to_rad(-32.0), Vector3.ONE*0.95, rust_material)
+	_spawn_visual_scene(visual_bunker_scene, "ImportedFortBunker", Vector3(33.0,0.0,28.0), deg_to_rad(180.0), Vector3.ONE*1.15, concrete_material)
+	for mud_data in [["MudNorthRoad",Vector3(0.0,0.095,-31.0),Vector3(60.0,0.08,8.0)],["MudSouthRoad",Vector3(0.0,0.095,35.0),Vector3(62.0,0.08,10.0)],["MudRailYard",Vector3(28.0,0.095,-18.0),Vector3(40.0,0.08,28.0)]]:
+		var mud_plane := MeshInstance3D.new()
+		mud_plane.name = str(mud_data[0])
+		mud_plane.position = Vector3(mud_data[1])
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(mud_data[2])
+		mud_plane.mesh = mesh
+		mud_plane.material_override = mud_material
+		add_child(mud_plane)
+
+func _initialize_battlefield_particles() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	battlefield_dust = GPUParticles3D.new()
+	battlefield_dust.amount = 180
+	battlefield_dust.lifetime = 9.0
+	battlefield_dust.visibility_aabb = AABB(Vector3(-70.0,-5.0,-60.0),Vector3(140.0,28.0,120.0))
+	var process_material := ParticleProcessMaterial.new()
+	process_material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	process_material.emission_box_extents = Vector3(58.0,8.0,48.0)
+	process_material.direction = Vector3(0.25,0.15,0.10)
+	process_material.spread = 180.0
+	process_material.initial_velocity_min = 0.10
+	process_material.initial_velocity_max = 0.55
+	process_material.gravity = Vector3(0.0,-0.02,0.0)
+	process_material.scale_min = 0.05
+	process_material.scale_max = 0.22
+	process_material.color = Color(0.58,0.54,0.46,0.26)
+	battlefield_dust.process_material = process_material
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.22,0.22)
+	var dust_material := StandardMaterial3D.new()
+	dust_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dust_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dust_material.albedo_color = Color(0.65,0.60,0.52,0.30)
+	dust_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	quad.material = dust_material
+	battlefield_dust.draw_pass_1 = quad
+	add_child(battlefield_dust)
+	battlefield_dust.emitting = true
+
+func spawn_bullet_impact_decal(position: Vector3, normal: Vector3) -> void:
+	if DisplayServer.get_name() == "headless" or bullet_impact_texture == null:
+		return
+	var decal := Decal.new()
+	decal.texture_albedo = bullet_impact_texture
+	decal.size = Vector3(0.42,0.42,0.18)
+	decal.position = position + normal*0.01
+	decal.rotation = Vector3(0.0,atan2(normal.x,normal.z),0.0)
+	add_child(decal)
+	active_impact_decals.append(decal)
+	while active_impact_decals.size() > 48:
+		var oldest: Decal = active_impact_decals.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
 
 func _load_optional_scene(path: String) -> PackedScene:
 	if DisplayServer.get_name() == "headless":
@@ -3832,6 +3927,11 @@ func show_shot_effect(
 	)
 	tracer.material_override = tracer_material
 	effect_root.add_child(tracer)
+	if not hit_player:
+		spawn_bullet_impact_decal(
+			end_position,
+			(start_position - end_position).normalized()
+		)
 
 	var impact := MeshInstance3D.new()
 	var impact_mesh := SphereMesh.new()
@@ -4633,7 +4733,12 @@ func _build_world() -> void:
 	battlefield_environment.fog_enabled = true
 	battlefield_environment.fog_light_color = Color(0.52, 0.57, 0.60)
 	battlefield_environment.fog_light_energy = 0.65
-	battlefield_environment.fog_density = 0.006
+	battlefield_environment.fog_density = 0.008
+	battlefield_environment.volumetric_fog_enabled = true
+	battlefield_environment.volumetric_fog_density = 0.018
+	battlefield_environment.volumetric_fog_length = 70.0
+	battlefield_environment.glow_enabled = true
+	battlefield_environment.glow_intensity = 0.65
 	env.environment = battlefield_environment
 	add_child(env)
 
@@ -4747,6 +4852,9 @@ func _build_world() -> void:
 		light.light_energy = 1.6
 		sector_root.add_child(light)
 		sector_lights[sector_name] = light
+
+	_build_asset_based_rail_and_fort_pass()
+	_initialize_battlefield_particles()
 
 	# Combined-arms battlefield expansion.
 	_make_static_box(

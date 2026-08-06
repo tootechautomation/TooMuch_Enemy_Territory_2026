@@ -58,6 +58,12 @@ var tex_spawn_shield: Texture2D
 var tex_muzzle_flash_ui: Texture2D
 var fp_rifle_scene: PackedScene
 var fp_pistol_scene: PackedScene
+var fp_gunmetal_albedo: Texture2D
+var fp_gunmetal_normal: Texture2D
+var fp_gunmetal_roughness: Texture2D
+var fp_wood_albedo: Texture2D
+var fp_wood_normal: Texture2D
+var fp_wood_roughness: Texture2D
 
 var health := 100
 var ammo_in_mag := 30
@@ -224,6 +230,30 @@ func _load_optional_scene(path: String) -> PackedScene:
 		return resource as PackedScene
 	return null
 
+func _apply_first_person_materials(root: Node) -> void:
+	var gun_material := StandardMaterial3D.new()
+	gun_material.albedo_texture = fp_gunmetal_albedo
+	gun_material.normal_enabled = fp_gunmetal_normal != null
+	gun_material.normal_texture = fp_gunmetal_normal
+	gun_material.roughness_texture = fp_gunmetal_roughness
+	gun_material.roughness = 0.42
+	gun_material.metallic = 0.45
+	var wood_material := StandardMaterial3D.new()
+	wood_material.albedo_texture = fp_wood_albedo
+	wood_material.normal_enabled = fp_wood_normal != null
+	wood_material.normal_texture = fp_wood_normal
+	wood_material.roughness_texture = fp_wood_roughness
+	wood_material.roughness = 0.72
+	for child in root.get_children():
+		if child is MeshInstance3D:
+			var mesh_child := child as MeshInstance3D
+			var lower_name: String = mesh_child.name.to_lower()
+			if "stock" in lower_name or "grip" in lower_name or "fore" in lower_name:
+				mesh_child.material_override = wood_material
+			elif "hand" not in lower_name and "finger" not in lower_name and "sleeve" not in lower_name:
+				mesh_child.material_override = gun_material
+		_apply_first_person_materials(child)
+
 func _build_imported_first_person_weapon(
 	is_pistol: bool
 ) -> bool:
@@ -251,6 +281,7 @@ func _build_imported_first_person_weapon(
 		else Vector3.ONE * 0.88
 	)
 	weapon_view.add_child(imported_root)
+	_apply_first_person_materials(imported_root)
 
 	muzzle_flash = MeshInstance3D.new()
 	var flash_mesh := SphereMesh.new()
@@ -320,6 +351,12 @@ func _ready() -> void:
 		fp_pistol_scene = _load_optional_scene(
 			"res://assets/models/fp_service_pistol.glb"
 		)
+		fp_gunmetal_albedo = _load_optional_texture("res://assets/pbr/gunmetal_albedo.png")
+		fp_gunmetal_normal = _load_optional_texture("res://assets/pbr/gunmetal_normal.png")
+		fp_gunmetal_roughness = _load_optional_texture("res://assets/pbr/gunmetal_roughness.png")
+		fp_wood_albedo = _load_optional_texture("res://assets/pbr/wood_albedo.png")
+		fp_wood_normal = _load_optional_texture("res://assets/pbr/wood_normal.png")
+		fp_wood_roughness = _load_optional_texture("res://assets/pbr/wood_roughness.png")
 
 	_initialize_loadout()
 	if is_bot and not bot_role_initialized:
