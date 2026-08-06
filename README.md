@@ -1,12 +1,12 @@
 # Frontline: Objective
 
-## Version 8.9.0 — First-Person Weapon Fidelity
+## Version 8.10.0 — Articulated Soldier Motion
 
-Bundled fallback weapons now present a more convincing period first-person silhouette. Rifles, carbines, submachine guns, the support LMG, marksman weapon, and sidearm receive detailed magazines, triggers and guards, ejection ports, controls, barrel hardware, sights, sling fittings, and class-specific equipment. Reloading now lowers, rolls, and recovers the weapon instead of leaving it visually static.
+The upgraded fallback soldiers now receive animation through their actual articulated joint hierarchy. Locomotion drives shoulder, hip, and knee joints; aiming establishes a supported weapon pose; crouching lowers the stance with bent knees; reloading uses asymmetric hand-work; idle soldiers breathe and scan subtly; and incapacitated soldiers settle into a grounded pose.
 
-These additions apply only to fallback view models. Imported licensed weapons continue to replace them automatically and are not modified. Weapon statistics, firing behavior, network replication, and objective gameplay remain unchanged.
+This phase repairs the legacy animation binding that still searched for obsolete `ArmL`, `ArmR`, `LegL`, and `LegR` node names after the v8.7 soldier rebuild. External rigged characters retain their own imported AnimationPlayer/AnimationTree pipeline and are not altered.
 
-All v8.8 environmental detail, v8.7 soldier fidelity, Forward+ PBR rendering, spatial audio, and persistent combat effects remain included.
+Movement physics, collision shapes, weapon timing, damage, server authority, replication, and protocol 341 remain unchanged.
 
-Build: v8.9.0
+Build: v8.10.0
 Protocol: 341

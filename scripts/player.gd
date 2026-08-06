@@ -20,6 +20,9 @@ const RadarCompassScript = preload("res://scripts/radar_compass.gd")
 const FirstPersonWeaponFidelityScript = preload(
 	"res://scripts/visuals/first_person_weapon_fidelity.gd"
 )
+const ThirdPersonPoseFidelityScript = preload(
+	"res://scripts/visuals/third_person_pose_fidelity.gd"
+)
 
 
 enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
@@ -5490,6 +5493,20 @@ func _update_world_character_animation(delta: float) -> void:
 			stride * 0.035 * speed_ratio,
 			1.0 - exp(-10.0 * delta)
 		)
+
+	ThirdPersonPoseFidelityScript.apply(
+		character_visual,
+		delta,
+		visual_animation_time,
+		speed_ratio,
+		stride,
+		moving,
+		is_crouching,
+		aim_requested or is_aiming,
+		is_reloading,
+		alive,
+		downed
+	)
 
 func _update_hud() -> void:
 	if hud == null:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 8.10.0
+- Rebound fallback animation to the articulated v8.7 shoulder, hip, knee, torso, head, and weapon joints
+- Added speed-scaled locomotion, torso counter-motion, knee articulation, and equipment-aware posing
+- Added supported aiming, crouched combat, asymmetric reload, idle breathing, and subtle look motion
+- Added grounded incapacitated poses with clean recovery on respawn
+- Preserved external rig animation, physics, hitboxes, combat timing, networking, and protocol 341
+
+
 ## 8.9.0
 - Added detailed magazines, triggers, ejection ports, controls, barrel hardware, and sling fittings to fallback first-person weapons
 - Added a detailed fallback pistol slide, chamber, sights, magazine, grip panels, and controls
