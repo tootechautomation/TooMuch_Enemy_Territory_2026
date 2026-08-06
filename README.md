@@ -1,26 +1,38 @@
 # Frontline: Objective
 
-## Version 4.8.1 Viewport API Hotfix
+## Version 4.9.0 Presentation & Character Clarity
 
-This hotfix corrects the resolution-safe HUD viewport lookup.
+### End-of-round presentation
+- Replaced overlapping victory labels with one reusable announcement banner.
+- Rebuilt the round-results screen as a centered, dimmed overlay.
+- The normal HUD, compass, kill feed, and TAB scoreboard hide during results.
+- TAB can no longer open a second scoreboard over the final results.
+- Added a clean live round-restart countdown.
+- Reduced the final results content to fit the available viewport.
 
-### Fixed
-`CharacterBody3D` does not provide `get_viewport_rect()`. The HUD scaler now
-retrieves the active viewport and reads its visible rectangle:
+### World-label cleanup
+- Teammate names, class labels, revive markers, and spotted markers scale with
+  world distance.
+- Reduced label font and outline sizes.
+- Reduced teammate-name visibility to close combat distances.
+- Reduced class-label and spotted-enemy ranges.
+- Enabled normal depth testing for spotted markers.
 
-```gdscript
-var viewport: Viewport = get_viewport()
-if viewport == null:
-    return
-var viewport_size: Vector2 = viewport.get_visible_rect().size
-```
+### Scoreboard improvements
+- Narrower framed panel.
+- Smaller, more readable typography.
+- Better fit at 1280x720 while retaining responsive HUD scaling.
+- Separate Attackers and Defenders sections remain.
 
-All v4.8.0 HUD scaling, compass cleanup, world-marker cleanup, spawn-beam
-cleanup, gameplay systems, and visual assets remain included.
+### Character clarity
+- Third-person materials use more subdued, rough WWII uniform surfaces.
+- Existing team colors and class accents remain readable without appearing
+  fluorescent.
+- Existing locomotion, crouch, gear movement, and first-person body hiding remain.
 
 ### Compatibility
-- Build: v4.8.1
+- Build: v4.9.0
 - Protocol: 341
 - Explicit connection-message `+` retained.
 
-Expected status: `Connected: v4.8.1 protocol 341`
+Expected status: `Connected: v4.9.0 protocol 341`

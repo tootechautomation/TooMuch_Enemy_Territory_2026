@@ -28,6 +28,29 @@ func _load_skin_resources(paths: Array[String]) -> Array[Resource]:
 			result.append(resource)
 	return result
 
+func _add_class_armband(
+	parent: Node3D,
+	accent: Color
+) -> void:
+	var band := MeshInstance3D.new()
+	band.name = "ClassArmband"
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.105
+	mesh.bottom_radius = 0.105
+	mesh.height = 0.16
+	mesh.radial_segments = 18
+	band.mesh = mesh
+	band.rotation_degrees.z = 90.0
+	band.position = Vector3(-0.34, 1.12, 0.0)
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = accent.darkened(0.08)
+	material.roughness = 0.82
+	material.emission_enabled = true
+	material.emission = accent * 0.08
+	band.material_override = material
+	parent.add_child(band)
+
 func _build_character() -> void:
 	var player = get_parent()
 	var skins: Array[Resource] = (

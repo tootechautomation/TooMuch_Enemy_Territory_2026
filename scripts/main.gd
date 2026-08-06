@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "4.8.1"
+const BUILD_VERSION := "4.9.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -169,6 +169,13 @@ var dynamite_light: OmniLight3D
 var round_results_layer: CanvasLayer
 var round_results_panel: PanelContainer
 var round_results_label: Label
+var round_results_title: Label
+var round_results_summary: Label
+var round_results_countdown: Label
+var announcement_layer: CanvasLayer
+var announcement_panel: PanelContainer
+var announcement_label: Label
+var announcement_hide_ms := 0
 var attacker_tickets := INITIAL_TEAM_TICKETS
 var defender_tickets := INITIAL_TEAM_TICKETS
 var command_post_control := -1
@@ -367,8 +374,14 @@ func _process(delta: float) -> void:
 		snapshot_accumulator = 0.0
 		_broadcast_player_snapshots()
 
+	_update_announcement_ui()
 	if match_over:
 		round_restart_remaining = maxf(0.0, round_restart_remaining - delta)
+		if round_results_countdown != null:
+			round_results_countdown.text = (
+				"Next round begins in %.0f seconds"
+				% ceilf(round_restart_remaining)
+			)
 		broadcast_match_state.rpc(
 			match_time_remaining,
 			spawn_wave_remaining,
@@ -4255,29 +4268,199 @@ func push_kill_feed(message: String) -> void:
 	if kill_feed.size() > 5: kill_feed.resize(5)
 	print(message)
 
+func _round_results_style(
+	background: Color,
+	border: Color,
+	border_width: int = 3
+) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = background
+	style.border_color = border
+	style.set_border_width_all(border_width)
+	style.corner_radius_top_left = 10
+	style.corner_radius_top_right = 10
+	style.corner_radius_bottom_left = 10
+	style.corner_radius_bottom_right = 10
+	style.content_margin_left = 22.0
+	style.content_margin_right = 22.0
+	style.content_margin_top = 18.0
+	style.content_margin_bottom = 18.0
+	return style
+
 func _build_round_results_ui() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 
 	round_results_layer = CanvasLayer.new()
-	round_results_layer.layer = 40
+	round_results_layer.layer = 60
 	add_child(round_results_layer)
 
+	var dimmer := ColorRect.new()
+	dimmer.name = "RoundResultsDimmer"
+	dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dimmer.color = Color(0.015, 0.018, 0.018, 0.72)
+	dimmer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dimmer.visible = false
+	round_results_layer.add_child(dimmer)
+
 	round_results_panel = PanelContainer.new()
-	round_results_panel.position = Vector2(300, 95)
-	round_results_panel.custom_minimum_size = Vector2(680, 530)
+	round_results_panel.name = "RoundResultsPanel"
+	round_results_panel.set_anchors_preset(Control.PRESET_CENTER)
+	round_results_panel.position = Vector2(-410, -285)
+	round_results_panel.size = Vector2(820, 570)
+	round_results_panel.add_theme_stylebox_override(
+		"panel",
+		_round_results_style(
+			Color(0.035, 0.040, 0.037, 0.97),
+			Color(0.56, 0.50, 0.30, 0.98)
+		)
+	)
 	round_results_panel.visible = false
 	round_results_layer.add_child(round_results_panel)
 
-	round_results_label = Label.new()
-	round_results_label.add_theme_font_size_override(
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 10)
+	round_results_panel.add_child(layout)
+
+	round_results_title = Label.new()
+	round_results_title.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	round_results_title.add_theme_font_size_override("font_size", 30)
+	round_results_title.add_theme_color_override(
+		"font_color",
+		Color(0.95, 0.83, 0.34)
+	)
+	round_results_title.add_theme_color_override(
+		"font_shadow_color",
+		Color(0.0, 0.0, 0.0, 0.95)
+	)
+	round_results_title.add_theme_constant_override(
+		"shadow_offset_x",
+		2
+	)
+	round_results_title.add_theme_constant_override(
+		"shadow_offset_y",
+		2
+	)
+	layout.add_child(round_results_title)
+
+	var separator := HSeparator.new()
+	layout.add_child(separator)
+
+	round_results_summary = Label.new()
+	round_results_summary.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	round_results_summary.vertical_alignment = (
+		VERTICAL_ALIGNMENT_TOP
+	)
+	round_results_summary.autowrap_mode = (
+		TextServer.AUTOWRAP_WORD_SMART
+	)
+	round_results_summary.add_theme_font_size_override(
+		"font_size",
+		16
+	)
+	round_results_summary.add_theme_color_override(
+		"font_color",
+		Color(0.91, 0.90, 0.84)
+	)
+	round_results_summary.size_flags_vertical = (
+		Control.SIZE_EXPAND_FILL
+	)
+	layout.add_child(round_results_summary)
+
+	round_results_countdown = Label.new()
+	round_results_countdown.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	round_results_countdown.add_theme_font_size_override(
 		"font_size",
 		20
 	)
-	round_results_label.horizontal_alignment = (
+	round_results_countdown.add_theme_color_override(
+		"font_color",
+		Color(0.78, 0.84, 0.90)
+	)
+	layout.add_child(round_results_countdown)
+
+	# Keep the legacy reference valid for any existing calls.
+	round_results_label = round_results_summary
+
+	announcement_layer = CanvasLayer.new()
+	announcement_layer.layer = 55
+	add_child(announcement_layer)
+
+	announcement_panel = PanelContainer.new()
+	announcement_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	announcement_panel.position = Vector2(-330, 28)
+	announcement_panel.size = Vector2(660, 70)
+	announcement_panel.add_theme_stylebox_override(
+		"panel",
+		_round_results_style(
+			Color(0.035, 0.038, 0.034, 0.91),
+			Color(0.55, 0.49, 0.27, 0.96),
+			2
+		)
+	)
+	announcement_panel.visible = false
+	announcement_layer.add_child(announcement_panel)
+
+	announcement_label = Label.new()
+	announcement_label.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
 	)
-	round_results_panel.add_child(round_results_label)
+	announcement_label.vertical_alignment = (
+		VERTICAL_ALIGNMENT_CENTER
+	)
+	announcement_label.add_theme_font_size_override(
+		"font_size",
+		23
+	)
+	announcement_label.add_theme_color_override(
+		"font_color",
+		Color(0.96, 0.90, 0.65)
+	)
+	announcement_panel.add_child(announcement_label)
+
+func _compact_round_scoreboard(final_scoreboard: String) -> String:
+	var compact_lines: Array[String] = []
+	for raw_line in final_scoreboard.split("\n"):
+		var line := raw_line.strip_edges()
+		if line.is_empty():
+			if (
+				not compact_lines.is_empty()
+				and not compact_lines[-1].is_empty()
+			):
+				compact_lines.append("")
+			continue
+		if line.begins_with("FRONTLINE:"):
+			continue
+		if line.begins_with("Time "):
+			compact_lines.append(line)
+			continue
+		if line.begins_with("Objective:"):
+			compact_lines.append(line)
+			continue
+		if line.begins_with("Sector Control:"):
+			compact_lines.append(line)
+			continue
+		if line in ["ATTACKERS", "DEFENDERS", "ROUND AWARDS"]:
+			compact_lines.append("")
+			compact_lines.append(line)
+			continue
+		if line.begins_with("PLAYER"):
+			compact_lines.append(
+				"PLAYER          CLASS       K/D/A   OBJ   XP"
+			)
+			continue
+		if line.begins_with("CP "):
+			compact_lines.append("")
+			compact_lines.append(line)
+			continue
+		compact_lines.append(line)
+	return "\n".join(compact_lines)
 
 @rpc("authority", "call_local", "reliable")
 func show_round_results(
@@ -4287,31 +4470,66 @@ func show_round_results(
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
-	if round_results_panel == null or round_results_label == null:
+	if (
+		round_results_panel == null
+		or round_results_title == null
+		or round_results_summary == null
+	):
 		return
 
-	round_results_panel.visible = true
-	round_results_label.text = (
-		"%s\n\n%s\n\nNext round in %.0f seconds"
-		% [
-			result_message,
-			final_scoreboard,
-			restart_seconds
-		]
+	var dimmer := round_results_layer.get_node_or_null(
+		"RoundResultsDimmer"
+	) as ColorRect
+	if dimmer != null:
+		dimmer.visible = true
+
+	round_results_title.text = result_message.to_upper()
+	round_results_summary.text = _compact_round_scoreboard(
+		final_scoreboard
 	)
+	round_results_countdown.text = (
+		"Next round begins in %.0f seconds"
+		% restart_seconds
+	)
+	round_results_panel.visible = true
+	if announcement_panel != null:
+		announcement_panel.visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 @rpc("authority", "call_local", "reliable")
 func hide_round_results() -> void:
 	if round_results_panel != null:
 		round_results_panel.visible = false
+	if round_results_layer != null:
+		var dimmer := round_results_layer.get_node_or_null(
+			"RoundResultsDimmer"
+		) as ColorRect
+		if dimmer != null:
+			dimmer.visible = false
 
 @rpc("authority", "call_local", "reliable")
 func announce(message: String) -> void:
 	print(message)
-	if DisplayServer.get_name() == "headless": return
-	var layer := CanvasLayer.new(); add_child(layer)
-	var label := Label.new(); label.text = message; label.position = Vector2(390, 50); label.add_theme_font_size_override("font_size", 28); layer.add_child(label)
+	if DisplayServer.get_name() == "headless":
+		return
+	if announcement_panel == null or announcement_label == null:
+		return
+	if round_results_panel != null and round_results_panel.visible:
+		return
+
+	announcement_label.text = message
+	announcement_panel.visible = true
+	announcement_hide_ms = Time.get_ticks_msec() + 3200
+
+func _update_announcement_ui() -> void:
+	if (
+		announcement_panel != null
+		and announcement_panel.visible
+		and announcement_hide_ms > 0
+		and Time.get_ticks_msec() >= announcement_hide_ms
+	):
+		announcement_panel.visible = false
+		announcement_hide_ms = 0
 
 func _update_command_post_stations() -> void:
 	if not multiplayer.is_server() or objective_stage == 0 or command_post_control < 0:

@@ -1,9 +1,11 @@
 # Changelog
 
-## 4.8.1
-- Replaced invalid CharacterBody3D `get_viewport_rect()` call
-- Added null-safe Viewport retrieval
-- HUD scaler now uses `viewport.get_visible_rect().size`
-- Preserved all v4.8.0 features
-- Preserved protocol 341
-- Preserved explicit connection-string `+`
+## 4.9.0
+- Rebuilt end-of-round results overlay
+- Replaced stacking announcements with one timed banner
+- Hid normal HUD, radar, feed, and TAB scoreboard during round results
+- Added live restart countdown
+- Reduced world-label sizes and visibility ranges
+- Compact scoreboard dimensions and typography
+- Subdued third-person material response
+- Preserved protocol 341 and explicit connection-string `+`

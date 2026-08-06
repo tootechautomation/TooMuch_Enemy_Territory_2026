@@ -1684,20 +1684,20 @@ func _build_identity_visuals() -> void:
 	world_nameplate = Label3D.new()
 	world_nameplate.name = "WorldNameplate"
 	world_nameplate.position = Vector3(0.0, 1.62, 0.0)
-	world_nameplate.font_size = 34
-	world_nameplate.outline_size = 10
+	world_nameplate.font_size = 18
+	world_nameplate.outline_size = 5
 	world_nameplate.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	world_nameplate.fixed_size = true
+	world_nameplate.fixed_size = false
 	world_nameplate.visible = false
 	add_child(world_nameplate)
 
 	world_class_label = Label3D.new()
 	world_class_label.name = "WorldClassLabel"
 	world_class_label.position = Vector3(0.0, 1.38, 0.0)
-	world_class_label.font_size = 22
-	world_class_label.outline_size = 8
+	world_class_label.font_size = 14
+	world_class_label.outline_size = 4
 	world_class_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	world_class_label.fixed_size = true
+	world_class_label.fixed_size = false
 	world_class_label.visible = false
 	add_child(world_class_label)
 
@@ -1705,10 +1705,10 @@ func _build_identity_visuals() -> void:
 	revive_marker.name = "ReviveMarker"
 	revive_marker.text = "REVIVE"
 	revive_marker.position = Vector3(0.0, 1.30, 0.0)
-	revive_marker.font_size = 32
-	revive_marker.outline_size = 10
+	revive_marker.font_size = 18
+	revive_marker.outline_size = 5
 	revive_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	revive_marker.fixed_size = true
+	revive_marker.fixed_size = false
 	revive_marker.modulate = Color(0.25, 1.0, 0.38)
 	revive_marker.visible = false
 	add_child(revive_marker)
@@ -1805,10 +1805,10 @@ func _update_identity_visibility() -> void:
 	var enemy_spotted: bool = replicated_spotted_ms > 0
 
 	world_nameplate.visible = alive and not downed and (
-		(same_team and distance <= 34.0)
-		or (enemy_spotted and distance <= 50.0)
+		(same_team and distance <= 16.0)
+		or (enemy_spotted and distance <= 34.0)
 	)
-	world_class_label.visible = alive and not downed and same_team and distance <= 24.0
+	world_class_label.visible = alive and not downed and same_team and distance <= 12.0
 
 func _build_spotted_marker() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -1818,10 +1818,11 @@ func _build_spotted_marker() -> void:
 	spotted_label.name = "SpottedMarker"
 	spotted_label.text = "SPOTTED"
 	spotted_label.position = Vector3(0.0, 1.55, 0.0)
-	spotted_label.font_size = 28
-	spotted_label.outline_size = 8
+	spotted_label.font_size = 16
+	spotted_label.outline_size = 4
 	spotted_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	spotted_label.no_depth_test = true
+	spotted_label.no_depth_test = false
+	spotted_label.fixed_size = false
 	spotted_label.visible = false
 	add_child(spotted_label)
 
@@ -3573,10 +3574,19 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 		_ability_name()
 	]
 
+	var round_results_open := false
+	if main.has_method("get"):
+		var results_panel: PanelContainer = (
+			main.get("round_results_panel") as PanelContainer
+		)
+		if results_panel != null:
+			round_results_open = results_panel.visible
+
 	var hud_visible: bool = (
 		not scoreboard.visible
 		and not tactical_map_open
 		and not spawn_menu_open
+		and not round_results_open
 	)
 	et_hud_root.visible = hud_visible
 	if radar_panel != null:
@@ -3873,7 +3883,7 @@ func _build_hud() -> void:
 	scoreboard = Label.new()
 	scoreboard.position = Vector2(210, 100)
 	scoreboard.custom_minimum_size = Vector2(860, 520)
-	scoreboard.add_theme_font_size_override("font_size", 17)
+	scoreboard.add_theme_font_size_override("font_size", 14)
 	scoreboard.visible = false
 	layer.add_child(scoreboard)
 	feed = Label.new()
@@ -3895,8 +3905,8 @@ func _build_hud() -> void:
 
 	# Framed TAB results panel.
 	scoreboard_panel = PanelContainer.new()
-	scoreboard_panel.position = Vector2(135, 55)
-	scoreboard_panel.size = Vector2(1010, 610)
+	scoreboard_panel.position = Vector2(185, 62)
+	scoreboard_panel.size = Vector2(910, 590)
 	scoreboard_panel.add_theme_stylebox_override(
 		"panel",
 		_hud_panel_style(
@@ -3910,8 +3920,8 @@ func _build_hud() -> void:
 	layer.add_child(scoreboard_panel)
 	scoreboard.reparent(scoreboard_panel)
 	scoreboard.position = Vector2.ZERO
-	scoreboard.custom_minimum_size = Vector2(970, 570)
-	scoreboard.add_theme_font_size_override("font_size", 17)
+	scoreboard.custom_minimum_size = Vector2(870, 550)
+	scoreboard.add_theme_font_size_override("font_size", 14)
 	scoreboard.add_theme_color_override(
 		"font_color",
 		Color(0.93, 0.91, 0.82)
@@ -4531,10 +4541,27 @@ func _update_hud() -> void:
 		ability_name,
 		ability_state
 	]
-	scoreboard.visible = Input.is_action_pressed("scoreboard")
+	var round_results_open := false
+	var main_results_panel: PanelContainer = (
+		main.get("round_results_panel") as PanelContainer
+	)
+	if main_results_panel != null:
+		round_results_open = main_results_panel.visible
+
+	scoreboard.visible = (
+		Input.is_action_pressed("scoreboard")
+		and not round_results_open
+	)
 	if scoreboard_panel != null:
 		scoreboard_panel.visible = scoreboard.visible
 	if scoreboard.visible:
 		scoreboard.text = str(main.call("scoreboard_text"))
+
 	_update_et_style_hud(main, names)
-	feed.text = "\n".join(main.kill_feed)
+	if et_hud_root != null and round_results_open:
+		et_hud_root.visible = false
+	if radar_panel != null and round_results_open:
+		radar_panel.visible = false
+	if feed != null:
+		feed.visible = not round_results_open
+		feed.text = "\n".join(main.kill_feed)
