@@ -877,6 +877,49 @@ func server_receive_input(move: Vector2, yaw: float, look_pitch: float, wants_ju
 	crouch_requested = wants_crouch
 	aim_requested = wants_aim
 
+func _server_forward_wall_probe(
+	horizontal_motion: Vector3
+) -> float:
+	if horizontal_motion.length_squared() <= 0.000001:
+		return 1.0
+
+	var direction := horizontal_motion.normalized()
+	var probe_distance := horizontal_motion.length() + 0.48
+	var space_state := get_world_3d().direct_space_state
+	var minimum_fraction := 1.0
+
+	for probe_height in [0.35, 0.95, 1.45]:
+		var origin := global_position + Vector3.UP * probe_height
+		var query := PhysicsRayQueryParameters3D.create(
+			origin,
+			origin + direction * probe_distance
+		)
+		query.exclude = [self]
+		query.collision_mask = 1
+		query.collide_with_bodies = true
+		query.collide_with_areas = false
+
+		var hit := space_state.intersect_ray(query)
+		if hit.is_empty():
+			continue
+
+		var hit_position := Vector3(
+			hit.get("position", origin)
+		)
+		var distance := origin.distance_to(hit_position)
+		var safe_distance := maxf(0.0, distance - 0.38)
+		minimum_fraction = minf(
+			minimum_fraction,
+			clampf(
+				safe_distance
+				/ maxf(horizontal_motion.length(), 0.001),
+				0.0,
+				1.0
+			)
+		)
+
+	return minimum_fraction
+
 func _server_wall_safety_sweep(
 	horizontal_motion: Vector3
 ) -> Vector3:
@@ -988,11 +1031,18 @@ func _server_simulate(delta: float) -> void:
 		intended_horizontal
 	)
 	if intended_horizontal.length_squared() > 0.000001:
-		var movement_ratio := clampf(
+		var sweep_ratio := clampf(
 			safe_horizontal.length()
 			/ intended_horizontal.length(),
 			0.0,
 			1.0
+		)
+		var probe_ratio := _server_forward_wall_probe(
+			intended_horizontal
+		)
+		var movement_ratio := minf(
+			sweep_ratio,
+			probe_ratio
 		)
 		velocity.x *= movement_ratio
 		velocity.z *= movement_ratio

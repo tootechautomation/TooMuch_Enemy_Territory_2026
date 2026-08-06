@@ -1,11 +1,10 @@
 # Changelog
 
-## 8.1.0
-- Replaced broad townhouse proxies with exact scene-mesh trimesh collision
-- Instantiated structural townhouse scenes on the headless server
-- Removed manually positioned gray plaster collision proxies
-- Disabled broad AABB fallback collision in the wall auditor
-- Added server capsule motion sweep against thin walls
-- Added architectural windows, shutters, foundations, roof trim, gutters,
-  masonry damage, soot, and curbs
+## 8.2.0
+- Loaded structural scenes on both graphical clients and headless servers
+- Fixed client-visible/server-missing townhouse collision mismatch
+- Added doorway-aware structural fallback shells for missing assets
+- Added startup authoritative-asset availability report
+- Added ankle/chest/head server wall probes
+- Added drainpipes, cables, posters, wall caps, crates, and alley bins
 - Preserved protocol 341 and explicit connection-string `+`

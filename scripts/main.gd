@@ -27,6 +27,9 @@ const StructureCollisionAuditorScript = preload(
 const UrbanRealismPassScript = preload(
 	"res://scripts/visuals/urban_realism_pass.gd"
 )
+const AlleyDetailPassScript = preload(
+	"res://scripts/visuals/alley_detail_pass.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -60,7 +63,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.1.0"
+const BUILD_VERSION := "8.2.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -282,6 +285,7 @@ var wwii_material_library
 var battlefield_atmosphere: Node3D
 var structure_collision_report: Dictionary = {}
 var urban_realism_pass: Node3D
+var alley_detail_pass: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -345,6 +349,25 @@ func _ready() -> void:
 		Dictionary(local_profile.get("keybindings", {}))
 	)
 	_apply_profile_audio_settings()
+
+	# Structural scenes must be loaded on both the graphical client and the
+	# headless VPS. The server cannot collide with a wall it never instantiated.
+	visual_townhouse_scene = _load_optional_scene(
+		"res://assets/models/wwii_townhouse.glb"
+	)
+	visual_ruined_townhouse_scene = _load_optional_scene(
+		"res://assets/models/wwii_townhouse_ruined.glb"
+	)
+	visual_church_scene = _load_optional_scene(
+		"res://assets/models/stone_church.glb"
+	)
+	visual_warehouse_scene = _load_optional_scene(
+		"res://assets/models/rail_warehouse.glb"
+	)
+	visual_bunker_scene = _load_optional_scene(
+		"res://assets/models/concrete_bunker.glb"
+	)
+
 	if DisplayServer.get_name() != "headless":
 		_initialize_battlefield_ambience()
 		tex_metal = _load_optional_texture(
@@ -392,12 +415,6 @@ func _ready() -> void:
 		pbr_ground_roughness = _load_optional_texture(
 			"res://assets/pbr/rubble_ground_roughness.png"
 		)
-		visual_townhouse_scene = _load_optional_scene(
-			"res://assets/models/wwii_townhouse.glb"
-		)
-		visual_ruined_townhouse_scene = _load_optional_scene(
-			"res://assets/models/wwii_townhouse_ruined.glb"
-		)
 		visual_rubble_scene = _load_optional_scene(
 			"res://assets/models/rubble_pile.glb"
 		)
@@ -416,7 +433,6 @@ func _ready() -> void:
 		bullet_impact_texture = _load_optional_texture("res://assets/fx/bullet_impact.png")
 		visual_rail_car_scene = _load_optional_scene("res://assets/models/rail_car_detailed.glb")
 		visual_halftrack_scene = _load_optional_scene("res://assets/models/halftrack_prop.glb")
-		visual_bunker_scene = _load_optional_scene("res://assets/models/concrete_bunker.glb")
 		muzzle_smoke_texture = _load_optional_texture("res://assets/fx/muzzle_smoke.png")
 		glass_crack_texture = _load_optional_texture("res://assets/fx/glass_crack.png")
 		pbr_limestone_albedo = _load_optional_texture("res://assets/pbr/limestone_blocks_albedo.png")
@@ -431,8 +447,6 @@ func _ready() -> void:
 		pbr_gravel_albedo = _load_optional_texture("res://assets/pbr/compacted_gravel_albedo.png")
 		pbr_gravel_normal = _load_optional_texture("res://assets/pbr/compacted_gravel_normal.png")
 		pbr_gravel_roughness = _load_optional_texture("res://assets/pbr/compacted_gravel_roughness.png")
-		visual_church_scene = _load_optional_scene("res://assets/models/stone_church.glb")
-		visual_warehouse_scene = _load_optional_scene("res://assets/models/rail_warehouse.glb")
 		visual_field_gun_scene = _load_optional_scene("res://assets/models/field_artillery.glb")
 		visual_prop_cluster_scene = _load_optional_scene("res://assets/models/crate_barrel_cluster.glb")
 
@@ -449,6 +463,16 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	_parse_command_line()
+	print(
+		"Authoritative structural assets: townhouse=%s ruined=%s church=%s warehouse=%s bunker=%s"
+		% [
+			visual_townhouse_scene != null,
+			visual_ruined_townhouse_scene != null,
+			visual_church_scene != null,
+			visual_warehouse_scene != null,
+			visual_bunker_scene != null
+		]
+	)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if DisplayServer.get_name() == "headless":
@@ -2710,6 +2734,116 @@ func _set_mesh_visibility_recursive(
 		if visual != null:
 			visual.visible = visible_value
 
+func _create_authoritative_townhouse_fallback(
+	node_name: String,
+	position: Vector3,
+	rotation_y: float,
+	width: float,
+	depth: float,
+	height: float,
+	door_center_x: float = 0.0,
+	door_width: float = 1.8,
+	door_height: float = 2.7
+) -> Node3D:
+	var root := Node3D.new()
+	root.name = "%s_ServerFallback" % node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	root.set_meta("authoritative_missing_asset_fallback", true)
+	add_child(root)
+
+	var thickness := 0.30
+	var half_width := width * 0.5
+	var half_depth := depth * 0.5
+	var left_width := maxf(
+		0.25,
+		door_center_x - door_width * 0.5 + half_width
+	)
+	var right_width := maxf(
+		0.25,
+		half_width - door_center_x - door_width * 0.5
+	)
+
+	_make_local_structure_block(
+		root,
+		"%s_LeftSide" % node_name,
+		Vector3(-half_width, height * 0.5, 0.0),
+		Vector3(thickness, height, depth),
+		Color(0.44, 0.18, 0.10)
+	)
+	_make_local_structure_block(
+		root,
+		"%s_RightSide" % node_name,
+		Vector3(half_width, height * 0.5, 0.0),
+		Vector3(thickness, height, depth),
+		Color(0.58, 0.55, 0.49)
+	)
+	_make_local_structure_block(
+		root,
+		"%s_Rear" % node_name,
+		Vector3(0.0, height * 0.5, half_depth),
+		Vector3(width, height, thickness),
+		Color(0.50, 0.47, 0.41)
+	)
+
+	if left_width > 0.30:
+		_make_local_structure_block(
+			root,
+			"%s_FrontLeft" % node_name,
+			Vector3(
+				-half_width + left_width * 0.5,
+				height * 0.5,
+				-half_depth
+			),
+			Vector3(left_width, height, thickness),
+			Color(0.44, 0.18, 0.10)
+		)
+	if right_width > 0.30:
+		_make_local_structure_block(
+			root,
+			"%s_FrontRight" % node_name,
+			Vector3(
+				half_width - right_width * 0.5,
+				height * 0.5,
+				-half_depth
+			),
+			Vector3(right_width, height, thickness),
+			Color(0.58, 0.55, 0.49)
+		)
+	if height > door_height:
+		_make_local_structure_block(
+			root,
+			"%s_FrontLintel" % node_name,
+			Vector3(
+				door_center_x,
+				door_height + (height - door_height) * 0.5,
+				-half_depth
+			),
+			Vector3(
+				door_width,
+				height - door_height,
+				thickness
+			),
+			Color(0.47, 0.30, 0.20)
+		)
+
+	print(
+		"WARNING: structural asset missing; using doorway-aware fallback: %s"
+		% node_name
+	)
+	return root
+
+func _build_alley_detail_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if alley_detail_pass != null:
+		return
+	alley_detail_pass = AlleyDetailPassScript.new()
+	alley_detail_pass.name = "AlleyDetailPass"
+	add_child(alley_detail_pass)
+	if alley_detail_pass.has_method("build"):
+		alley_detail_pass.call("build")
+
 func _spawn_structural_scene(
 	scene: PackedScene,
 	node_name: String,
@@ -2847,7 +2981,9 @@ func _build_asset_based_village_pass() -> void:
 			Vector3(-51.0, 0.0, -27.0),
 			deg_to_rad(8.0),
 			Vector3(1.05, 1.05, 1.05),
-			brick_material
+			brick_material,
+			Vector3(8.0, 7.4, 6.0),
+			-0.75
 		],
 		[
 			visual_townhouse_scene,
@@ -2855,7 +2991,9 @@ func _build_asset_based_village_pass() -> void:
 			Vector3(-52.0, 0.0, -8.0),
 			deg_to_rad(-4.0),
 			Vector3(1.15, 1.10, 1.10),
-			plaster_material
+			plaster_material,
+			Vector3(8.4, 7.5, 6.2),
+			0.65
 		],
 		[
 			visual_ruined_townhouse_scene,
@@ -2863,7 +3001,9 @@ func _build_asset_based_village_pass() -> void:
 			Vector3(-50.0, 0.0, 13.0),
 			deg_to_rad(7.0),
 			Vector3(1.05, 1.05, 1.05),
-			plaster_material
+			plaster_material,
+			Vector3(8.0, 7.4, 6.0),
+			-0.35
 		],
 		[
 			visual_townhouse_scene,
@@ -2871,10 +3011,12 @@ func _build_asset_based_village_pass() -> void:
 			Vector3(-49.0, 0.0, 34.0),
 			deg_to_rad(-9.0),
 			Vector3(1.10, 1.12, 1.10),
-			brick_material
+			brick_material,
+			Vector3(8.3, 7.5, 6.2),
+			0.55
 		]
 	]:
-		_spawn_structural_scene(
+		var structure := _spawn_structural_scene(
 			building_data[0] as PackedScene,
 			str(building_data[1]),
 			Vector3(building_data[2]),
@@ -2882,6 +3024,17 @@ func _build_asset_based_village_pass() -> void:
 			Vector3(building_data[4]),
 			building_data[5] as Material
 		)
+		if structure == null:
+			var fallback_size := Vector3(building_data[6])
+			_create_authoritative_townhouse_fallback(
+				str(building_data[1]),
+				Vector3(building_data[2]),
+				float(building_data[3]),
+				fallback_size.x,
+				fallback_size.z,
+				fallback_size.y,
+				float(building_data[7])
+			)
 
 
 	if DisplayServer.get_name() == "headless":
@@ -8349,6 +8502,7 @@ func _build_world() -> void:
 	_build_high_fidelity_environment_pass()
 	_build_wwii_detail_pass()
 	_build_urban_realism_pass()
+	_build_alley_detail_pass()
 	_apply_wwii_material_library()
 	_build_battlefield_atmosphere()
 	_build_battlefield_dressing_pass()

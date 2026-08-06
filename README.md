@@ -1,21 +1,41 @@
 # Frontline: Objective
 
-## Version 8.1.0 Exact Scene Collision & Urban Realism
+## Version 8.2.0 Server Structural Asset Authority & Alley Detail
 
-The four village townhouses now instantiate on both client and headless server.
-Collision is generated directly from each visible mesh with
-`create_trimesh_collision()`, so rotated walls, recesses, and openings remain
-aligned with the rendered scene.
+### Root collision fix
+The townhouse, ruined-townhouse, church, warehouse, and bunker scenes are now
+loaded before the graphical/headless split in `_ready()`.
 
-The broad townhouse solid proxies and hand-positioned gray plaster wall proxies
-have been removed. The structural auditor no longer creates broad AABB box
-fallbacks, eliminating the primary source of invisible walls.
+Previously the client displayed the townhouses while a remote headless server
+had `null` structure scenes. The VPS therefore had no matching wall meshes from
+which to generate collision.
 
-Server movement now uses a short capsule motion sweep before `move_and_slide()`
-to reduce thin-wall tunneling during sprinting or low frame-rate spikes.
+The server and client now instantiate the same structural scenes and generate
+collision directly from those meshes.
 
-The visual pass adds window glass, shutters, stone lintels and sills,
-foundations, cornices, gutters, exposed-brick damage, soot, and stone curbs.
+### Missing asset protection
+When a required townhouse model is genuinely unavailable, the server creates a
+thin, doorway-aware perimeter shell. It does not create a broad solid building
+box and does not cover the intended doorway.
 
-Build: v8.1.0
+The console reports both asset availability and any fallback use.
+
+### Movement safeguards
+The existing server capsule motion sweep remains. A three-height forward wall
+probe now checks ankle, chest, and head height before movement, reducing
+tunneling through thin or imperfect trimesh walls.
+
+### Ongoing visual improvements
+The village alley receives:
+
+- metal drainpipes,
+- overhead utility cables,
+- aged wall posters,
+- masonry wall caps,
+- wooden crates,
+- metal bins.
+
+These are visual-only and do not add invisible collision.
+
+Build: v8.2.0
 Protocol: 341
