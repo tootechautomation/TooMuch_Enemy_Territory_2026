@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "4.5.0"
+const BUILD_VERSION := "4.6.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -4653,23 +4653,87 @@ func scoreboard_text() -> String:
 		"Soldier",
 		"Medic",
 		"Engineer",
-		"FieldOps",
+		"Field Ops",
 		"Scout"
 	]
-	var depot_text := "Neutral"
-	if supply_depot_control == 0:
-		depot_text = "Attackers"
-	elif supply_depot_control == 1:
-		depot_text = "Defenders"
 
 	var lines: Array[String] = [
+		"FRONTLINE: OBJECTIVE · OPERATION BLACK RIVER",
 		(
-			"TAB RESULTS · Tickets ATK %d / DEF %d · "
-			+ "Command Post %s · Supply Depot %s"
-		)
+			"Time %02d:%02d    ATK Tickets %d    DEF Tickets %d"
+			% [
+				int(match_time_remaining) / 60,
+				int(match_time_remaining) % 60,
+				attacker_tickets,
+				defender_tickets
+			]
+		),
+		"Objective: %s" % objective_status_text(),
+		"Sector Control: %s" % sector_status_text(),
+		"",
+		"ATTACKERS",
+		"PLAYER             CLASS        K   D   A   OBJ   XP   RANK"
+	]
+
+	var sorted_players: Array = players.values()
+	sorted_players.sort_custom(
+		func(a: Node3D, b: Node3D) -> bool:
+			if int(a.get("team")) != int(b.get("team")):
+				return int(a.get("team")) < int(b.get("team"))
+			if int(a.get("round_xp")) != int(b.get("round_xp")):
+				return int(a.get("round_xp")) > int(b.get("round_xp"))
+			return int(a.get("kills")) > int(b.get("kills"))
+	)
+
+	for team_id in [0, 1]:
+		if team_id == 1:
+			lines.append("")
+			lines.append("DEFENDERS")
+			lines.append(
+				"PLAYER             CLASS        K   D   A   OBJ   XP   RANK"
+			)
+
+		var team_found := false
+		for player_value in sorted_players:
+			var player: Node3D = player_value as Node3D
+			if player == null or int(player.get("team")) != team_id:
+				continue
+			team_found = true
+			var class_id: int = clampi(
+				int(player.get("player_class")),
+				0,
+				class_names.size() - 1
+			)
+			var bot_suffix := " [BOT]" if bool(player.get("is_bot")) else ""
+			lines.append(
+				"%-18s %-12s %2d  %2d  %2d  %4d  %4d  %s%s"
+				% [
+					str(player.get("player_name")),
+					class_names[class_id],
+					int(player.get("kills")),
+					int(player.get("deaths")),
+					int(player.get("assists")),
+					int(player.get("objective_points")),
+					int(player.get("xp")),
+					str(player.call("rank_name")),
+					bot_suffix
+				]
+			)
+
+		if not team_found:
+			lines.append("-- No deployed players --")
+
+	lines.append("")
+	lines.append("ROUND AWARDS")
+	var awards: String = round_awards_text()
+	for award_line in awards.split("\n"):
+		if award_line != "ROUND AWARDS":
+			lines.append(award_line)
+
+	lines.append("")
+	lines.append(
+		"CP %s · DEPOT %s · Protocol %d · Build %s"
 		% [
-			attacker_tickets,
-			defender_tickets,
 			(
 				"Neutral"
 				if command_post_control < 0
@@ -4679,63 +4743,19 @@ func scoreboard_text() -> String:
 					else "Defenders"
 				)
 			),
-			depot_text
-		],
-		(
-			"Player          Team Class      K  D  A  OBJ "
-			+ "RXP  XP   Rank       Type"
-		)
-	]
-
-	var sorted_players: Array = players.values()
-	sorted_players.sort_custom(
-		func(a: Node3D, b: Node3D) -> bool:
-			if int(a.get("team")) != int(b.get("team")):
-				return int(a.get("team")) < int(b.get("team"))
-			if int(a.get("round_xp")) != int(b.get("round_xp")):
-				return (
-					int(a.get("round_xp"))
-					> int(b.get("round_xp"))
-				)
-			return int(a.get("kills")) > int(b.get("kills"))
-	)
-
-	for player_value in sorted_players:
-		var player: Node3D = player_value as Node3D
-		if player == null:
-			continue
-
-		var player_team: int = int(player.get("team"))
-		var class_id: int = clampi(
-			int(player.get("player_class")),
-			0,
-			class_names.size() - 1
-		)
-		var actor_type := (
-			"BOT"
-			if bool(player.get("is_bot"))
-			else "HUMAN"
-		)
-
-		lines.append(
 			(
-				"%-15s %-4s %-10s %2d %2d %2d %4d "
-				+ "%4d %4d %-10s %s"
-			)
-			% [
-				str(player.get("player_name")),
-				"ATK" if player_team == 0 else "DEF",
-				class_names[class_id],
-				int(player.get("kills")),
-				int(player.get("deaths")),
-				int(player.get("assists")),
-				int(player.get("objective_points")),
-				int(player.get("round_xp")),
-				int(player.get("xp")),
-				str(player.call("rank_name")),
-				actor_type
-			]
-		)
+				"Neutral"
+				if supply_depot_control < 0
+				else (
+					"Attackers"
+					if supply_depot_control == 0
+					else "Defenders"
+				)
+			),
+			NETWORK_PROTOCOL,
+			BUILD_VERSION
+		]
+	)
 
 	return "\n".join(lines)
 

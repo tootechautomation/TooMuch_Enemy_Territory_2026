@@ -1,37 +1,33 @@
 # Frontline: Objective
 
-## Version 4.5.0 High-Fidelity WWII Environment Pass
+## Version 4.6.0 First-Person & HUD Overhaul
 
-### High-resolution materials
-- Added 1024px limestone-block PBR set.
-- Added 1024px slate-roof PBR set.
-- Added 1024px damaged-plaster PBR set.
-- Added 1024px compacted-gravel PBR set.
-- Each set includes albedo, normal, and roughness maps.
+### True first-person presentation
+- The local player's helmet, head, torso, legs, backpack, and class accent are hidden.
+- Only the imported weapon, sleeves, hands, and arms remain visible.
+- Other players and bots still render their complete third-person character.
+- Local body hiding is reapplied after snapshots, respawns, class changes, and every local frame.
 
-### New modular assets
-- Detailed stone church with tower, windows, buttresses, roof, and cross.
-- Large rail warehouse with loading dock and structural supports.
-- WWII field artillery piece.
-- Reusable crate-and-barrel clusters.
+### Original ET-inspired HUD
+The HUD has been rebuilt into a compact WWII objective-shooter layout:
+- Center-top match timer, tickets, and current objective.
+- Bottom-left team, class, health, stamina, stance, rank, and XP.
+- Bottom-right weapon, magazine, reserve ammunition, grenades, and smoke.
+- Center-bottom life state, sector control, and class ability.
+- Circular-style centered crosshair.
+- Existing kill feed, objective progress, damage feedback, radar, and scope systems remain.
 
-### Environment upgrade
-- Added church landmark to the village.
-- Added detailed warehouse to the rail yard.
-- Added field guns and prop clusters throughout the map.
-- Added high-resolution gravel road and rail-yard overlays.
-- Enabled SSAO, SSIL, and color adjustment when supported by the installed Godot build.
-- Improved sunlight, contact depth, contrast, and muted wartime color grading.
-
-### First-person presentation
-- Added subtle camera inertia to the imported weapon and arms.
-- Mouse movement now produces small delayed weapon motion.
-- Existing recoil, muzzle smoke, shell ejection, ADS, sprint lowering, and weapon bob remain.
+### TAB results screen
+- Large framed results panel.
+- Separate Attackers and Defenders sections.
+- Class, kills, deaths, assists, objective score, XP, and rank.
+- Current objective, tickets, sector control, round awards, build, and protocol.
+- The normal combat HUD hides while TAB is held.
 
 ### Compatibility
-- Build: v4.5.0
+- Build: v4.6.0
 - Protocol: 341
 - Explicit connection-message `+` retained.
-- All visual assets remain optional for the headless server.
+- Existing combat, bots, objectives, destruction, assets, and networking remain.
 
-Expected status: `Connected: v4.5.0 protocol 341`
+Expected status: `Connected: v4.6.0 protocol 341`

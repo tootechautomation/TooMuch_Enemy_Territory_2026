@@ -197,6 +197,19 @@ var rank_progress_label: Label
 var tactical_map_panel: PanelContainer
 var tactical_map_label: Label
 var tactical_map_open := false
+var et_hud_root: Control
+var et_status_label: Label
+var et_health_label: Label
+var et_stamina_label: Label
+var et_rank_label: Label
+var et_ammo_label: Label
+var et_weapon_label: Label
+var et_grenade_label: Label
+var et_objective_label: Label
+var et_timer_label: Label
+var et_team_label: Label
+var et_crosshair_ring: Label
+var scoreboard_panel: PanelContainer
 var bot_route_index := 0
 var bot_route_repath_ms := 0
 var compass_label: Label
@@ -372,6 +385,7 @@ func _ready() -> void:
 	_build_spotted_marker()
 	_build_identity_visuals()
 	_refresh_identity_visuals(true)
+	_apply_first_person_body_visibility()
 	target_position = global_position
 
 	if _is_local_player() and DisplayServer.get_name() != "headless":
@@ -411,6 +425,7 @@ func _physics_process(delta: float) -> void:
 		_collect_and_send_input()
 		_update_spectator_camera()
 		_update_hud()
+		_apply_first_person_body_visibility()
 		_update_identity_visibility()
 		_update_footstep_audio(delta)
 		_update_first_person_animation(delta)
@@ -794,6 +809,7 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 		class_accent_mesh.visible = alive
 	if weapon_view:
 		weapon_view.visible = alive and not downed
+	_apply_first_person_body_visibility()
 
 	if revive_marker != null:
 		var local_team := team
@@ -1720,6 +1736,33 @@ func _refresh_identity_visuals(force: bool = false) -> void:
 	if world_class_label != null:
 		world_class_label.text = _class_short_name(player_class)
 		world_class_label.modulate = accent_color.lightened(0.25)
+
+func _apply_first_person_body_visibility() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var local_view: bool = _is_local_player()
+	var body_node: Node3D = get_node_or_null("Body") as Node3D
+	var character_visual: Node3D = (
+		get_node_or_null("CharacterVisual") as Node3D
+	)
+
+	if body_node != null:
+		body_node.visible = not local_view and alive
+	if character_visual != null:
+		character_visual.visible = not local_view and alive
+	if class_accent_mesh != null:
+		class_accent_mesh.visible = not local_view and alive
+
+	if local_view:
+		if world_nameplate != null:
+			world_nameplate.visible = false
+		if world_class_label != null:
+			world_class_label.visible = false
+		if spotted_label != null:
+			spotted_label.visible = false
+		if revive_marker != null:
+			revive_marker.visible = false
 
 func _update_identity_visibility() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -3223,6 +3266,220 @@ func _play_confirm_sound(headshot: bool) -> void:
 	confirm_audio.stream = selected_stream
 	confirm_audio.play()
 
+func _hud_panel_style(
+	background: Color,
+	border: Color,
+	border_width: int = 2,
+	corner_radius: int = 7
+) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = background
+	style.border_color = border
+	style.set_border_width_all(border_width)
+	style.corner_radius_top_left = corner_radius
+	style.corner_radius_top_right = corner_radius
+	style.corner_radius_bottom_left = corner_radius
+	style.corner_radius_bottom_right = corner_radius
+	style.content_margin_left = 12.0
+	style.content_margin_right = 12.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	return style
+
+func _make_et_panel(
+	parent: Control,
+	position_value: Vector2,
+	size_value: Vector2,
+	background: Color,
+	border: Color
+) -> VBoxContainer:
+	var panel := PanelContainer.new()
+	panel.position = position_value
+	panel.size = size_value
+	panel.add_theme_stylebox_override(
+		"panel",
+		_hud_panel_style(background, border)
+	)
+	parent.add_child(panel)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 1)
+	panel.add_child(box)
+	return box
+
+func _make_et_label(
+	parent: Control,
+	text_value: String,
+	font_size: int,
+	alignment: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT
+) -> Label:
+	var label := Label.new()
+	label.text = text_value
+	label.horizontal_alignment = alignment
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", Color(0.94, 0.93, 0.85))
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	parent.add_child(label)
+	return label
+
+func _build_et_style_hud(layer: CanvasLayer) -> void:
+	et_hud_root = Control.new()
+	et_hud_root.name = "ObjectiveShooterHUD"
+	et_hud_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	et_hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(et_hud_root)
+
+	var olive_border := Color(0.52, 0.48, 0.31, 0.95)
+	var dark_panel := Color(0.055, 0.060, 0.052, 0.82)
+
+	var top_box := _make_et_panel(
+		et_hud_root,
+		Vector2(420, 14),
+		Vector2(440, 82),
+		dark_panel,
+		olive_border
+	)
+	et_timer_label = _make_et_label(
+		top_box,
+		"10:00",
+		23,
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	et_objective_label = _make_et_label(
+		top_box,
+		"FOLLOW THE ACTIVE OBJECTIVE",
+		18,
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	et_objective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	var left_box := _make_et_panel(
+		et_hud_root,
+		Vector2(18, 570),
+		Vector2(300, 132),
+		dark_panel,
+		olive_border
+	)
+	et_team_label = _make_et_label(left_box, "ATTACKERS · SOLDIER", 18)
+	et_health_label = _make_et_label(left_box, "✚ 100 HP", 25)
+	et_stamina_label = _make_et_label(left_box, "STAMINA 100%", 16)
+	et_rank_label = _make_et_label(left_box, "RECRUIT · 0 XP", 16)
+
+	var right_box := _make_et_panel(
+		et_hud_root,
+		Vector2(965, 570),
+		Vector2(297, 132),
+		dark_panel,
+		olive_border
+	)
+	et_weapon_label = _make_et_label(
+		right_box,
+		"SERVICE RIFLE",
+		18,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	)
+	et_ammo_label = _make_et_label(
+		right_box,
+		"30 / 120",
+		29,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	)
+	et_grenade_label = _make_et_label(
+		right_box,
+		"GRENADES 2 · SMOKE 1",
+		16,
+		HORIZONTAL_ALIGNMENT_RIGHT
+	)
+
+	et_status_label = Label.new()
+	et_status_label.position = Vector2(420, 675)
+	et_status_label.custom_minimum_size = Vector2(440, 28)
+	et_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	et_status_label.add_theme_font_size_override("font_size", 16)
+	et_status_label.add_theme_color_override(
+		"font_color",
+		Color(0.95, 0.90, 0.70)
+	)
+	et_hud_root.add_child(et_status_label)
+
+	et_crosshair_ring = Label.new()
+	et_crosshair_ring.text = "⊕"
+	et_crosshair_ring.position = Vector2(625, 333)
+	et_crosshair_ring.add_theme_font_size_override("font_size", 34)
+	et_crosshair_ring.add_theme_color_override(
+		"font_color",
+		Color(0.92, 0.92, 0.82, 0.90)
+	)
+	et_crosshair_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	et_hud_root.add_child(et_crosshair_ring)
+
+	# The original debug text is still updated internally but no longer rendered.
+	if hud != null:
+		hud.visible = false
+	if operations_label != null:
+		operations_label.visible = false
+	if class_mode_label != null:
+		class_mode_label.visible = false
+	if rank_progress_label != null:
+		rank_progress_label.visible = false
+	if tactical_indicator != null:
+		tactical_indicator.visible = false
+	if compass_label != null:
+		compass_label.visible = false
+	if crosshair != null:
+		crosshair.visible = false
+
+func _update_et_style_hud(main: Node, names: Array) -> void:
+	if et_hud_root == null or main == null:
+		return
+
+	var minutes: int = int(main.get("match_time_remaining")) / 60
+	var seconds: int = int(main.get("match_time_remaining")) % 60
+	var team_name := "ATTACKERS" if team == 0 else "DEFENDERS"
+	var stance_name := "CROUCHED" if is_crouching else "STANDING"
+	var life_name := "DOWNED" if downed else ("ALIVE" if alive else "RESPAWNING")
+
+	et_timer_label.text = (
+		"%02d:%02d · ATK %d / DEF %d"
+		% [
+			minutes,
+			seconds,
+			int(main.get("attacker_tickets")),
+			int(main.get("defender_tickets"))
+		]
+	)
+	et_objective_label.text = str(main.call("objective_status_text"))
+	et_team_label.text = "%s · %s" % [
+		team_name,
+		str(names[player_class]).to_upper()
+	]
+	et_health_label.text = "✚ %d HP" % health
+	et_stamina_label.text = "STAMINA %d%% · %s" % [
+		int(round(replicated_stamina)),
+		stance_name
+	]
+	et_rank_label.text = "%s · %d XP" % [rank_name(), xp]
+	et_weapon_label.text = _weapon_display_name().to_upper()
+	et_ammo_label.text = "%d / %d" % [ammo_in_mag, reserve_ammo]
+	et_grenade_label.text = "GRENADES %d · SMOKE %d" % [
+		grenades_remaining,
+		replicated_smoke_grenades
+	]
+	et_status_label.text = "%s · %s · Q %s" % [
+		life_name,
+		str(main.call("sector_status_text")),
+		_ability_name()
+	]
+
+	var hud_visible: bool = (
+		not scoreboard.visible
+		and not tactical_map_open
+		and not spawn_menu_open
+	)
+	et_hud_root.visible = hud_visible
+
 func _build_hud() -> void:
 	var layer := CanvasLayer.new(); add_child(layer)
 	hud = Label.new(); hud.position = Vector2(18, 18); hud.add_theme_font_size_override("font_size", 18); layer.add_child(hud)
@@ -3506,6 +3763,28 @@ func _build_hud() -> void:
 	scoreboard.visible = false
 	layer.add_child(scoreboard)
 	feed = Label.new(); feed.position = Vector2(930, 24); feed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; feed.custom_minimum_size = Vector2(320, 150); layer.add_child(feed)
+
+	# Framed TAB results panel.
+	scoreboard_panel = PanelContainer.new()
+	scoreboard_panel.position = Vector2(135, 55)
+	scoreboard_panel.size = Vector2(1010, 610)
+	scoreboard_panel.add_theme_stylebox_override(
+		"panel",
+		_hud_panel_style(
+			Color(0.025, 0.030, 0.028, 0.94),
+			Color(0.53, 0.48, 0.30, 0.98),
+			3,
+			8
+		)
+	)
+	scoreboard_panel.visible = false
+	layer.add_child(scoreboard_panel)
+	scoreboard.reparent(scoreboard_panel)
+	scoreboard.position = Vector2.ZERO
+	scoreboard.custom_minimum_size = Vector2(970, 570)
+	scoreboard.add_theme_font_size_override("font_size", 16)
+
+	_build_et_style_hud(layer)
 
 func _radar_position(world_position: Vector3, radius_meters: float = 42.0) -> Vector2:
 	var relative: Vector3 = world_position - global_position
@@ -4061,6 +4340,9 @@ func _update_hud() -> void:
 		ability_state
 	]
 	scoreboard.visible = Input.is_action_pressed("scoreboard")
+	if scoreboard_panel != null:
+		scoreboard_panel.visible = scoreboard.visible
 	if scoreboard.visible:
 		scoreboard.text = str(main.call("scoreboard_text"))
+	_update_et_style_hud(main, names)
 	feed.text = "\n".join(main.kill_feed)
