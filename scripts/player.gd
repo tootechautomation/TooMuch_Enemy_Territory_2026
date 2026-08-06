@@ -17,6 +17,9 @@ const RealAssetAdapterScript = preload(
 )
 
 const RadarCompassScript = preload("res://scripts/radar_compass.gd")
+const FirstPersonWeaponFidelityScript = preload(
+	"res://scripts/visuals/first_person_weapon_fidelity.gd"
+)
 
 
 enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
@@ -4230,6 +4233,13 @@ func _rebuild_first_person_weapon() -> void:
 		front_sight.material_override = metal
 		weapon_view.add_child(front_sight)
 
+	FirstPersonWeaponFidelityScript.decorate(
+		weapon_view,
+		is_pistol,
+		player_class,
+		metal,
+		wood
+	)
 	muzzle_flash = MeshInstance3D.new()
 	var flash_mesh := SphereMesh.new()
 	flash_mesh.radius = 0.045 if is_pistol else 0.06
@@ -5354,6 +5364,14 @@ func _update_first_person_animation(delta: float) -> void:
 	elif aim_requested:
 		target_position.y += 0.02
 		target_position.z -= 0.06
+	elif is_reloading:
+		var reload_motion := sin(visual_animation_time * 4.8)
+		target_position.y -= 0.20
+		target_position.x += 0.10 + reload_motion * 0.035
+		target_position.z += 0.10
+		target_rotation.x += 0.32
+		target_rotation.y -= 0.18 + reload_motion * 0.055
+		target_rotation.z += 0.30
 	else:
 		target_rotation.y += sin(visual_animation_time * 1.4) * 0.008
 		target_rotation.x += cos(visual_animation_time * 1.1) * 0.006

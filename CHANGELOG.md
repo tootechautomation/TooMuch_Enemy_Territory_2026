@@ -1,5 +1,13 @@
 # Changelog
 
+## 8.9.0
+- Added detailed magazines, triggers, ejection ports, controls, barrel hardware, and sling fittings to fallback first-person weapons
+- Added a detailed fallback pistol slide, chamber, sights, magazine, grip panels, and controls
+- Added class-specific LMG, SMG, carbine, field-ops, and marksman weapon details
+- Added a lowered and rolled first-person reload pose with subtle hand-work movement
+- Preserved imported weapon overrides, combat balance, networking, earlier milestones, and protocol 341
+
+
 ## 8.8.0
 - Added layered period facades with recessed doors, windows, stone bases, lintels, and sills
 - Added iron balconies, warm street lamps, chimneys, and stronger roof silhouettes
