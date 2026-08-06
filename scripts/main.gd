@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "4.9.0"
+const BUILD_VERSION := "5.0.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -807,6 +807,224 @@ func _build_high_fidelity_environment_pass() -> void:
 	_set_environment_property_if_available(&"adjustment_contrast", 1.08)
 	_set_environment_property_if_available(&"adjustment_saturation", 0.88)
 	_set_environment_property_if_available(&"adjustment_brightness", 1.02)
+
+func _make_wooden_fence(
+	node_name: String,
+	position: Vector3,
+	length: int,
+	rotation_y: float = 0.0
+) -> void:
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+
+	var wood_material := StandardMaterial3D.new()
+	wood_material.albedo_color = Color(0.25, 0.15, 0.075)
+	wood_material.roughness = 0.96
+
+	for index in range(length + 1):
+		var post := MeshInstance3D.new()
+		var post_mesh := BoxMesh.new()
+		post_mesh.size = Vector3(0.16, 1.55, 0.16)
+		post.mesh = post_mesh
+		post.position = Vector3(
+			float(index) * 1.35 - float(length) * 0.675,
+			0.78,
+			0.0
+		)
+		post.material_override = wood_material
+		root.add_child(post)
+
+	for rail_y in [0.55, 1.12]:
+		var rail := MeshInstance3D.new()
+		var rail_mesh := BoxMesh.new()
+		rail_mesh.size = Vector3(
+			float(length) * 1.35,
+			0.13,
+			0.12
+		)
+		rail.mesh = rail_mesh
+		rail.position = Vector3(0.0, rail_y, 0.0)
+		rail.material_override = wood_material
+		root.add_child(rail)
+
+func _make_telegraph_pole(
+	node_name: String,
+	position: Vector3
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	add_child(root)
+
+	var wood_material := StandardMaterial3D.new()
+	wood_material.albedo_color = Color(0.20, 0.115, 0.055)
+	wood_material.roughness = 0.95
+
+	var pole := MeshInstance3D.new()
+	var pole_mesh := CylinderMesh.new()
+	pole_mesh.top_radius = 0.09
+	pole_mesh.bottom_radius = 0.14
+	pole_mesh.height = 6.6
+	pole.mesh = pole_mesh
+	pole.position.y = 3.3
+	pole.material_override = wood_material
+	root.add_child(pole)
+
+	var crossbar := MeshInstance3D.new()
+	var crossbar_mesh := BoxMesh.new()
+	crossbar_mesh.size = Vector3(2.4, 0.16, 0.16)
+	crossbar.mesh = crossbar_mesh
+	crossbar.position.y = 6.05
+	crossbar.material_override = wood_material
+	root.add_child(crossbar)
+
+	for insulator_x in [-0.85, 0.0, 0.85]:
+		var insulator := MeshInstance3D.new()
+		var insulator_mesh := CylinderMesh.new()
+		insulator_mesh.top_radius = 0.08
+		insulator_mesh.bottom_radius = 0.12
+		insulator_mesh.height = 0.24
+		insulator.mesh = insulator_mesh
+		insulator.position = Vector3(insulator_x, 6.25, 0.0)
+		var ceramic := StandardMaterial3D.new()
+		ceramic.albedo_color = Color(0.28, 0.32, 0.30)
+		ceramic.roughness = 0.38
+		insulator.material_override = ceramic
+		root.add_child(insulator)
+
+func _make_shell_crater(
+	node_name: String,
+	position: Vector3,
+	radius: float
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var crater := MeshInstance3D.new()
+	crater.name = node_name
+	var mesh := TorusMesh.new()
+	mesh.inner_radius = radius * 0.52
+	mesh.outer_radius = radius
+	mesh.rings = 22
+	mesh.ring_segments = 32
+	crater.mesh = mesh
+	crater.position = position + Vector3(0.0, 0.035, 0.0)
+	crater.rotation_degrees.x = 90.0
+	crater.scale.y = 0.25
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.16, 0.12, 0.075)
+	material.roughness = 1.0
+	crater.material_override = material
+	add_child(crater)
+
+func _make_direction_sign(
+	node_name: String,
+	position: Vector3,
+	rotation_y: float,
+	label_text: String
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+
+	var post := MeshInstance3D.new()
+	var post_mesh := BoxMesh.new()
+	post_mesh.size = Vector3(0.15, 2.1, 0.15)
+	post.mesh = post_mesh
+	post.position.y = 1.05
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.23, 0.14, 0.07)
+	wood.roughness = 0.96
+	post.material_override = wood
+	root.add_child(post)
+
+	var board := MeshInstance3D.new()
+	var board_mesh := BoxMesh.new()
+	board_mesh.size = Vector3(2.25, 0.62, 0.10)
+	board.mesh = board_mesh
+	board.position = Vector3(0.0, 1.82, 0.0)
+	board.material_override = wood
+	root.add_child(board)
+
+	var label := Label3D.new()
+	label.text = label_text
+	label.position = Vector3(0.0, 1.82, -0.065)
+	label.font_size = 28
+	label.outline_size = 5
+	label.modulate = Color(0.88, 0.84, 0.67)
+	label.fixed_size = false
+	root.add_child(label)
+
+func _build_battlefield_dressing_pass() -> void:
+	for fence_data in [
+		["WestRoadFenceA", Vector3(-43.0,0.0,-39.0), 10, 0.0],
+		["WestRoadFenceB", Vector3(-31.0,0.0,42.0), 12, 0.08],
+		["RailFenceA", Vector3(20.0,0.0,-34.0), 9, 0.0],
+		["FortFenceA", Vector3(43.0,0.0,39.0), 8, 1.57]
+	]:
+		_make_wooden_fence(
+			str(fence_data[0]),
+			Vector3(fence_data[1]),
+			int(fence_data[2]),
+			float(fence_data[3])
+		)
+
+	for pole_position in [
+		Vector3(-48.0,0.0,-34.0),
+		Vector3(-32.0,0.0,-34.0),
+		Vector3(-16.0,0.0,-34.0),
+		Vector3(12.0,0.0,-34.0),
+		Vector3(28.0,0.0,-34.0),
+		Vector3(44.0,0.0,-34.0)
+	]:
+		_make_telegraph_pole(
+			"Telegraph_%s" % str(pole_position),
+			pole_position
+		)
+
+	for crater_data in [
+		[Vector3(-16.0,0.0,-8.0), 1.6],
+		[Vector3(5.0,0.0,14.0), 2.0],
+		[Vector3(18.0,0.0,-29.0), 1.4],
+		[Vector3(38.0,0.0,7.0), 1.8],
+		[Vector3(-37.0,0.0,28.0), 1.5]
+	]:
+		_make_shell_crater(
+			"Crater_%s" % str(crater_data[0]),
+			Vector3(crater_data[0]),
+			float(crater_data[1])
+		)
+
+	_make_direction_sign(
+		"VillageSign",
+		Vector3(-27.0,0.0,-18.0),
+		deg_to_rad(8.0),
+		"VILLAGE  →"
+	)
+	_make_direction_sign(
+		"RailSign",
+		Vector3(11.0,0.0,-25.0),
+		deg_to_rad(-4.0),
+		"RAIL DEPOT  →"
+	)
+	_make_direction_sign(
+		"FortSign",
+		Vector3(20.0,0.0,19.0),
+		deg_to_rad(18.0),
+		"FORT  →"
+	)
 
 func _load_optional_scene(path: String) -> PackedScene:
 	if DisplayServer.get_name() == "headless":
@@ -5385,6 +5603,7 @@ func _build_world() -> void:
 	_initialize_battlefield_particles()
 	_build_breakable_environment()
 	_build_high_fidelity_environment_pass()
+	_build_battlefield_dressing_pass()
 
 	# Combined-arms battlefield expansion.
 	_make_static_box(

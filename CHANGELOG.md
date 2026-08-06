@@ -1,11 +1,10 @@
 # Changelog
 
-## 4.9.0
-- Rebuilt end-of-round results overlay
-- Replaced stacking announcements with one timed banner
-- Hid normal HUD, radar, feed, and TAB scoreboard during round results
-- Added live restart countdown
-- Reduced world-label sizes and visibility ranges
-- Compact scoreboard dimensions and typography
-- Subdued third-person material response
+## 5.0.0
+- Replaced compass texture with native Godot-drawn compass
+- Added top-right anchored radar layout
+- Added circular marker clamping
+- Added objective-bearing diamond and direction arrow
+- Added fences, telegraph poles, craters, and military signs
+- Reduced first-person weapon obstruction
 - Preserved protocol 341 and explicit connection-string `+`

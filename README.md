@@ -1,38 +1,37 @@
 # Frontline: Objective
 
-## Version 4.9.0 Presentation & Character Clarity
+## Version 5.0.0 Visual Identity & Battlefield Detail
 
-### End-of-round presentation
-- Replaced overlapping victory labels with one reusable announcement banner.
-- Rebuilt the round-results screen as a centered, dimmed overlay.
-- The normal HUD, compass, kill feed, and TAB scoreboard hide during results.
-- TAB can no longer open a second scoreboard over the final results.
-- Added a clean live round-restart countdown.
-- Reduced the final results content to fit the available viewport.
+### Compass correction
+- Replaced the imported compass-frame texture with a native Godot Control.
+- The circular compass is drawn at runtime and cannot crop off-screen.
+- Uses top-right anchoring rather than fixed screen coordinates.
+- Compass ticks rotate relative to player heading.
+- Objective bearing is displayed as a gold diamond.
+- Team affiliation appears as a colored inner arc.
+- Radar markers are clamped inside the circular map boundary.
 
-### World-label cleanup
-- Teammate names, class labels, revive markers, and spotted markers scale with
-  world distance.
-- Reduced label font and outline sizes.
-- Reduced teammate-name visibility to close combat distances.
-- Reduced class-label and spotted-enemy ranges.
-- Enabled normal depth testing for spotted markers.
+### Objective guidance
+- Added a centered objective direction arrow.
+- Arrow points left, right, or forward.
+- Existing objective distance and heading remain visible.
 
-### Scoreboard improvements
-- Narrower framed panel.
-- Smaller, more readable typography.
-- Better fit at 1280x720 while retaining responsive HUD scaling.
-- Separate Attackers and Defenders sections remain.
+### Battlefield detail
+- Added wooden roadside and perimeter fences.
+- Added telegraph poles and ceramic insulators.
+- Added shell craters throughout contested areas.
+- Added village, rail-depot, and fort direction signs.
+- All new dressing is graphical-client safe and headless compatible.
 
-### Character clarity
-- Third-person materials use more subdued, rough WWII uniform surfaces.
-- Existing team colors and class accents remain readable without appearing
-  fluorescent.
-- Existing locomotion, crouch, gear movement, and first-person body hiding remain.
+### First-person presentation
+- Reduced imported rifle and pistol visual scale.
+- Shifted the primary weapon slightly right and down.
+- Weapon now blocks less of the center view.
+- Existing arms, recoil, sway, smoke, shell ejection, and ADS remain.
 
 ### Compatibility
-- Build: v4.9.0
+- Build: v5.0.0
 - Protocol: 341
 - Explicit connection-message `+` retained.
 
-Expected status: `Connected: v4.9.0 protocol 341`
+Expected status: `Connected: v5.0.0 protocol 341`

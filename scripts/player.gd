@@ -1,5 +1,7 @@
 extends CharacterBody3D
 
+const RadarCompassScript = preload("res://scripts/radar_compass.gd")
+
 
 enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
 
@@ -214,9 +216,10 @@ var hud_canvas_layer: CanvasLayer
 var hud_base_resolution := Vector2(1280.0, 720.0)
 var hud_last_viewport_size := Vector2.ZERO
 var radar_frame_texture: Texture2D
-var radar_frame_rect: TextureRect
+var radar_frame_rect: Control
 var et_compass_label: Label
 var et_objective_distance_label: Label
+var et_objective_arrow_label: Label
 var visual_stride_phase := 0.0
 var visual_last_speed := 0.0
 var bot_route_index := 0
@@ -300,12 +303,12 @@ func _build_imported_first_person_weapon(
 	imported_root.position = (
 		Vector3(0.0, 0.0, 0.06)
 		if is_pistol
-		else Vector3(0.0, 0.02, 0.12)
+		else Vector3(0.08, 0.07, 0.17)
 	)
 	imported_root.scale = (
-		Vector3.ONE * 0.95
+		Vector3(0.88, 0.88, 0.92)
 		if is_pistol
-		else Vector3.ONE * 0.88
+		else Vector3(0.80, 0.82, 0.86)
 	)
 	weapon_view.add_child(imported_root)
 	_apply_first_person_materials(imported_root)
@@ -385,9 +388,6 @@ func _ready() -> void:
 		fp_wood_normal = _load_optional_texture("res://assets/pbr/wood_normal.png")
 		fp_wood_roughness = _load_optional_texture("res://assets/pbr/wood_roughness.png")
 		muzzle_smoke_texture = _load_optional_texture("res://assets/fx/muzzle_smoke.png")
-		radar_frame_texture = _load_optional_texture(
-			"res://assets/hud/radar_compass_frame.png"
-		)
 
 	_initialize_loadout()
 	if is_bot and not bot_role_initialized:
@@ -3418,6 +3418,22 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 	)
 	et_hud_root.add_child(et_objective_distance_label)
 
+	et_objective_arrow_label = Label.new()
+	et_objective_arrow_label.position = Vector2(620, 146)
+	et_objective_arrow_label.custom_minimum_size = Vector2(40, 28)
+	et_objective_arrow_label.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_CENTER
+	)
+	et_objective_arrow_label.add_theme_font_size_override(
+		"font_size",
+		25
+	)
+	et_objective_arrow_label.add_theme_color_override(
+		"font_color",
+		Color(1.0, 0.78, 0.12)
+	)
+	et_hud_root.add_child(et_objective_arrow_label)
+
 	var left_box := _make_et_panel(
 		et_hud_root,
 		Vector2(18, 570),
@@ -3551,6 +3567,20 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 	et_objective_distance_label.text = "OBJECTIVE %dm" % int(round(
 		global_position.distance_to(objective_position)
 	))
+
+	var objective_local: Vector3 = global_transform.basis.inverse() * (
+		objective_position - global_position
+	)
+	var horizontal_angle: float = atan2(
+		objective_local.x,
+		-objective_local.z
+	)
+	if absf(horizontal_angle) < 0.22:
+		et_objective_arrow_label.text = "▲"
+	elif horizontal_angle > 0.0:
+		et_objective_arrow_label.text = "▶"
+	else:
+		et_objective_arrow_label.text = "◀"
 
 	et_team_label.text = "%s · %s" % [
 		team_name,
@@ -3847,24 +3877,24 @@ func _build_hud() -> void:
 
 	radar_panel = Control.new()
 	radar_panel.name = "TacticalRadar"
-	radar_panel.position = Vector2(1082, 18)
-	radar_panel.size = Vector2(180, 180)
-	radar_panel.clip_contents = true
+	radar_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	radar_panel.position = Vector2(-202, 18)
+	radar_panel.size = Vector2(184, 184)
+	radar_panel.clip_contents = false
 	radar_panel.visible = false
 	layer.add_child(radar_panel)
 
-	radar_frame_rect = TextureRect.new()
-	radar_frame_rect.texture = radar_frame_texture
-	radar_frame_rect.position = Vector2(0, 0)
-	radar_frame_rect.size = Vector2(180, 180)
-	radar_frame_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	radar_frame_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	radar_frame_rect = Control.new()
+	radar_frame_rect.name = "NativeCompass"
+	radar_frame_rect.set_script(RadarCompassScript)
+	radar_frame_rect.position = Vector2.ZERO
+	radar_frame_rect.size = Vector2(184, 184)
 	radar_frame_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	radar_panel.add_child(radar_frame_rect)
 
 	var radar_title := Label.new()
 	radar_title.text = "FIELD COMPASS"
-	radar_title.position = Vector2(28, 5)
+	radar_title.position = Vector2(30, 6)
 	radar_title.custom_minimum_size = Vector2(124, 20)
 	radar_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	radar_title.add_theme_font_size_override("font_size", 11)
@@ -3875,9 +3905,8 @@ func _build_hud() -> void:
 	radar_panel.add_child(radar_title)
 
 	radar_objective = Label.new()
-	radar_objective.text = "◆"
-	radar_objective.add_theme_font_size_override("font_size", 18)
-	radar_objective.modulate = Color(1.0, 0.78, 0.12)
+	radar_objective.text = ""
+	radar_objective.visible = false
 	radar_panel.add_child(radar_objective)
 
 	scoreboard = Label.new()
@@ -3941,11 +3970,15 @@ func _radar_position(world_position: Vector3, radius_meters: float = 42.0) -> Ve
 	relative.y = 0.0
 	var local_x: float = relative.dot(global_transform.basis.x)
 	var local_forward: float = relative.dot(-global_transform.basis.z)
-	var scale_factor: float = 68.0 / radius_meters
-	return Vector2(
-		90.0 + clampf(local_x * scale_factor, -68.0, 68.0),
-		90.0 - clampf(local_forward * scale_factor, -68.0, 68.0)
+	var scale_factor: float = 58.0 / radius_meters
+	var result := Vector2(
+		92.0 + clampf(local_x * scale_factor, -58.0, 58.0),
+		92.0 - clampf(local_forward * scale_factor, -58.0, 58.0)
 	)
+	var centered: Vector2 = result - Vector2(92.0, 92.0)
+	if centered.length() > 58.0:
+		centered = centered.normalized() * 58.0
+	return centered + Vector2(92.0, 92.0)
 
 func _get_or_create_radar_actor(actor_id: int) -> Label:
 	if radar_actor_markers.has(actor_id):
@@ -3990,10 +4023,35 @@ func _update_radar() -> void:
 		if objective_node != null:
 			objective_position = objective_node.global_position
 
-	if radar_objective != null:
-		radar_objective.position = (
-			_radar_position(objective_position)
-			- Vector2(7, 10)
+	if radar_frame_rect != null and radar_frame_rect.has_method(
+		"set_compass_state"
+	):
+		var objective_relative: Vector3 = (
+			objective_position - global_position
+		)
+		var objective_bearing: float = fposmod(
+			rad_to_deg(
+				atan2(
+					objective_relative.x,
+					-objective_relative.z
+				)
+			),
+			360.0
+		)
+		var heading: float = fposmod(
+			rad_to_deg(rotation.y) + 180.0,
+			360.0
+		)
+		radar_frame_rect.call(
+			"set_compass_state",
+			heading,
+			(
+				Color(0.18, 0.72, 1.0)
+				if team == 0
+				else Color(1.0, 0.28, 0.20)
+			),
+			objective_bearing,
+			true
 		)
 
 	var active_ids: Dictionary = {}
