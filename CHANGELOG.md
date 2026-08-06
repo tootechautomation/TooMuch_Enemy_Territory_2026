@@ -1,12 +1,10 @@
 # Changelog
 
-## 5.1.0
-- Shortened and faded bullet tracers
-- Reduced impact flashes
-- Added first-person muzzle lighting
-- Reduced crosshair and objective-arrow size
-- Added road barricades
-- Added burning barrels and local fire lighting
-- Added battlefield smoke columns
-- Added objective-zone lighting
+## 5.2.0
+- Added northern urban lane and southern flank lane
+- Added eight open-entry buildings
+- Added underground sewer route and access ramps
+- Added dedicated team staging zones
+- Expanded spawn candidates and safety validation
+- Added route cover and objective route hints
 - Preserved protocol 341 and explicit connection-string `+`

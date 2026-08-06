@@ -221,6 +221,7 @@ var radar_frame_rect: Control
 var et_compass_label: Label
 var et_objective_distance_label: Label
 var et_objective_arrow_label: Label
+var et_route_hint_label: Label
 var visual_stride_phase := 0.0
 var visual_last_speed := 0.0
 var bot_route_index := 0
@@ -3467,6 +3468,17 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 	)
 	et_hud_root.add_child(et_objective_arrow_label)
 
+	et_route_hint_label = Label.new()
+	et_route_hint_label.position = Vector2(470, 166)
+	et_route_hint_label.custom_minimum_size = Vector2(340, 22)
+	et_route_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	et_route_hint_label.add_theme_font_size_override("font_size", 12)
+	et_route_hint_label.add_theme_color_override(
+		"font_color",
+		Color(0.78,0.80,0.72,0.86)
+	)
+	et_hud_root.add_child(et_route_hint_label)
+
 	var left_box := _make_et_panel(
 		et_hud_root,
 		Vector2(18, 570),
@@ -3614,6 +3626,12 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 		et_objective_arrow_label.text = "▶"
 	else:
 		et_objective_arrow_label.text = "◀"
+
+	et_route_hint_label.text = (
+		"NORTH STREET · CENTRAL ROAD · SOUTH FLANK · SEWER"
+		if int(main.get("objective_stage")) == 0
+		else "RAIL YARD · FORT APPROACH · SOUTH ANNEX"
+	)
 
 	et_team_label.text = "%s · %s" % [
 		team_name,

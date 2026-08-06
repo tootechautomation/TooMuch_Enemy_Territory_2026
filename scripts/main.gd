@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.1.0"
+const BUILD_VERSION := "5.2.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -120,18 +120,22 @@ var destructible_covers: Dictionary = {}
 var next_cover_id := 1
 var spawn_points := {
 	0: [
-		Vector3(-16.0, 1.0, 0.0),
-		Vector3(-16.0, 1.0, 6.5),
-		Vector3(-16.0, 1.0, -6.5),
-		Vector3(-12.5, 1.0, 8.0),
-		Vector3(-12.5, 1.0, -8.0)
+		Vector3(-54.0, 1.2, -18.0),
+		Vector3(-54.0, 1.2, -10.0),
+		Vector3(-54.0, 1.2, -2.0),
+		Vector3(-50.0, 1.2, -22.0),
+		Vector3(-50.0, 1.2, 2.0),
+		Vector3(-46.0, 1.2, -14.0),
+		Vector3(-46.0, 1.2, -6.0)
 	],
 	1: [
-		Vector3(16.0, 1.0, 0.0),
-		Vector3(16.0, 1.0, 6.5),
-		Vector3(16.0, 1.0, -6.5),
-		Vector3(12.5, 1.0, 8.0),
-		Vector3(12.5, 1.0, -8.0)
+		Vector3(55.0, 1.2, 18.0),
+		Vector3(55.0, 1.2, 10.0),
+		Vector3(55.0, 1.2, 2.0),
+		Vector3(51.0, 1.2, 22.0),
+		Vector3(51.0, 1.2, -2.0),
+		Vector3(47.0, 1.2, 14.0),
+		Vector3(47.0, 1.2, 6.0)
 	]
 }
 var next_team := 0
@@ -1267,6 +1271,193 @@ func _build_combat_atmosphere_pass() -> void:
 		Vector3(34.0,2.2,28.0),
 		Color(0.70,0.25,0.16)
 	)
+
+func _make_gameplay_block(
+	node_name: String,
+	position: Vector3,
+	size: Vector3,
+	color: Color,
+	rotation_y: float = 0.0
+) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = node_name
+	body.position = position
+	body.rotation.y = rotation_y
+	add_child(body)
+
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	collision.shape = shape
+	body.add_child(collision)
+
+	if DisplayServer.get_name() != "headless":
+		var visual := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = size
+		visual.mesh = mesh
+		var material := StandardMaterial3D.new()
+		material.albedo_color = color
+		material.roughness = 0.92
+		visual.material_override = material
+		body.add_child(visual)
+	return body
+
+func _make_open_building(
+	node_name: String,
+	position: Vector3,
+	width: float,
+	depth: float,
+	height: float,
+	rotation_y: float,
+	wall_color: Color
+) -> Node3D:
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+
+	var thickness := 0.42
+	var doorway_width := 2.3
+	var side_width: float = (width - doorway_width) * 0.5
+
+	var part_data: Array = [
+		["Floor", Vector3(0.0,0.10,0.0), Vector3(width,0.20,depth), Color(0.24,0.24,0.22)],
+		["Back", Vector3(0.0,height*0.5,depth*0.5), Vector3(width,height,thickness), wall_color],
+		["Left", Vector3(-width*0.5,height*0.5,0.0), Vector3(thickness,height,depth), wall_color],
+		["Right", Vector3(width*0.5,height*0.5,0.0), Vector3(thickness,height,depth), wall_color],
+		["FrontLeft", Vector3(-(doorway_width+side_width)*0.5,height*0.5,-depth*0.5), Vector3(side_width,height,thickness), wall_color],
+		["FrontRight", Vector3((doorway_width+side_width)*0.5,height*0.5,-depth*0.5), Vector3(side_width,height,thickness), wall_color],
+		["Roof", Vector3(0.0,height+0.16,0.0), Vector3(width+0.35,0.32,depth+0.35), Color(0.13,0.15,0.16)]
+	]
+	for item in part_data:
+		var part := _make_gameplay_block(
+			"%s_%s" % [node_name, str(item[0])],
+			position,
+			Vector3(item[2]),
+			Color(item[3]),
+			rotation_y
+		)
+		part.reparent(root)
+		part.position = Vector3(item[1])
+		part.rotation.y = 0.0
+	return root
+
+func _make_tunnel_segment(
+	node_name: String,
+	position: Vector3,
+	length: float,
+	rotation_y: float
+) -> Node3D:
+	var root := Node3D.new()
+	root.name = node_name
+	root.position = position
+	root.rotation.y = rotation_y
+	add_child(root)
+
+	var width := 4.4
+	var height := 3.4
+	var concrete := Color(0.30,0.31,0.29)
+	var tunnel_parts: Array = [
+		["Floor", Vector3(0.0,-0.12,0.0), Vector3(width,0.24,length)],
+		["Ceiling", Vector3(0.0,height,0.0), Vector3(width,0.34,length)],
+		["LeftWall", Vector3(-width*0.5,height*0.5,0.0), Vector3(0.42,height,length)],
+		["RightWall", Vector3(width*0.5,height*0.5,0.0), Vector3(0.42,height,length)]
+	]
+	for item in tunnel_parts:
+		var part := _make_gameplay_block(
+			"%s_%s" % [node_name, str(item[0])],
+			position,
+			Vector3(item[2]),
+			concrete,
+			rotation_y
+		)
+		part.reparent(root)
+		part.position = Vector3(item[1])
+		part.rotation.y = 0.0
+
+	if DisplayServer.get_name() != "headless":
+		for lamp_z in range(int(-length*0.5+4.0), int(length*0.5), 8):
+			var light := OmniLight3D.new()
+			light.position = Vector3(0.0,2.75,float(lamp_z))
+			light.light_color = Color(1.0,0.62,0.28)
+			light.light_energy = 0.65
+			light.omni_range = 5.0
+			light.shadow_enabled = false
+			root.add_child(light)
+	return root
+
+func _make_spawn_staging_area(team_id: int, position: Vector3) -> void:
+	var team_color := Color(0.15,0.30,0.42) if team_id == 0 else Color(0.40,0.16,0.12)
+	var facing := 0.0 if team_id == 0 else PI
+	_make_open_building(
+		"AttackerStaging" if team_id == 0 else "DefenderStaging",
+		position, 15.0, 10.0, 4.2, facing, team_color
+	)
+	for cover_data in [
+		Vector3(-5.0,0.65,-6.0),
+		Vector3(0.0,0.65,-6.0),
+		Vector3(5.0,0.65,-6.0)
+	]:
+		var offset := cover_data.rotated(Vector3.UP, facing)
+		_make_gameplay_block(
+			"StagingCover_%d_%s" % [team_id, str(cover_data.x)],
+			position + offset,
+			Vector3(3.0,1.3,0.75),
+			Color(0.29,0.23,0.15),
+			facing
+		)
+
+func _build_map_expansion_pass() -> void:
+	_make_spawn_staging_area(0, Vector3(-52.0,0.0,-10.0))
+	_make_spawn_staging_area(1, Vector3(52.0,0.0,10.0))
+
+	for building_data in [
+		["NorthApartmentA",Vector3(-31.0,0.0,-50.0),13.0,11.0,6.5,0.0,Color(0.48,0.42,0.34)],
+		["NorthApartmentB",Vector3(-12.0,0.0,-50.0),12.0,10.0,6.0,0.04,Color(0.40,0.34,0.29)],
+		["NorthWorkshop",Vector3(10.0,0.0,-50.0),15.0,11.0,5.0,-0.03,Color(0.38,0.31,0.25)],
+		["NorthWarehouseAnnex",Vector3(34.0,0.0,-49.0),17.0,12.0,5.8,0.02,Color(0.35,0.30,0.27)],
+		["SouthFarmhouse",Vector3(-34.0,0.0,51.0),13.0,11.0,5.8,PI,Color(0.48,0.43,0.34)],
+		["SouthMachineShop",Vector3(-10.0,0.0,51.0),16.0,11.0,5.2,PI,Color(0.34,0.31,0.27)],
+		["SouthBarracks",Vector3(18.0,0.0,51.0),17.0,12.0,5.8,PI,Color(0.39,0.34,0.28)],
+		["SouthFortAnnex",Vector3(42.0,0.0,50.0),13.0,10.0,5.2,PI,Color(0.31,0.31,0.29)]
+	]:
+		_make_open_building(
+			str(building_data[0]), Vector3(building_data[1]),
+			float(building_data[2]), float(building_data[3]),
+			float(building_data[4]), float(building_data[5]),
+			Color(building_data[6])
+		)
+
+	_make_tunnel_segment("VillageSewerWest",Vector3(-29.0,-3.3,10.0),26.0,PI*0.5)
+	_make_tunnel_segment("VillageSewerEast",Vector3(-5.0,-3.3,10.0),24.0,PI*0.5)
+
+	for ramp_data in [
+		["SewerRampWest",Vector3(-43.0,-1.5,10.0),deg_to_rad(-16.0)],
+		["SewerRampEast",Vector3(8.0,-1.5,10.0),deg_to_rad(16.0)]
+	]:
+		var ramp := _make_gameplay_block(
+			str(ramp_data[0]), Vector3(ramp_data[1]),
+			Vector3(10.0,0.45,4.0), Color(0.27,0.27,0.25), PI*0.5
+		)
+		ramp.rotation.z = float(ramp_data[2])
+
+	for cover_data in [
+		[Vector3(-39.0,0.8,-37.0),0.18],
+		[Vector3(-20.0,0.8,-37.0),-0.14],
+		[Vector3(2.0,0.8,-38.0),0.10],
+		[Vector3(25.0,0.8,-38.0),-0.12],
+		[Vector3(-36.0,0.8,38.0),-0.10],
+		[Vector3(-14.0,0.8,38.0),0.12],
+		[Vector3(10.0,0.8,38.0),-0.15],
+		[Vector3(34.0,0.8,38.0),0.13]
+	]:
+		_make_gameplay_block(
+			"RouteCover_%s" % str(cover_data[0]),
+			Vector3(cover_data[0]), Vector3(4.2,1.6,0.8),
+			Color(0.31,0.24,0.15), float(cover_data[1])
+		)
 
 func _load_optional_scene(path: String) -> PackedScene:
 	if DisplayServer.get_name() == "headless":
@@ -4012,6 +4203,9 @@ func _get_spawn(team: int, peer_id: int) -> Vector3:
 	)
 	return emergency
 
+func _spawn_enemy_staging_position(team_id: int) -> Vector3:
+	return Vector3(52.0,0.0,10.0) if team_id == 0 else Vector3(-52.0,0.0,-10.0)
+
 func _validate_spawn_candidate(
 	base_candidate: Vector3,
 	peer_id: int
@@ -4136,6 +4330,16 @@ func _validate_spawn_candidate(
 				"valid": false,
 				"position": spawn_position
 			}
+
+	var spawn_team := 0
+	if player_teams.has(peer_id):
+		spawn_team = int(player_teams[peer_id])
+	var enemy_staging := _spawn_enemy_staging_position(spawn_team)
+	if spawn_position.distance_to(enemy_staging) < 18.0:
+		return {
+			"valid": false,
+			"position": spawn_position
+		}
 
 	return {
 		"valid": true,
@@ -5854,6 +6058,7 @@ func _build_world() -> void:
 	_build_high_fidelity_environment_pass()
 	_build_battlefield_dressing_pass()
 	_build_combat_atmosphere_pass()
+	_build_map_expansion_pass()
 
 	# Combined-arms battlefield expansion.
 	_make_static_box(
