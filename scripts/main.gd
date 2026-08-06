@@ -6,6 +6,9 @@ const PlayerProfileScript = preload(
 const InputBindingManagerScript = preload(
 	"res://scripts/profile/input_binding_manager.gd"
 )
+const AdaptiveMusicDirectorScript = preload(
+	"res://scripts/adaptive_music_director.gd"
+)
 const ServerProgressionStoreScript = preload(
 	"res://scripts/profile/server_progression_store.gd"
 )
@@ -69,7 +72,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.10.0"
+const BUILD_VERSION := "8.11.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -297,6 +300,7 @@ var cinematic_environment_pass: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
+var adaptive_music_director: Node
 var bridge_beacon: OmniLight3D
 var bunker_beacon: OmniLight3D
 var spawn_beams: Array[Node3D] = []
@@ -379,6 +383,7 @@ func _ready() -> void:
 
 	if DisplayServer.get_name() != "headless":
 		_initialize_battlefield_ambience()
+		_initialize_adaptive_music()
 		tex_metal = _load_optional_texture(
 			"res://assets/textures/metal_panel.png"
 		)
@@ -528,6 +533,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
+	_update_adaptive_music()
 	atmosphere_elapsed += delta
 	_update_immersive_visuals()
 	_update_objective_visuals()
@@ -664,9 +670,41 @@ func _initialize_battlefield_ambience() -> void:
 		ambience_wav.loop_begin = 0
 		ambience_wav.loop_end = int(ambience_wav.data.size() / 2)
 	ambience_player.bus = "Music"
-	ambience_player.volume_db = -15.0
+	ambience_player.volume_db = -20.0
 	add_child(ambience_player)
 	ambience_player.play()
+
+func _initialize_adaptive_music() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if adaptive_music_director != null:
+		return
+	adaptive_music_director = AdaptiveMusicDirectorScript.new()
+	adaptive_music_director.name = "AdaptiveMusicDirector"
+	add_child(adaptive_music_director)
+	adaptive_music_director.call("initialize")
+
+func _update_adaptive_music() -> void:
+	if adaptive_music_director == null:
+		return
+	var pressure := 0.08
+	if dynamite_armed:
+		pressure += 0.68
+	if command_post_contested:
+		pressure += 0.28
+	if supply_depot_contested:
+		pressure += 0.22
+	for contested_value in sector_contested.values():
+		if bool(contested_value):
+			pressure += 0.10
+	pressure += (1.0 - clampf(float(objective_health) / 100.0, 0.0, 1.0)) * 0.22
+	if match_time_remaining <= 90.0:
+		pressure += 0.20
+	if overtime_active:
+		pressure = 1.0
+	if match_over:
+		pressure = 0.0
+	adaptive_music_director.call("set_intensity", clampf(pressure, 0.0, 1.0))
 
 func _create_spawn_beam(position: Vector3, team_id: int) -> void:
 	if DisplayServer.get_name() == "headless":

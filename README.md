@@ -1,12 +1,12 @@
 # Frontline: Objective
 
-## Version 8.10.0 — Articulated Soldier Motion
+## Version 8.11.0 — Adaptive Battlefield Score
 
-The upgraded fallback soldiers now receive animation through their actual articulated joint hierarchy. Locomotion drives shoulder, hip, and knee joints; aiming establishes a supported weapon pose; crouching lowers the stance with bent knees; reloading uses asymmetric hand-work; idle soldiers breathe and scan subtly; and incapacitated soldiers settle into a grounded pose.
+Frontline: Objective now includes an original three-layer musical score rather than relying on battlefield ambience alone. Calm, tension, and assault stems remain synchronized and crossfade smoothly as objective pressure changes.
 
-This phase repairs the legacy animation binding that still searched for obsolete `ArmL`, `ArmR`, `LegL`, and `LegR` node names after the v8.7 soldier rebuild. External rigged characters retain their own imported AnimationPlayer/AnimationTree pipeline and are not altered.
+The score intensifies when dynamite is armed, command posts or supply depots are contested, sectors are under active contention, the objective is damaged, overtime begins, or the round enters its final ninety seconds. Existing battlefield ambience continues underneath at a reduced level, and the profile Music slider controls both ambience and score through the established Music bus.
 
-Movement physics, collision shapes, weapon timing, damage, server authority, replication, and protocol 341 remain unchanged.
+The bundled music is newly synthesized for this project and does not reuse copyrighted Wolfenstein music. Headless servers skip all music construction.
 
-Build: v8.10.0
+Build: v8.11.0
 Protocol: 341

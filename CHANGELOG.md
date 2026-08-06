@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.11.0
+- Added an original synchronized calm, tension, and assault battlefield score
+- Added smooth objective-driven intensity crossfades
+- Raised score pressure for armed dynamite, contested control points, damaged objectives, overtime, and final-minute play
+- Routed all score stems through the existing Music bus and profile volume control
+- Lowered ambience slightly so the musical score remains clearly audible
+- Preserved headless behavior, gameplay, networking, previous milestones, and protocol 341
+
+
 ## 8.10.0
 - Rebound fallback animation to the articulated v8.7 shoulder, hip, knee, torso, head, and weapon joints
 - Added speed-scaled locomotion, torso counter-motion, knee articulation, and equipment-aware posing
