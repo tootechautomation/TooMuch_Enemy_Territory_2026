@@ -1,10 +1,12 @@
 # Frontline: Objective
 
-## Version 8.13.0 — Dynamic Battlefield Weather
+## Version 8.14.0 — Period Tactical Interface
 
-The battlefield now transitions through moving overcast fronts, wind-driven rain, low wet-ground mist, shifting fog and sunlight, synchronized rain ambience, and restrained distant lightning. Weather changes gradually using deterministic layered cycles, preserving visibility while preventing the map from feeling frozen or artificially static.
+The HUD, spawn menu, connection screen, scoreboard, profile settings, progression panels, and dynamically created controls now share a cohesive WWII tactical visual language. Dark steel-and-canvas panels, brass objective accents, clearer button states, readable input fields, role-aware progress bars, stronger label shadows, and consistent spacing replace the default Godot-control appearance.
 
-Rain and mist use bounded particle fields. Cloud layers do not cast expensive dynamic shadows, lightning does not cast shadows, and all weather construction is skipped on headless servers. Weather is visual and atmospheric only; it does not alter movement, weapon handling, accuracy, objectives, AI, or networking.
+A restrained edge vignette and fine animated grain integrate the interface with the battlefield without obstructing the center of the screen. The styling system discovers controls created after deployment, so multiplayer HUD and menu elements remain consistent throughout a session and at different supported resolutions.
 
-Build: v8.13.0
+No HUD information, bindings, input behavior, gameplay, networking, or protocol values changed.
+
+Build: v8.14.0
 Protocol: 341

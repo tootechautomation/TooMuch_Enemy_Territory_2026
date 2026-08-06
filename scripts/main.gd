@@ -45,6 +45,9 @@ const ObjectiveSetpieceFidelityScript = preload(
 const DynamicWeatherSystemScript = preload(
 	"res://scripts/visuals/dynamic_weather_system.gd"
 )
+const PeriodInterfaceFidelityScript = preload(
+	"res://scripts/visuals/period_interface_fidelity.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -78,7 +81,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.13.0"
+const BUILD_VERSION := "8.14.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -305,6 +308,7 @@ var combat_effects_manager: Node3D
 var cinematic_environment_pass: Node3D
 var objective_setpiece_fidelity: Node3D
 var dynamic_weather_system: Node3D
+var period_interface_fidelity: Node
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -479,6 +483,7 @@ func _ready() -> void:
 	_update_external_asset_overlay()
 	_apply_high_visual_quality()
 	_build_round_results_ui()
+	_initialize_period_interface_fidelity()
 	_update_objective_visuals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
@@ -495,6 +500,16 @@ func _ready() -> void:
 			visual_bunker_scene != null
 		]
 	)
+
+func _initialize_period_interface_fidelity() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if period_interface_fidelity != null:
+		return
+	period_interface_fidelity = PeriodInterfaceFidelityScript.new()
+	period_interface_fidelity.name = "PeriodInterfaceFidelity"
+	add_child(period_interface_fidelity)
+	period_interface_fidelity.call("initialize")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if DisplayServer.get_name() == "headless":

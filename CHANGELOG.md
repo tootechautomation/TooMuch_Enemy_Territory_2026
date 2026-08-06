@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.14.0
+- Added cohesive steel, canvas, and brass styling across HUD and menus
+- Added clear button states, readable fields, and role-aware progress bars
+- Added consistent title hierarchy, label shadows, spacing, and panel treatment
+- Added a restrained edge vignette and low-opacity animated film grain
+- Added discovery styling for controls created later in multiplayer sessions
+- Preserved HUD information, inputs, responsive layout, gameplay, networking, and protocol 341
+
+
 ## 8.13.0
 - Added three independently moving procedural overcast layers
 - Added bounded wind-driven rain and wet-ground mist
