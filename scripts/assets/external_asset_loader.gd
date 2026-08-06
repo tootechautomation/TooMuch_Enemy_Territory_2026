@@ -92,3 +92,90 @@ static func hide_named_nodes(
 		var found := root.find_child(node_name, true, false)
 		if found is Node3D:
 			(found as Node3D).visible = false
+
+static func generated_trimesh_collision(
+	model: Node3D
+) -> int:
+	if model == null:
+		return 0
+
+	var generated := 0
+	for child in model.find_children("*", "MeshInstance3D", true):
+		var mesh_instance := child as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+
+		var before_count: int = mesh_instance.get_child_count()
+		mesh_instance.create_trimesh_collision()
+		var after_count: int = mesh_instance.get_child_count()
+		if after_count > before_count:
+			generated += after_count - before_count
+
+	generated += apply_world_collision_contract(model)
+	return generated
+
+static func ensure_environment_collision(
+	model: Node3D,
+	generate_when_missing: bool
+) -> Dictionary:
+	var existing: int = apply_world_collision_contract(model)
+	var generated := 0
+
+	if existing == 0 and generate_when_missing:
+		generated = generated_trimesh_collision(model)
+		existing = apply_world_collision_contract(model)
+
+	return {
+		"existing_bodies": existing,
+		"generated_nodes": generated,
+		"has_collision": existing > 0
+	}
+
+static func attach_scene_to_socket(
+	socket: Node3D,
+	scene: PackedScene,
+	node_name: String,
+	offset: Vector3 = Vector3.ZERO,
+	rotation_degrees: Vector3 = Vector3.ZERO,
+	scale_value: Vector3 = Vector3.ONE
+) -> Node3D:
+	if socket == null or scene == null:
+		return null
+
+	var instance: Node = scene.instantiate()
+	if not instance is Node3D:
+		instance.queue_free()
+		return null
+
+	var model := instance as Node3D
+	model.name = node_name
+	model.position = offset
+	model.rotation_degrees = rotation_degrees
+	model.scale = scale_value
+	socket.add_child(model)
+	return model
+
+static func build_asset_report(
+	root: Node,
+	availability: Dictionary
+) -> String:
+	var lines: Array[String] = ["External Asset Report"]
+	for key in availability.keys():
+		lines.append(
+			"%s: %s" % [
+				str(key),
+				"READY" if bool(availability[key]) else "fallback"
+			]
+		)
+
+	if root != null:
+		var external_nodes := root.find_children(
+			"External*",
+			"Node3D",
+			true
+		)
+		lines.append(
+			"instantiated external nodes: %d"
+			% external_nodes.size()
+		)
+	return "\n".join(lines)

@@ -21,6 +21,80 @@ const CHARACTER_CONFIG := {
 	}
 }
 
+const WEAPON_PATHS := {
+	"allied_primary": (
+		"res://assets/external/weapons/allied_rifle.glb"
+	),
+	"axis_primary": (
+		"res://assets/external/weapons/axis_rifle.glb"
+	),
+	"service_pistol": (
+		"res://assets/external/weapons/service_pistol.glb"
+	)
+}
+
+const ENVIRONMENT_CONFIG := {
+	"village_house_a": {
+		"offset": Vector3.ZERO,
+		"rotation_y": 0.0,
+		"scale": Vector3.ONE,
+		"generate_collision": true,
+		"hide_fallback": [
+			"TownhouseVisualA",
+			"TownhouseAVisual",
+			"VisualTownhouseA"
+		]
+	},
+	"village_house_b": {
+		"offset": Vector3.ZERO,
+		"rotation_y": 0.0,
+		"scale": Vector3.ONE,
+		"generate_collision": true,
+		"hide_fallback": [
+			"TownhouseVisualB",
+			"TownhouseBVisual",
+			"VisualTownhouseB"
+		]
+	},
+	"ruined_house": {
+		"offset": Vector3.ZERO,
+		"rotation_y": 0.0,
+		"scale": Vector3.ONE,
+		"generate_collision": true,
+		"hide_fallback": [
+			"TownhouseVisualC",
+			"TownhouseCVisual",
+			"VisualTownhouseC"
+		]
+	},
+	"warehouse": {
+		"offset": Vector3.ZERO,
+		"rotation_y": 0.0,
+		"scale": Vector3.ONE,
+		"generate_collision": true,
+		"hide_fallback": [
+			"RailWarehouseVisual",
+			"WarehouseVisual"
+		]
+	},
+	"chainlink_fence": {
+		"offset": Vector3.ZERO,
+		"rotation_y": 0.0,
+		"scale": Vector3.ONE,
+		"generate_collision": true,
+		"hide_fallback": [
+			"RailFenceA"
+		]
+	},
+	"military_crate": {
+		"offset": Vector3.ZERO,
+		"rotation_y": 0.0,
+		"scale": Vector3.ONE,
+		"generate_collision": true,
+		"hide_fallback": []
+	}
+}
+
 const ENVIRONMENT_PATHS := {
 	"village_house_a": (
 		"res://assets/external/environment/village_house_a.glb"
@@ -75,9 +149,34 @@ static func availability_report() -> Dictionary:
 		report[asset_id] = ResourceLoader.exists(
 			str(ENVIRONMENT_PATHS[asset_id])
 		)
+	for weapon_id in WEAPON_PATHS:
+		report["weapon_%s" % weapon_id] = ResourceLoader.exists(
+			str(WEAPON_PATHS[weapon_id])
+		)
 	return report
 
 static func character_config(team_id: int) -> Dictionary:
 	return Dictionary(
 		CHARACTER_CONFIG.get(team_id, CHARACTER_CONFIG[0])
+	)
+
+static func weapon_scene(
+	team_id: int,
+	weapon_index: int
+) -> PackedScene:
+	if weapon_index == 1:
+		return optional_scene(str(WEAPON_PATHS["service_pistol"]))
+	return optional_scene(
+		str(
+			WEAPON_PATHS[
+				"allied_primary"
+				if team_id == 0
+				else "axis_primary"
+			]
+		)
+	)
+
+static func environment_config(asset_id: String) -> Dictionary:
+	return Dictionary(
+		ENVIRONMENT_CONFIG.get(asset_id, {})
 	)

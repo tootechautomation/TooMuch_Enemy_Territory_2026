@@ -26,7 +26,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.1.0"
+const BUILD_VERSION := "7.2.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -2271,31 +2271,95 @@ func _spawn_external_environment_assets() -> void:
 	]
 
 	for placement in placements:
+		var asset_id: String = str(placement[0])
 		var scene: PackedScene = (
 			ExternalAssetRegistryScript.environment_scene(
-				str(placement[0])
+				asset_id
 			)
 		)
 		if scene == null:
 			continue
+
+		var asset_config: Dictionary = (
+			ExternalAssetRegistryScript.environment_config(
+				asset_id
+			)
+		)
+		var final_position: Vector3 = (
+			Vector3(placement[2])
+			+ Vector3(
+				asset_config.get(
+					"offset",
+					Vector3.ZERO
+				)
+			)
+		)
+		var final_rotation: float = (
+			float(placement[3])
+			+ float(
+				asset_config.get("rotation_y", 0.0)
+			)
+		)
+		var final_scale: Vector3 = (
+			Vector3(placement[4])
+			* Vector3(
+				asset_config.get(
+					"scale",
+					Vector3.ONE
+				)
+			)
+		)
+
 		var external_node: Node3D = (
 			ExternalAssetLoaderScript.instantiate_scene(
 				self,
 				scene,
 				str(placement[1]),
-				Vector3(placement[2]),
-				float(placement[3]),
-				Vector3(placement[4])
+				final_position,
+				final_rotation,
+				final_scale
 			)
 		)
-		if external_node != null:
-			ExternalAssetLoaderScript.apply_world_collision_contract(
-				external_node
+		if external_node == null:
+			continue
+
+		var collision_result: Dictionary = (
+			ExternalAssetLoaderScript.ensure_environment_collision(
+				external_node,
+				bool(
+					asset_config.get(
+						"generate_collision",
+						false
+					)
+				)
+			)
+		)
+
+		if bool(collision_result.get("has_collision", false)):
+			var fallback_names: Array = Array(
+				asset_config.get("hide_fallback", [])
+			)
+			var string_names: Array[String] = []
+			for fallback_name in fallback_names:
+				string_names.append(str(fallback_name))
+			ExternalAssetLoaderScript.hide_named_nodes(
+				self,
+				string_names
 			)
 
+		print(
+			"External environment asset %s collision=%s"
+			% [asset_id, collision_result]
+		)
+
+	var availability: Dictionary = (
+		ExternalAssetRegistryScript.availability_report()
+	)
 	print(
-		"External asset availability: %s"
-		% ExternalAssetRegistryScript.availability_report()
+		ExternalAssetLoaderScript.build_asset_report(
+			self,
+			availability
+		)
 	)
 
 func _load_optional_scene(path: String) -> PackedScene:

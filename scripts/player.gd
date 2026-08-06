@@ -78,6 +78,8 @@ var external_character_animation: StringName = &""
 var external_animation_controller
 var external_weapon_socket: Node3D
 var external_model_loaded := false
+var external_weapon_model: Node3D
+var external_weapon_index := -1
 var fp_gunmetal_albedo: Texture2D
 var fp_gunmetal_normal: Texture2D
 var fp_gunmetal_roughness: Texture2D
@@ -1288,6 +1290,8 @@ func _apply_weapon_index(index: int, rebuild_view: bool = true) -> void:
 
 	if rebuild_view and _is_local_player() and DisplayServer.get_name() != "headless":
 		_rebuild_first_person_weapon()
+	if DisplayServer.get_name() != "headless":
+		_refresh_external_weapon_model()
 
 func _local_request_weapon_switch() -> void:
 	if weapon_slots.is_empty():
@@ -1797,6 +1801,7 @@ func _build_external_character_model() -> bool:
 	if scene == null:
 		return false
 
+	_clear_external_weapon_model()
 	if external_character_model != null:
 		external_character_model.queue_free()
 
@@ -1845,6 +1850,7 @@ func _build_external_character_model() -> bool:
 		)
 	)
 	external_model_loaded = true
+	_refresh_external_weapon_model()
 
 	var fallback_body: Node3D = get_node_or_null("Body") as Node3D
 	var fallback_character: Node3D = (
@@ -1856,9 +1862,53 @@ func _build_external_character_model() -> bool:
 		fallback_character.visible = false
 	return true
 
+func _clear_external_weapon_model() -> void:
+	if external_weapon_model != null:
+		external_weapon_model.queue_free()
+	external_weapon_model = null
+	external_weapon_index = -1
+
+func _refresh_external_weapon_model() -> void:
+	if external_character_model == null:
+		_clear_external_weapon_model()
+		return
+	if external_weapon_socket == null:
+		_clear_external_weapon_model()
+		return
+	if external_weapon_index == current_weapon_index:
+		return
+
+	_clear_external_weapon_model()
+	var scene: PackedScene = (
+		ExternalAssetRegistryScript.weapon_scene(
+			team,
+			current_weapon_index
+		)
+	)
+	if scene == null:
+		return
+
+	external_weapon_model = (
+		ExternalAssetLoaderScript.attach_scene_to_socket(
+			external_weapon_socket,
+			scene,
+			(
+				"ExternalServicePistol"
+				if current_weapon_index == 1
+				else "ExternalPrimaryWeapon"
+			),
+			Vector3.ZERO,
+			Vector3.ZERO,
+			Vector3.ONE
+		)
+	)
+	if external_weapon_model != null:
+		external_weapon_index = current_weapon_index
+
 func _update_external_character_animation() -> void:
 	if external_character_model == null:
 		return
+	_refresh_external_weapon_model()
 
 	external_character_model.visible = (
 		not _is_local_player()
