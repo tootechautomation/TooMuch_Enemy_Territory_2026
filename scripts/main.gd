@@ -12,7 +12,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "5.3.0"
+const BUILD_VERSION := "5.4.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -122,22 +122,22 @@ var destructible_covers: Dictionary = {}
 var next_cover_id := 1
 var spawn_points := {
 	0: [
+		Vector3(-58.0, 1.2, -16.0),
+		Vector3(-58.0, 1.2, -10.0),
+		Vector3(-58.0, 1.2, -4.0),
 		Vector3(-54.0, 1.2, -18.0),
 		Vector3(-54.0, 1.2, -10.0),
 		Vector3(-54.0, 1.2, -2.0),
-		Vector3(-50.0, 1.2, -22.0),
-		Vector3(-50.0, 1.2, 2.0),
-		Vector3(-46.0, 1.2, -14.0),
-		Vector3(-46.0, 1.2, -6.0)
+		Vector3(-50.0, 1.2, -10.0)
 	],
 	1: [
-		Vector3(55.0, 1.2, 18.0),
-		Vector3(55.0, 1.2, 10.0),
-		Vector3(55.0, 1.2, 2.0),
-		Vector3(51.0, 1.2, 22.0),
-		Vector3(51.0, 1.2, -2.0),
-		Vector3(47.0, 1.2, 14.0),
-		Vector3(47.0, 1.2, 6.0)
+		Vector3(58.0, 1.2, 16.0),
+		Vector3(58.0, 1.2, 10.0),
+		Vector3(58.0, 1.2, 4.0),
+		Vector3(54.0, 1.2, 18.0),
+		Vector3(54.0, 1.2, 10.0),
+		Vector3(54.0, 1.2, 2.0),
+		Vector3(50.0, 1.2, 10.0)
 	]
 }
 var next_team := 0
@@ -1283,6 +1283,10 @@ func _make_gameplay_block(
 ) -> StaticBody3D:
 	var body: StaticBody3D = StaticBody3D.new()
 	body.name = node_name
+	body.collision_layer = 1
+	body.collision_mask = 1
+	body.collision_layer = 1
+	body.collision_mask = 1
 	body.position = position
 	body.rotation.y = rotation_y
 	add_child(body)
@@ -1390,19 +1394,45 @@ func _make_tunnel_segment(
 			root.add_child(light)
 	return root
 
-func _make_spawn_staging_area(team_id: int, position: Vector3) -> void:
-	var team_color: Color = Color(0.15,0.30,0.42) if team_id == 0 else Color(0.40,0.16,0.12)
+func _make_spawn_staging_area(
+	team_id: int,
+	position: Vector3
+) -> void:
+	# Staging is deliberately open. Earlier enclosed shells overlapped spawn
+	# capsules and trapped bots against their own deployment geometry.
 	var facing: float = 0.0 if team_id == 0 else PI
-	_make_open_building(
-		"AttackerStaging" if team_id == 0 else "DefenderStaging",
-		position, 15.0, 10.0, 4.2, facing, team_color
+	var floor_color := (
+		Color(0.16, 0.25, 0.31)
+		if team_id == 0
+		else Color(0.30, 0.16, 0.13)
 	)
-	for cover_data in [
-		Vector3(-5.0,0.65,-6.0),
-		Vector3(0.0,0.65,-6.0),
-		Vector3(5.0,0.65,-6.0)
+
+	_make_gameplay_block(
+		"AttackerStagingFloor" if team_id == 0 else "DefenderStagingFloor",
+		position + Vector3(0.0, -0.10, 0.0),
+		Vector3(18.0, 0.20, 16.0),
+		floor_color,
+		facing
+	)
+
+	# Rear protection only; all forward and side exits remain unobstructed.
+	var rear_offset: Vector3 = Vector3(0.0, 2.0, 7.5).rotated(
+		Vector3.UP,
+		facing
+	)
+	_make_gameplay_block(
+		"AttackerRearWall" if team_id == 0 else "DefenderRearWall",
+		position + rear_offset,
+		Vector3(16.0, 4.0, 0.45),
+		Color(0.25, 0.22, 0.18),
+		facing
+	)
+
+	for cover_position in [
+		Vector3(-5.5, 0.55, 2.5),
+		Vector3(0.0, 0.55, 3.8),
+		Vector3(5.5, 0.55, 2.5)
 	]:
-		var cover_position: Vector3 = Vector3(cover_data)
 		var offset: Vector3 = cover_position.rotated(
 			Vector3.UP,
 			facing
@@ -1413,14 +1443,14 @@ func _make_spawn_staging_area(team_id: int, position: Vector3) -> void:
 				str(cover_position.x)
 			],
 			position + offset,
-			Vector3(3.0,1.3,0.75),
-			Color(0.29,0.23,0.15),
+			Vector3(2.4, 1.1, 0.65),
+			Color(0.29, 0.23, 0.15),
 			facing
 		)
 
 func _build_map_expansion_pass() -> void:
-	_make_spawn_staging_area(0, Vector3(-52.0,0.0,-10.0))
-	_make_spawn_staging_area(1, Vector3(52.0,0.0,10.0))
+	_make_spawn_staging_area(0, Vector3(-56.0,0.0,-10.0))
+	_make_spawn_staging_area(1, Vector3(56.0,0.0,10.0))
 
 	for building_data in [
 		["NorthApartmentA",Vector3(-31.0,0.0,-50.0),13.0,11.0,6.5,0.0,Color(0.48,0.42,0.34)],
@@ -1477,6 +1507,8 @@ func _collision_box(
 ) -> StaticBody3D:
 	var body: StaticBody3D = StaticBody3D.new()
 	body.name = node_name
+	body.collision_layer = 1
+	body.collision_mask = 1
 	body.position = local_position
 	body.rotation.y = rotation_y
 
@@ -4514,8 +4546,41 @@ func _get_spawn(team: int, peer_id: int) -> Vector3:
 	)
 	return emergency
 
+func server_recover_stuck_player(
+	peer_id: int,
+	team_id: int,
+	current_position: Vector3
+) -> Vector3:
+	if not multiplayer.is_server():
+		return current_position
+
+	var candidates: Array = spawn_points.get(
+		clampi(team_id, 0, 1),
+		[]
+	)
+	var best_position := current_position
+	var best_distance := INF
+
+	for candidate_value in candidates:
+		var candidate: Vector3 = Vector3(candidate_value)
+		var result: Dictionary = _validate_spawn_candidate(
+			candidate,
+			peer_id
+		)
+		if not bool(result.get("valid", false)):
+			continue
+		var validated: Vector3 = Vector3(
+			result.get("position", candidate)
+		)
+		var distance: float = current_position.distance_to(validated)
+		if distance < best_distance:
+			best_distance = distance
+			best_position = validated
+
+	return best_position
+
 func _spawn_enemy_staging_position(team_id: int) -> Vector3:
-	return Vector3(52.0,0.0,10.0) if team_id == 0 else Vector3(-52.0,0.0,-10.0)
+	return Vector3(56.0,0.0,10.0) if team_id == 0 else Vector3(-56.0,0.0,-10.0)
 
 func _validate_spawn_candidate(
 	base_candidate: Vector3,
@@ -4588,8 +4653,8 @@ func _validate_spawn_candidate(
 
 	# Player capsule is 1.8 m tall with a 0.45 m radius.
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.45
-	capsule.height = 1.8
+	capsule.radius = 0.52
+	capsule.height = 1.95
 
 	var spawn_position := floor_position + Vector3.UP * 0.96
 	var shape_query := PhysicsShapeQueryParameters3D.new()
@@ -4601,7 +4666,7 @@ func _validate_spawn_candidate(
 	shape_query.collision_mask = 1
 	shape_query.collide_with_areas = false
 	shape_query.collide_with_bodies = true
-	shape_query.margin = 0.03
+	shape_query.margin = 0.10
 
 	var excluded: Array[RID] = []
 	if players.has(peer_id):

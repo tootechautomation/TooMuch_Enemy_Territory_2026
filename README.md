@@ -1,44 +1,41 @@
 # Frontline: Objective
 
-## Version 5.3.0 Collision Integrity & Interior Combat
+## Version 5.4.0 Navigation & Collision Reliability
 
-### Critical collision fix
-Several imported visual buildings previously created collision only inside
-graphical-client functions. The headless authoritative server therefore treated
-those structures as empty space.
+### Physics contract
+- Players now use collision layer 2 and collision mask 1.
+- All world structures explicitly use collision layer 1 and mask 1.
+- Bot obstacle rays explicitly query world layer 1.
+- Spawn validation uses an oversized capsule and larger safety margin.
 
-All major collision now builds in a shared server/client pass.
+### Spawn fix
+The enclosed staging buildings introduced in v5.2 overlapped valid spawn
+capsules and trapped players and bots inside walls.
 
-### Collision coverage
-- Four imported village townhouses
-- Stone church
-- Rail warehouse
-- Fort bunker
-- Three rail cars
-- Two half-tracks
-- All v5.2 open-entry buildings and tunnels remain collision-enabled
+They were replaced with open deployment courtyards:
+- Solid floor
+- Rear protective wall only
+- Three low cover pieces
+- Open front and side exits
+- Spawn positions moved farther outward and away from geometry
 
-### Interior-ready shells
-Imported buildings now use wall, floor, roof, lintel, and doorway collision
-pieces rather than one solid invisible box. Doorways remain traversable while
-brick and plaster walls block players and bullets.
+### Bot navigation
+- Added team-specific waypoint routes through the expanded map.
+- Bots use waypoints until reaching the active objective area.
+- Added a 1.8-second jump cooldown.
+- Bots jump only when the low ray is blocked and the high ray is clear.
+- Stuck bots strafe and rotate rather than repeatedly jumping.
+- Severely stuck bots request a validated server recovery position.
+- Recovery has a five-second cooldown.
 
-### Interior combat
-- Added server-authoritative crate and barrier cover inside eight expanded-map
-  buildings.
-- Cover breaks direct interior sightlines.
-- Collision exists identically on the VPS and local client.
-
-### Validation
-A startup validation pass checks every registered structure proxy and reports
-any structure that contains no CollisionShape3D.
-
-Set `collision_debug_enabled = true` before startup to display translucent green
-collision proxies on graphical clients.
+### Collision
+- All v5.3 structure collision remains.
+- Wall, doorway, church, warehouse, bunker, rail-car, vehicle, tunnel, and
+  expanded-building collision remains server authoritative.
 
 ### Compatibility
-- Build: v5.3.0
+- Build: v5.4.0
 - Protocol: 341
 - Explicit connection-message `+` retained.
 
-Expected status: `Connected: v5.3.0 protocol 341`
+Expected status: `Connected: v5.4.0 protocol 341`

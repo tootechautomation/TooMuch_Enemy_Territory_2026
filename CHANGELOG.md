@@ -1,10 +1,11 @@
 # Changelog
 
-## 5.3.0
-- Moved imported-structure collision out of visual-only functions
-- Added server/client shared collision pass
-- Added doorway-aware collision shells
-- Added collision for church, warehouse, bunker, rail cars, and half-tracks
-- Added interior combat cover to expanded buildings
-- Added startup collision validation
+## 5.4.0
+- Added explicit player/world collision layers and masks
+- Replaced trapping staging shells with open courtyards
+- Moved team spawn candidates away from geometry
+- Enlarged spawn validation capsule and margin
+- Added bot waypoint routing
+- Added bot jump cooldown and lateral obstacle recovery
+- Added validated server-side stuck recovery
 - Preserved protocol 341 and explicit connection-string `+`

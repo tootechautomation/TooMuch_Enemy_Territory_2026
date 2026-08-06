@@ -102,6 +102,10 @@ var bot_ability_accumulator := 0.0
 var bot_stuck_accumulator := 0.0
 var bot_last_position := Vector3.ZERO
 var bot_strafe_direction := 1.0
+var bot_next_jump_ms := 0
+var bot_last_recovery_ms := 0
+var bot_waypoint_index := 0
+var bot_route: Array[Vector3] = []
 var bot_grenade_accumulator := 2.0
 var bot_squad_role := 0
 var bot_role_initialized := false
@@ -2147,7 +2151,10 @@ func _server_bot_tick(delta: float) -> void:
 		_bot_try_ability()
 
 	if has_movement_goal:
-		_bot_move_toward(movement_goal, delta)
+		var routed_goal: Vector3 = _bot_route_goal(
+			movement_goal
+		)
+		_bot_move_toward(routed_goal, delta)
 	else:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -2168,6 +2175,74 @@ func _bot_face_position(world_position: Vector3) -> void:
 		global_position + flat_direction.normalized(),
 		Vector3.UP
 	)
+
+func _bot_initialize_route() -> void:
+	if not bot_route.is_empty():
+		return
+
+	if team == 0:
+		bot_route = [
+			Vector3(-48.0, 1.0, -10.0),
+			Vector3(-35.0, 1.0, -22.0),
+			Vector3(-20.0, 1.0, -12.0),
+			Vector3(-6.0, 1.0, 0.0),
+			Vector3(10.0, 1.0, 8.0),
+			Vector3(28.0, 1.0, 20.0)
+		]
+	else:
+		bot_route = [
+			Vector3(48.0, 1.0, 10.0),
+			Vector3(36.0, 1.0, 22.0),
+			Vector3(24.0, 1.0, 10.0),
+			Vector3(10.0, 1.0, 2.0),
+			Vector3(-6.0, 1.0, -4.0),
+			Vector3(-22.0, 1.0, -12.0)
+		]
+
+	bot_waypoint_index = 0
+
+func _bot_route_goal(fallback_goal: Vector3) -> Vector3:
+	_bot_initialize_route()
+	if bot_route.is_empty():
+		return fallback_goal
+
+	var waypoint: Vector3 = bot_route[bot_waypoint_index]
+	if global_position.distance_to(waypoint) < 2.2:
+		bot_waypoint_index = (
+			bot_waypoint_index + 1
+		) % bot_route.size()
+		waypoint = bot_route[bot_waypoint_index]
+
+	# Use the objective directly once the bot has reached the central lanes.
+	if global_position.distance_to(fallback_goal) < 18.0:
+		return fallback_goal
+	return waypoint
+
+func _bot_try_stuck_recovery() -> void:
+	var now: int = Time.get_ticks_msec()
+	if now < bot_last_recovery_ms + 5000:
+		return
+	bot_last_recovery_ms = now
+
+	var main_node: Node = get_parent()
+	if (
+		main_node == null
+		or not main_node.has_method("server_recover_stuck_player")
+	):
+		return
+
+	var recovered: Vector3 = Vector3(
+		main_node.call(
+			"server_recover_stuck_player",
+			peer_id,
+			team,
+			global_position
+		)
+	)
+	if recovered.distance_to(global_position) > 1.0:
+		global_position = recovered
+		velocity = Vector3.ZERO
+		bot_last_position = recovered
 
 func _bot_move_toward(
 	world_position: Vector3,
@@ -2193,8 +2268,14 @@ func _bot_move_toward(
 	velocity.x = flat_direction.x * bot_speed
 	velocity.z = flat_direction.z * bot_speed
 
-	if is_on_floor() and _bot_obstacle_ahead(flat_direction):
+	var now: int = Time.get_ticks_msec()
+	if (
+		is_on_floor()
+		and now >= bot_next_jump_ms
+		and _bot_obstacle_ahead(flat_direction)
+	):
 		velocity.y = JUMP_SPEED
+		bot_next_jump_ms = now + 1800
 
 func _bot_obstacle_ahead(direction: Vector3) -> bool:
 	var space_state: PhysicsDirectSpaceState3D = (
@@ -2208,6 +2289,9 @@ func _bot_obstacle_ahead(direction: Vector3) -> bool:
 		low_to
 	)
 	low_query.exclude = [self]
+	low_query.collision_mask = 1
+	low_query.collide_with_bodies = true
+	low_query.collide_with_areas = false
 	var low_hit: Dictionary = space_state.intersect_ray(low_query)
 
 	if low_hit.is_empty():
@@ -2220,6 +2304,9 @@ func _bot_obstacle_ahead(direction: Vector3) -> bool:
 		high_to
 	)
 	high_query.exclude = [self]
+	high_query.collision_mask = 1
+	high_query.collide_with_bodies = true
+	high_query.collide_with_areas = false
 	var high_hit: Dictionary = space_state.intersect_ray(
 		high_query
 	)
@@ -2243,11 +2330,18 @@ func _bot_update_stuck_state(delta: float) -> void:
 	if bot_stuck_accumulator >= 1.1:
 		bot_stuck_accumulator = 0.0
 		bot_strafe_direction *= -1.0
+
+		var lateral: Vector3 = transform.basis.x * bot_strafe_direction
+		velocity.x = lateral.x * 3.8
+		velocity.z = lateral.z * 3.8
 		rotation.y += deg_to_rad(
-			90.0 * bot_strafe_direction
+			55.0 * bot_strafe_direction
 		)
-		if is_on_floor():
-			velocity.y = JUMP_SPEED
+
+		if global_position.distance_to(bot_last_position) < 0.20:
+			_bot_try_stuck_recovery()
+		else:
+			bot_last_position = global_position
 
 func _bot_try_ability() -> void:
 	if Time.get_ticks_msec() < next_ability_time:
