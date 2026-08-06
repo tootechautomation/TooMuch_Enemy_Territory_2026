@@ -1,9 +1,11 @@
 # Changelog
 
-## 7.3.1
-- Removed unresolved ExternalLODController member type
-- Stored the LOD controller as Node
-- Instantiated the controller through the preloaded script
-- Converted LOD calls to guarded dynamic calls
-- Preserved all v7.3 validation, overlay and LOD functionality
+## 7.4.0
+- Added persistent ConfigFile-based player profiles
+- Added custom player names and server-side name validation
+- Added reliable name synchronization to all peers
+- Added F8 profile/settings panel
+- Saved team, class, sensitivity, FOV, HUD scale and audio settings
+- Saved last server address and port
+- Added duplicate-name suffix handling
 - Preserved protocol 341 and explicit connection-string `+`

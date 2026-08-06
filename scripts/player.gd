@@ -297,6 +297,9 @@ var recoil_position_impulse := Vector3.ZERO
 var muzzle_smoke_texture: Texture2D
 var camera_inertia := Vector2.ZERO
 var previous_look_input := Vector2.ZERO
+var profile_mouse_sensitivity := 0.0025
+var profile_field_of_view := 75.0
+var profile_hud_scale := 1.0
 
 var server_logged_first_input := false
 
@@ -397,6 +400,45 @@ func _load_optional_texture(path: String) -> Texture2D:
 	push_warning("Optional texture failed to load: %s" % path)
 	return null
 
+func apply_local_profile_settings(settings: Dictionary) -> void:
+	if not _is_local_player():
+		return
+
+	profile_mouse_sensitivity = clampf(
+		float(settings.get("mouse_sensitivity", 0.0025)),
+		0.0005,
+		0.0100
+	)
+	profile_field_of_view = clampf(
+		float(settings.get("field_of_view", 75.0)),
+		60.0,
+		110.0
+	)
+	profile_hud_scale = clampf(
+		float(settings.get("hud_scale", 1.0)),
+		0.70,
+		1.40
+	)
+	selected_team = clampi(
+		int(settings.get("preferred_team", selected_team)),
+		0,
+		1
+	)
+	selected_class = clampi(
+		int(settings.get("preferred_class", selected_class)),
+		0,
+		4
+	)
+
+	var camera: Camera3D = get_node_or_null(
+		"Head/Camera3D"
+	) as Camera3D
+	if camera != null and not is_aiming:
+		camera.fov = profile_field_of_view
+
+	_apply_resolution_safe_hud()
+	_update_selection_status()
+
 func _ready() -> void:
 	if DisplayServer.get_name() != "headless":
 		tex_uniform_attackers = _load_optional_texture(
@@ -447,6 +489,21 @@ func _ready() -> void:
 		muzzle_smoke_texture = _load_optional_texture("res://assets/fx/muzzle_smoke.png")
 
 	_initialize_loadout()
+	if _is_local_player():
+		var main_node: Node = get_parent()
+		if (
+			main_node != null
+			and main_node.has_method(
+				"get_local_profile_settings"
+			)
+		):
+			apply_local_profile_settings(
+				Dictionary(
+					main_node.call(
+						"get_local_profile_settings"
+					)
+				)
+			)
 	if is_bot and not bot_role_initialized:
 		bot_squad_role = posmod(peer_id, 4)
 		bot_role_initialized = true
@@ -496,8 +553,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 	if event is InputEventMouseMotion and alive and not downed:
-		rotation.y -= event.relative.x * 0.0025
-		pitch = clampf(pitch - event.relative.y * 0.0025, -1.35, 1.35)
+		rotation.y -= event.relative.x * profile_mouse_sensitivity
+		pitch = clampf(
+			pitch - event.relative.y * profile_mouse_sensitivity,
+			-1.35,
+			1.35
+		)
 		$Head.rotation.x = pitch
 
 	if event.is_action_pressed("spectator_next") and not alive:
@@ -3612,9 +3673,31 @@ func _build_spawn_menu() -> void:
 	root_box.add_child(deploy_button)
 
 	var hint := Label.new()
-	hint.text = "Press M anytime to reopen this menu"
+	hint.text = (
+		"Press M anytime to reopen · F8 player settings"
+	)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root_box.add_child(hint)
+
+	var main_node: Node = get_parent()
+	if (
+		main_node != null
+		and main_node.has_method("get_local_profile_settings")
+	):
+		var settings: Dictionary = Dictionary(
+			main_node.call("get_local_profile_settings")
+		)
+		selected_team = clampi(
+			int(settings.get("preferred_team", selected_team)),
+			0,
+			1
+		)
+		selected_class = clampi(
+			int(settings.get("preferred_class", selected_class)),
+			0,
+			4
+		)
+		_update_selection_status()
 
 func _update_selection_status() -> void:
 	if selection_status == null:
@@ -3689,7 +3772,7 @@ func _update_aim_view() -> void:
 	if camera == null:
 		return
 
-	var target_fov: float = DEFAULT_FOV
+	var target_fov: float = profile_field_of_view
 	if is_aiming:
 		target_fov = (
 			SCOUT_ADS_FOV
@@ -4166,6 +4249,7 @@ func _apply_resolution_safe_hud() -> void:
 		viewport_size.y / hud_base_resolution.y
 	)
 	scale_factor = clampf(scale_factor, 0.58, 1.55)
+	scale_factor *= profile_hud_scale
 	var rendered_size: Vector2 = hud_base_resolution * scale_factor
 	var offset: Vector2 = (viewport_size - rendered_size) * 0.5
 

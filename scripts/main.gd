@@ -1,5 +1,9 @@
 extends Node
 
+const PlayerProfileScript = preload(
+	"res://scripts/profile/player_profile.gd"
+)
+
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
 )
@@ -32,7 +36,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.3.1"
+const BUILD_VERSION := "7.4.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -190,6 +194,22 @@ var connection_panel: PanelContainer
 var connection_address: LineEdit
 var connection_port: SpinBox
 var connection_join_button: Button
+var connection_player_name: LineEdit
+var profile_manager
+var local_profile: Dictionary = {}
+var profile_canvas: CanvasLayer
+var profile_panel: PanelContainer
+var profile_name_input: LineEdit
+var profile_team_option: OptionButton
+var profile_class_option: OptionButton
+var profile_sensitivity_slider: HSlider
+var profile_fov_slider: HSlider
+var profile_hud_scale_slider: HSlider
+var profile_master_slider: HSlider
+var profile_effects_slider: HSlider
+var profile_music_slider: HSlider
+var profile_status_label: Label
+var profile_panel_visible := false
 var protocol_verified := false
 var protocol_message := "Protocol pending"
 var last_server_input_ack := -1
@@ -275,6 +295,9 @@ var forward_spawn_points := {
 }
 
 func _ready() -> void:
+	profile_manager = PlayerProfileScript.new()
+	local_profile = profile_manager.load_profile()
+	_apply_profile_audio_settings()
 	if DisplayServer.get_name() != "headless":
 		_initialize_battlefield_ambience()
 		tex_metal = _load_optional_texture(
@@ -396,6 +419,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		)
 		if key_code == KEY_F10:
 			_toggle_external_asset_overlay()
+			get_viewport().set_input_as_handled()
+		elif key_code == KEY_F8:
+			_set_profile_panel_visible(
+				not profile_panel_visible
+			)
+			get_viewport().set_input_as_handled()
+		elif key_code == KEY_ESCAPE and profile_panel_visible:
+			_set_profile_panel_visible(false)
 			get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
@@ -4272,7 +4303,301 @@ func join_server(address: String, port: int = PORT_DEFAULT) -> void:
 	multiplayer.multiplayer_peer = peer
 	if status_label: status_label.text = "Connecting to %s:%d..." % [address, port]
 
+func get_local_profile_settings() -> Dictionary:
+	return local_profile.duplicate(true)
+
+func _linear_to_db(value: float) -> float:
+	if value <= 0.001:
+		return -80.0
+	return linear_to_db(value)
+
+func _set_bus_volume(bus_name: String, value: float) -> void:
+	var bus_index: int = AudioServer.get_bus_index(bus_name)
+	if bus_index < 0:
+		return
+	AudioServer.set_bus_volume_db(
+		bus_index,
+		_linear_to_db(value)
+	)
+
+func _apply_profile_audio_settings() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	_set_bus_volume(
+		"Master",
+		float(local_profile.get("master_volume", 0.85))
+	)
+	_set_bus_volume(
+		"SFX",
+		float(local_profile.get("effects_volume", 0.90))
+	)
+	_set_bus_volume(
+		"Music",
+		float(local_profile.get("music_volume", 0.65))
+	)
+
+func _apply_profile_to_local_player() -> void:
+	if multiplayer.multiplayer_peer == null:
+		return
+	var local_id: int = multiplayer.get_unique_id()
+	if not players.has(local_id):
+		return
+	var player: Node = players[local_id] as Node
+	if (
+		player != null
+		and player.has_method("apply_local_profile_settings")
+	):
+		player.call(
+			"apply_local_profile_settings",
+			local_profile
+		)
+
+func _profile_slider_row(
+	parent: VBoxContainer,
+	label_text: String,
+	minimum: float,
+	maximum: float,
+	step: float,
+	initial: float
+) -> HSlider:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(180, 28)
+	row.add_child(label)
+
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = step
+	slider.value = initial
+	slider.custom_minimum_size = Vector2(270, 28)
+	row.add_child(slider)
+
+	var value_label := Label.new()
+	value_label.custom_minimum_size = Vector2(70, 28)
+	value_label.text = "%.2f" % initial
+	slider.value_changed.connect(
+		func(value: float) -> void:
+			value_label.text = "%.2f" % value
+	)
+	row.add_child(value_label)
+	return slider
+
+func _build_profile_panel() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if profile_panel != null:
+		return
+
+	profile_canvas = CanvasLayer.new()
+	profile_canvas.name = "ProfileSettingsCanvas"
+	profile_canvas.layer = 125
+	add_child(profile_canvas)
+
+	profile_panel = PanelContainer.new()
+	profile_panel.name = "ProfileSettingsPanel"
+	profile_panel.position = Vector2(120, 55)
+	profile_panel.custom_minimum_size = Vector2(590, 610)
+	profile_panel.visible = false
+	profile_canvas.add_child(profile_panel)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	profile_panel.add_child(box)
+
+	var title := Label.new()
+	title.text = "PLAYER PROFILE & SETTINGS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 25)
+	box.add_child(title)
+
+	var description := Label.new()
+	description.text = (
+		"Saved locally and used automatically on every compatible server."
+	)
+	description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(description)
+
+	var name_label := Label.new()
+	name_label.text = "PLAYER NAME"
+	box.add_child(name_label)
+
+	profile_name_input = LineEdit.new()
+	profile_name_input.max_length = 20
+	profile_name_input.text = str(
+		local_profile.get("player_name", "Soldier")
+	)
+	box.add_child(profile_name_input)
+
+	var team_row := HBoxContainer.new()
+	box.add_child(team_row)
+	var team_label := Label.new()
+	team_label.text = "PREFERRED TEAM"
+	team_label.custom_minimum_size = Vector2(180, 32)
+	team_row.add_child(team_label)
+	profile_team_option = OptionButton.new()
+	profile_team_option.add_item("Attackers", 0)
+	profile_team_option.add_item("Defenders", 1)
+	profile_team_option.selected = int(
+		local_profile.get("preferred_team", 0)
+	)
+	team_row.add_child(profile_team_option)
+
+	var class_row := HBoxContainer.new()
+	box.add_child(class_row)
+	var class_label := Label.new()
+	class_label.text = "PREFERRED CLASS"
+	class_label.custom_minimum_size = Vector2(180, 32)
+	class_row.add_child(class_label)
+	profile_class_option = OptionButton.new()
+	for class_name in [
+		"Soldier",
+		"Medic",
+		"Engineer",
+		"Field Ops",
+		"Scout"
+	]:
+		profile_class_option.add_item(class_name)
+	profile_class_option.selected = int(
+		local_profile.get("preferred_class", 0)
+	)
+	class_row.add_child(profile_class_option)
+
+	profile_sensitivity_slider = _profile_slider_row(
+		box,
+		"Mouse sensitivity",
+		0.0005,
+		0.0100,
+		0.0001,
+		float(local_profile.get("mouse_sensitivity", 0.0025))
+	)
+	profile_fov_slider = _profile_slider_row(
+		box,
+		"Field of view",
+		60.0,
+		110.0,
+		1.0,
+		float(local_profile.get("field_of_view", 75.0))
+	)
+	profile_hud_scale_slider = _profile_slider_row(
+		box,
+		"HUD scale",
+		0.70,
+		1.40,
+		0.05,
+		float(local_profile.get("hud_scale", 1.0))
+	)
+	profile_master_slider = _profile_slider_row(
+		box,
+		"Master volume",
+		0.0,
+		1.0,
+		0.05,
+		float(local_profile.get("master_volume", 0.85))
+	)
+	profile_effects_slider = _profile_slider_row(
+		box,
+		"Effects volume",
+		0.0,
+		1.0,
+		0.05,
+		float(local_profile.get("effects_volume", 0.90))
+	)
+	profile_music_slider = _profile_slider_row(
+		box,
+		"Music volume",
+		0.0,
+		1.0,
+		0.05,
+		float(local_profile.get("music_volume", 0.65))
+	)
+
+	var button_row := HBoxContainer.new()
+	box.add_child(button_row)
+
+	var save_button := Button.new()
+	save_button.text = "SAVE & APPLY"
+	save_button.custom_minimum_size = Vector2(270, 45)
+	save_button.pressed.connect(_save_profile_from_panel)
+	button_row.add_child(save_button)
+
+	var close_button := Button.new()
+	close_button.text = "CLOSE"
+	close_button.custom_minimum_size = Vector2(270, 45)
+	close_button.pressed.connect(
+		func() -> void:
+			_set_profile_panel_visible(false)
+	)
+	button_row.add_child(close_button)
+
+	profile_status_label = Label.new()
+	profile_status_label.text = "F8 opens this panel during play."
+	profile_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(profile_status_label)
+
+func _save_profile_from_panel() -> void:
+	if profile_manager == null:
+		return
+
+	local_profile = profile_manager.update({
+		"player_name": profile_name_input.text,
+		"preferred_team": profile_team_option.selected,
+		"preferred_class": profile_class_option.selected,
+		"mouse_sensitivity": profile_sensitivity_slider.value,
+		"field_of_view": profile_fov_slider.value,
+		"hud_scale": profile_hud_scale_slider.value,
+		"master_volume": profile_master_slider.value,
+		"effects_volume": profile_effects_slider.value,
+		"music_volume": profile_music_slider.value,
+		"last_server": (
+			connection_address.text
+			if connection_address != null
+			else local_profile.get("last_server", "127.0.0.1")
+		),
+		"last_port": (
+			int(connection_port.value)
+			if connection_port != null
+			else int(local_profile.get("last_port", PORT_DEFAULT))
+		)
+	})
+
+	_apply_profile_audio_settings()
+	_apply_profile_to_local_player()
+
+	if connection_player_name != null:
+		connection_player_name.text = str(
+			local_profile.get("player_name", "Soldier")
+		)
+
+	if multiplayer.multiplayer_peer != null:
+		request_player_profile.rpc_id(
+			1,
+			str(local_profile.get("player_name", "Soldier"))
+		)
+
+	if profile_status_label != null:
+		profile_status_label.text = (
+			"Saved to user://frontline_profile.cfg"
+		)
+
+func _set_profile_panel_visible(visible_value: bool) -> void:
+	if profile_panel == null:
+		_build_profile_panel()
+	if profile_panel == null:
+		return
+	profile_panel_visible = visible_value
+	profile_panel.visible = visible_value
+	Input.mouse_mode = (
+		Input.MOUSE_MODE_VISIBLE
+		if visible_value
+		else Input.MOUSE_MODE_CAPTURED
+	)
+
 func _show_connection_menu() -> void:
+	_build_profile_panel()
 	if connection_panel != null and is_instance_valid(connection_panel):
 		connection_panel.visible = true
 		if status_label != null:
@@ -4298,15 +4623,27 @@ func _show_connection_menu() -> void:
 	title.add_theme_font_size_override("font_size", 24)
 	box.add_child(title)
 
+	connection_player_name = LineEdit.new()
+	connection_player_name.placeholder_text = "Player name"
+	connection_player_name.max_length = 20
+	connection_player_name.text = str(
+		local_profile.get("player_name", "Soldier")
+	)
+	box.add_child(connection_player_name)
+
 	connection_address = LineEdit.new()
 	connection_address.placeholder_text = "Server IP"
-	connection_address.text = "127.0.0.1"
+	connection_address.text = str(
+		local_profile.get("last_server", "127.0.0.1")
+	)
 	box.add_child(connection_address)
 
 	connection_port = SpinBox.new()
 	connection_port.min_value = 1
 	connection_port.max_value = 65535
-	connection_port.value = PORT_DEFAULT
+	connection_port.value = int(
+		local_profile.get("last_port", PORT_DEFAULT)
+	)
 	box.add_child(connection_port)
 
 	connection_join_button = Button.new()
@@ -4318,12 +4655,25 @@ func _show_connection_menu() -> void:
 			if status_label != null:
 				status_label.text = "Connecting…"
 
+			local_profile = profile_manager.update({
+				"player_name": connection_player_name.text,
+				"last_server": connection_address.text.strip_edges(),
+				"last_port": int(connection_port.value)
+			})
 			join_server(
 				connection_address.text.strip_edges(),
 				int(connection_port.value)
 			)
 	)
 	box.add_child(connection_join_button)
+
+	var settings_button := Button.new()
+	settings_button.text = "Player Profile & Settings"
+	settings_button.pressed.connect(
+		func() -> void:
+			_set_profile_panel_visible(true)
+	)
+	box.add_child(settings_button)
 
 	status_label = Label.new()
 	status_label.text = "WASD · Mouse · E interact · Q ability · Tab scoreboard"
@@ -4453,6 +4803,11 @@ func receive_server_protocol(
 		NETWORK_PROTOCOL,
 		BUILD_VERSION
 	)
+	request_player_profile.rpc_id(
+		1,
+		str(local_profile.get("player_name", "Soldier"))
+	)
+	_apply_profile_to_local_player()
 
 @rpc("any_peer", "call_remote", "reliable")
 func client_protocol_ack(
@@ -4919,6 +5274,44 @@ func request_player_ability(requested_peer_id: int) -> void:
 		player.call("server_ability_request")
 
 @rpc("any_peer", "call_remote", "reliable")
+func request_player_profile(requested_name: String) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if not players.has(sender_id):
+		return
+
+	var safe_name: String = PlayerProfileScript.sanitize_player_name(
+		requested_name
+	)
+
+	# Prevent exact duplicate names while keeping the requested identity clear.
+	var base_name := safe_name
+	var suffix := 2
+	while safe_name in player_names.values():
+		if str(player_names.get(sender_id, "")) == safe_name:
+			break
+		safe_name = "%s%d" % [base_name.substr(0, 17), suffix]
+		suffix += 1
+
+	player_names[sender_id] = safe_name
+	var player: Node3D = players[sender_id] as Node3D
+	if player != null:
+		player.set("player_name", safe_name)
+
+	apply_player_name.rpc(sender_id, safe_name)
+	push_kill_feed.rpc("%s joined the battle" % safe_name)
+
+@rpc("authority", "call_local", "reliable")
+func apply_player_name(peer_id: int, safe_name: String) -> void:
+	player_names[peer_id] = safe_name
+	if players.has(peer_id):
+		var player: Node3D = players[peer_id] as Node3D
+		if player != null:
+			player.set("player_name", safe_name)
+
+@rpc("any_peer", "call_remote", "reliable")
 func request_player_team_and_class(
 	requested_peer_id: int,
 	requested_team: int,
@@ -5115,6 +5508,9 @@ func spawn_player(peer_id: int, team: int, pname: String, spawn_position: Vector
 	player.position = spawn_position
 	add_child(player)
 	players[peer_id] = player
+
+	if peer_id == multiplayer.get_unique_id():
+		_apply_profile_to_local_player()
 
 	if multiplayer.is_server():
 		print(

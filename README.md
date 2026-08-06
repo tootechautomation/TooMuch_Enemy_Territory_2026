@@ -1,50 +1,46 @@
 # Frontline: Objective
 
-## Version 7.3.1 External LOD Parser Hotfix
+## Version 7.4.0 Persistent Player Profile & Cross-Server Settings
 
-### Fixed parser error
+### Custom player names
+The connection screen now includes a player-name field. The server validates
+the name and synchronizes it to scoreboards, kill feeds, HUD labels and other
+clients.
 
-Version 7.3.0 declared:
+The generated `Player########` name remains only as a brief connection
+fallback until the verified profile arrives.
 
-```gdscript
-var external_lod_controller: ExternalLODController
-```
-
-Godot could parse `main.gd` before the external script's `class_name` was
-registered, producing:
+### Persistent settings
+Profiles are stored locally in:
 
 ```text
-Could not find type "ExternalLODController" in the current scope.
+user://frontline_profile.cfg
 ```
 
-The controller is now stored as a standard `Node` and instantiated through the
-already preloaded script resource:
+The same profile is used automatically across compatible servers.
 
-```gdscript
-var external_lod_controller: Node
+Saved:
+- Player name
+- Preferred team and class
+- Mouse sensitivity
+- Field of view
+- HUD scale
+- Master, effects and music volume
+- Last server IP and port
 
-var controller_instance: Node = (
-    ExternalLODControllerScript.new()
-)
-```
+### Settings panel
+Press `F8` before joining or during play to open the settings panel. Changes
+apply immediately and are saved for future sessions.
 
-Method calls use `has_method()` and `call()`, removing the cross-script parser
-dependency while retaining the complete LOD behavior.
-
-### Included v7.3 features
-
-- Character and environment asset validation
-- Runtime distance-based LOD
-- Far-distance shadow and GI reduction
-- F10 external-asset status overlay
-- Safe procedural fallback replacement
-- Imported collision validation
+### Server safety
+Player names are sanitized to 2–20 characters. Exact duplicate names receive a
+numeric suffix. Clients cannot rename another peer because the server uses the
+actual RPC sender ID.
 
 ### Compatibility
-
-- Build: v7.3.1
+- Build: v7.4.0
 - Protocol: 341
 - Explicit connection-message `+` retained
-- No external assets are required for startup
+- Existing servers require the matching v7.4 client build
 
-Expected status: `Connected: v7.3.1 protocol 341`
+Expected status: `Connected: v7.4.0 protocol 341`
