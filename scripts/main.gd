@@ -19,7 +19,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "6.0.0"
+const BUILD_VERSION := "6.1.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -1285,6 +1285,47 @@ func _build_combat_atmosphere_pass() -> void:
 		Color(0.70,0.25,0.16)
 	)
 
+func _generated_surface_material(
+	node_name: String,
+	fallback_color: Color
+) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = fallback_color
+	material.roughness = 0.88
+
+	var lower_name := node_name.to_lower()
+	var albedo_path := ""
+	var roughness_path := ""
+
+	if "brick" in lower_name or "townhouse" in lower_name:
+		albedo_path = "res://assets/pbr/generated/brick_wall_albedo.png"
+		roughness_path = "res://assets/pbr/generated/brick_wall_roughness.png"
+	elif "plaster" in lower_name or "apartment" in lower_name:
+		albedo_path = "res://assets/pbr/generated/plaster_albedo.png"
+		roughness_path = "res://assets/pbr/generated/plaster_roughness.png"
+	elif "ground" in lower_name or "road" in lower_name:
+		albedo_path = "res://assets/pbr/generated/cobblestone_albedo.png"
+		roughness_path = "res://assets/pbr/generated/cobblestone_roughness.png"
+	elif (
+		"wood" in lower_name
+		or "cover" in lower_name
+		or "crate" in lower_name
+		or "barricade" in lower_name
+	):
+		albedo_path = "res://assets/pbr/generated/wood_albedo.png"
+		roughness_path = "res://assets/pbr/generated/wood_roughness.png"
+	elif "metal" in lower_name or "rail" in lower_name:
+		albedo_path = "res://assets/pbr/generated/aged_metal_albedo.png"
+		roughness_path = "res://assets/pbr/generated/aged_metal_roughness.png"
+
+	if albedo_path != "" and ResourceLoader.exists(albedo_path):
+		material.albedo_texture = load(albedo_path) as Texture2D
+		material.uv1_scale = Vector3(2.0, 2.0, 2.0)
+	if roughness_path != "" and ResourceLoader.exists(roughness_path):
+		material.roughness_texture = load(roughness_path) as Texture2D
+
+	return material
+
 func _make_gameplay_block(
 	node_name: String,
 	position: Vector3,
@@ -1313,9 +1354,9 @@ func _make_gameplay_block(
 		var mesh: BoxMesh = BoxMesh.new()
 		mesh.size = size
 		visual.mesh = mesh
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = color
-		material.roughness = 0.92
+		var material: StandardMaterial3D = (
+			_generated_surface_material(node_name, color)
+		)
 		visual.material_override = material
 		body.add_child(visual)
 	return body

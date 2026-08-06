@@ -1,57 +1,35 @@
 # Frontline: Objective
 
-## Version 6.0.0 Bot Locomotion, Direct Input & WWII Character Upgrade
+## Version 6.1.0 Authoritative Bot Drive & PBR Surface Pass
 
-### Bot locomotion reset
-Squad orders and shared enemy information remain, but moving escort formations
-no longer control bot locomotion.
+### Bot movement
+The custom bot velocity path has been removed from active use.
 
-Bots now:
-- Follow stable team route waypoints
-- Switch directly to the objective within 20 meters
-- Ignore shared enemies beyond 48 meters
-- Smoothly rotate toward goals instead of repeatedly using `look_at`
-- Stop route advancement at the final waypoint instead of wrapping backward
+Bots now feed a forward movement command into the same `_server_simulate()`
+function used by human players. This gives bots the same CharacterBody3D
+movement, collision, gravity, jumping, floor handling, and server authority.
 
-This removes the circular formation chasing that caused stationary spinning.
+Bots request validated recovery after two seconds without displacement.
 
-### Direct keyboard controls
-The player now reads the physical keys directly in `_unhandled_input`:
+### Original PBR texture pack
+Added original generated textures for Allied and Axis uniform cloth, red brick,
+aged plaster, cobblestone, wood, and aged metal. These assets are original and
+do not copy Wolfenstein artwork.
 
-- Tab: hold scoreboard
-- K: toggle tactical map
-- M: spawn/team/class menu
-- Escape: close overlays
+### Character realism
+Procedural soldiers now use fabric texture detail, but they remain procedural
+geometry. Truly realistic people require licensed rigged humanoid models.
 
-Input Map actions remain as controller/remapping fallbacks.
+Optional model slots:
+- `assets/models/allied_soldier.glb`
+- `assets/models/axis_soldier.glb`
 
-### WWII character upgrade
-Procedural third-person soldiers now include:
-- Neck, collar, and facial nose shape
-- Separate forearms and lower legs
-- Tunic skirt
-- Defined shoulders
-- Cross-body web straps
-- Canteen and entrenching tool
-- Rougher cloth materials
-- Existing helmet, pack, belt, pouches, gloves, boots, and class gear
-
-### Optional rigged model slots
-The client checks for these optional files:
-
-- `res://assets/models/allied_soldier.glb`
-- `res://assets/models/axis_soldier.glb`
-
-They are loaded only at runtime after Godot imports them. They are not
-parse-time preloads and cannot break headless startup.
-
-For best results, future models should be rigged humanoid GLBs with idle, walk,
-run, crouch, fire, reload, death, and revive animations.
+A model requirements document is included.
 
 ### Compatibility
-- Build: v6.0.0
+- Build: v6.1.0
 - Protocol: 341
 - Explicit connection-message `+` retained
 - Cache-independent VPS startup retained
 
-Expected status: `Connected: v6.0.0 protocol 341`
+Expected status: `Connected: v6.1.0 protocol 341`

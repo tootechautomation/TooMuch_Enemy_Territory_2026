@@ -118,6 +118,9 @@ var bot_last_support_ms := 0
 var bot_hold_position_until_ms := 0
 var bot_squad_support_refresh_ms := 0
 var bot_cached_squad_goal := Vector3.ZERO
+var bot_active_move_goal := Vector3.ZERO
+var bot_has_active_move_goal := false
+var bot_hard_stuck_seconds := 0.0
 var bot_grenade_accumulator := 2.0
 var bot_squad_role := 0
 var bot_role_initialized := false
@@ -1688,6 +1691,9 @@ func server_respawn(spawn_position: Vector3) -> void:
 	bot_waypoint_index = 0
 	bot_cached_squad_goal = Vector3.ZERO
 	bot_squad_support_refresh_ms = 0
+	bot_active_move_goal = Vector3.ZERO
+	bot_has_active_move_goal = false
+	bot_hard_stuck_seconds = 0.0
 	_apply_server_crouch(false)
 	_activate_spawn_protection()
 	alive = true
@@ -2450,21 +2456,13 @@ func _server_bot_tick(delta: float) -> void:
 		bot_ability_accumulator = 2.5
 		_bot_try_ability()
 
+	bot_has_active_move_goal = has_movement_goal
 	if has_movement_goal:
-		var routed_goal: Vector3 = _bot_route_goal(
-			movement_goal
-		)
-		_bot_move_toward(routed_goal, delta)
+		bot_active_move_goal = _bot_route_goal(movement_goal)
 	else:
-		velocity.x = 0.0
-		velocity.z = 0.0
+		bot_active_move_goal = global_position
 
-	_bot_update_stuck_state(delta)
-
-	if not is_on_floor():
-		velocity.y -= gravity * delta
-
-	move_and_slide()
+	_bot_drive_with_server_movement(delta)
 
 func _bot_face_position(world_position: Vector3) -> void:
 	var flat_direction: Vector3 = world_position - global_position
@@ -2595,6 +2593,54 @@ func _bot_try_stuck_recovery() -> void:
 		global_position = recovered
 		velocity = Vector3.ZERO
 		bot_last_position = recovered
+
+func _bot_drive_with_server_movement(delta: float) -> void:
+	if not bot_has_active_move_goal:
+		input_vector = Vector2.ZERO
+		sprint_requested = false
+		aim_requested = false
+		_server_simulate(delta)
+		return
+
+	var world_direction: Vector3 = (
+		bot_active_move_goal - global_position
+	)
+	world_direction.y = 0.0
+	var distance: float = world_direction.length()
+
+	if distance <= 0.85:
+		input_vector = Vector2.ZERO
+		sprint_requested = false
+		_server_simulate(delta)
+		return
+
+	world_direction = world_direction.normalized()
+	rotation.y = atan2(-world_direction.x, -world_direction.z)
+	input_vector = Vector2(0.0, -1.0)
+	sprint_requested = distance > 8.0
+	crouch_requested = false
+	aim_requested = false
+	jump_requested = (
+		is_on_floor()
+		and Time.get_ticks_msec() >= bot_next_jump_ms
+		and _bot_obstacle_ahead(world_direction)
+	)
+	if jump_requested:
+		bot_next_jump_ms = Time.get_ticks_msec() + 1800
+
+	var before_position: Vector3 = global_position
+	_server_simulate(delta)
+	var moved: float = before_position.distance_to(global_position)
+
+	if moved < 0.01:
+		bot_hard_stuck_seconds += delta
+	else:
+		bot_hard_stuck_seconds = 0.0
+		bot_last_position = global_position
+
+	if bot_hard_stuck_seconds >= 2.0:
+		bot_hard_stuck_seconds = 0.0
+		_bot_try_stuck_recovery()
 
 func _bot_move_toward(
 	world_position: Vector3,

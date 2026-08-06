@@ -2,11 +2,21 @@ extends Node3D
 
 var attacker_skins: Array[Resource] = []
 var defender_skins: Array[Resource] = []
+var uniform_texture: Texture2D
 
 func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		set_process(false)
 		return
+
+	var player = get_parent()
+	var uniform_path := (
+		"res://assets/pbr/generated/uniform_allied_albedo.png"
+		if int(player.team) == 0
+		else "res://assets/pbr/generated/uniform_axis_albedo.png"
+	)
+	if ResourceLoader.exists(uniform_path):
+		uniform_texture = load(uniform_path) as Texture2D
 
 	attacker_skins = _load_skin_resources([
 		"res://data/skins/attacker_ranger.tres",
@@ -319,6 +329,9 @@ func _build_character() -> void:
 func _material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
+	if uniform_texture != null:
+		material.albedo_texture = uniform_texture
+		material.uv1_scale = Vector3(2.5, 2.5, 2.5)
 	material.roughness = 0.90
 	material.metallic = 0.03
 	return material
