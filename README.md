@@ -1,25 +1,18 @@
 # Frontline: Objective
 
-## Version 7.7.3 Duplicate Weapon Block Removal
+## Version 7.8.0 Material, Lighting & Battlefield Atmosphere
 
-The stock, handguard, and sight block had been inserted into the imported GLB
-helper. That helper does not declare the procedural dimensions or materials,
-which caused `receiver_length` scope errors near the beginning of player.gd.
+Procedural geometry now receives shared textured materials for brick, plaster,
+concrete, stone, wood, metal, roads, mud, sandbags, and roofs. Deterministic
+noise breaks up flat colors while imported `External*` GLB nodes remain
+untouched.
 
-The imported helper now performs only:
-- GLB instantiation
-- Imported material processing
-- Imported muzzle-flash setup
+The client also receives filmic tonemapping, tuned ambient light, stronger
+contact shading, longer sun shadows, low haze, airborne dust, facade grime,
+scorch marks, and non-colliding street debris.
 
-The procedural rebuild function now owns:
-- Receiver and barrel dimensions
-- Metal and wood materials
-- Buttstock
-- Handguard
-- Rear sight
-- Front sight
-- First-person arms
-- Procedural muzzle flash
+This release intentionally changes no collision, bot navigation, networking,
+objectives, or damage behavior.
 
-Build: v7.7.3
+Build: v7.8.0
 Protocol: 341

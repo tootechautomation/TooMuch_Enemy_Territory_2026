@@ -12,6 +12,12 @@ const ServerProgressionStoreScript = preload(
 const WWIIDetailPassScript = preload(
 	"res://scripts/visuals/wwii_detail_pass.gd"
 )
+const WWIIMaterialLibraryScript = preload(
+	"res://scripts/visuals/wwii_material_library.gd"
+)
+const BattlefieldAtmosphereScript = preload(
+	"res://scripts/visuals/battlefield_atmosphere.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -45,7 +51,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "7.7.3"
+const BUILD_VERSION := "7.8.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -263,6 +269,8 @@ var command_post_progress_label: Label3D
 var command_post_beacon: OmniLight3D
 var battlefield_environment: Environment
 var wwii_detail_pass: Node3D
+var wwii_material_library
+var battlefield_atmosphere: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
 var ambience_player: AudioStreamPlayer
@@ -827,6 +835,27 @@ func _set_environment_property_if_available(
 		if StringName(property_info.get("name", "")) == property_name:
 			battlefield_environment.set(property_name, value)
 			return
+
+func _apply_wwii_material_library() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	wwii_material_library = WWIIMaterialLibraryScript.new()
+	if wwii_material_library.has_method("apply_to_world"):
+		var report: Dictionary = Dictionary(
+			wwii_material_library.call("apply_to_world", self)
+		)
+		print("WWII material assignment: %s" % report)
+
+func _build_battlefield_atmosphere() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_atmosphere != null:
+		return
+	battlefield_atmosphere = BattlefieldAtmosphereScript.new()
+	battlefield_atmosphere.name = "BattlefieldAtmosphere"
+	add_child(battlefield_atmosphere)
+	if battlefield_atmosphere.has_method("build"):
+		battlefield_atmosphere.call("build", self)
 
 func _build_wwii_detail_pass() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -8138,6 +8167,8 @@ func _build_world() -> void:
 	_build_breakable_environment()
 	_build_high_fidelity_environment_pass()
 	_build_wwii_detail_pass()
+	_apply_wwii_material_library()
+	_build_battlefield_atmosphere()
 	_build_battlefield_dressing_pass()
 	_build_combat_atmosphere_pass()
 	_build_map_expansion_pass()
