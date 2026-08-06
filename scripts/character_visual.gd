@@ -132,6 +132,89 @@ func _build_character() -> void:
 		skin.helmet_color
 	)
 
+	# Human facial and neck proportions.
+	_add_cylinder(
+		"Neck",
+		Vector3(0.0, 0.73, 0.0),
+		0.12,
+		0.22,
+		Color(0.54, 0.38, 0.28)
+	)
+	_add_rounded_box(
+		"Nose",
+		Vector3(0.0, 0.95, -0.265),
+		Vector3(0.075, 0.12, 0.09),
+		Color(0.62, 0.44, 0.32)
+	)
+	_add_rounded_box(
+		"Collar",
+		Vector3(0.0, 0.62, -0.08),
+		Vector3(0.50, 0.16, 0.30),
+		skin.primary_color.darkened(0.10)
+	)
+
+	# Separate upper and lower limb forms improve the human silhouette.
+	_add_capsule(
+		"ForearmL",
+		Vector3(-0.50, -0.15, -0.04),
+		0.115,
+		0.42,
+		skin.primary_color.darkened(0.04)
+	)
+	_add_capsule(
+		"ForearmR",
+		Vector3(0.50, -0.15, -0.04),
+		0.115,
+		0.42,
+		skin.primary_color.darkened(0.04)
+	)
+	_add_capsule(
+		"ShinL",
+		Vector3(-0.19, -1.02, -0.01),
+		0.13,
+		0.42,
+		skin.secondary_color.darkened(0.11)
+	)
+	_add_capsule(
+		"ShinR",
+		Vector3(0.19, -1.02, -0.01),
+		0.13,
+		0.42,
+		skin.secondary_color.darkened(0.11)
+	)
+
+	# WWII tunic skirt, shoulder structure, straps and web equipment.
+	_add_rounded_box(
+		"TunicSkirt",
+		Vector3(0.0, -0.18, 0.0),
+		Vector3(0.70, 0.36, 0.38),
+		skin.primary_color.darkened(0.05)
+	)
+	_add_rounded_box(
+		"ShoulderL",
+		Vector3(-0.43, 0.46, 0.0),
+		Vector3(0.25, 0.20, 0.34),
+		skin.primary_color
+	)
+	_add_rounded_box(
+		"ShoulderR",
+		Vector3(0.43, 0.46, 0.0),
+		Vector3(0.25, 0.20, 0.34),
+		skin.primary_color
+	)
+	_add_rounded_box(
+		"StrapL",
+		Vector3(-0.20, 0.28, -0.225),
+		Vector3(0.075, 0.76, 0.045),
+		skin.accent_color.darkened(0.15)
+	)
+	_add_rounded_box(
+		"StrapR",
+		Vector3(0.20, 0.28, -0.225),
+		Vector3(0.075, 0.76, 0.045),
+		skin.accent_color.darkened(0.15)
+	)
+
 	# Boots, gloves, belt, pouches, and backpack add silhouette detail.
 	_add_capsule(
 		"BootL",
@@ -183,6 +266,19 @@ func _build_character() -> void:
 		Vector3(0.20, 0.25, 0.12),
 		skin.accent_color.darkened(0.10)
 	)
+	_add_cylinder(
+		"Canteen",
+		Vector3(-0.37, -0.35, 0.22),
+		0.11,
+		0.30,
+		Color(0.24, 0.28, 0.19)
+	)
+	_add_rounded_box(
+		"EntrenchingTool",
+		Vector3(0.34, 0.05, 0.40),
+		Vector3(0.16, 0.56, 0.08),
+		Color(0.20, 0.16, 0.09)
+	)
 
 	# Class-specific gear.
 	match int(player.player_class):
@@ -223,7 +319,7 @@ func _build_character() -> void:
 func _material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
-	material.roughness = 0.76
+	material.roughness = 0.90
 	material.metallic = 0.03
 	return material
 

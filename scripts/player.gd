@@ -60,6 +60,8 @@ var tex_spawn_shield: Texture2D
 var tex_muzzle_flash_ui: Texture2D
 var fp_rifle_scene: PackedScene
 var fp_pistol_scene: PackedScene
+var allied_character_scene: PackedScene
+var axis_character_scene: PackedScene
 var fp_gunmetal_albedo: Texture2D
 var fp_gunmetal_normal: Texture2D
 var fp_gunmetal_roughness: Texture2D
@@ -217,6 +219,8 @@ var tactical_map_panel: PanelContainer
 var tactical_map_label: Label
 var tactical_map_open := false
 var tactical_map_toggle_latched := false
+var scoreboard_key_held := false
+var direct_map_key_latched := false
 var et_hud_root: Control
 var et_status_label: Label
 var et_health_label: Label
@@ -401,6 +405,12 @@ func _ready() -> void:
 		fp_pistol_scene = _load_optional_scene(
 			"res://assets/models/fp_service_pistol.glb"
 		)
+		allied_character_scene = _load_optional_scene(
+			"res://assets/models/allied_soldier.glb"
+		)
+		axis_character_scene = _load_optional_scene(
+			"res://assets/models/axis_soldier.glb"
+		)
 		fp_gunmetal_albedo = _load_optional_texture("res://assets/pbr/gunmetal_albedo.png")
 		fp_gunmetal_normal = _load_optional_texture("res://assets/pbr/gunmetal_normal.png")
 		fp_gunmetal_roughness = _load_optional_texture("res://assets/pbr/gunmetal_roughness.png")
@@ -435,6 +445,27 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _is_local_player():
 		return
+
+	if event is InputEventKey:
+		var key_event := event as InputEventKey
+		var key_code: Key = (
+			key_event.physical_keycode
+			if key_event.physical_keycode != 0
+			else key_event.keycode
+		)
+
+		if key_code == KEY_TAB:
+			scoreboard_key_held = key_event.pressed
+			get_viewport().set_input_as_handled()
+
+		if (
+			key_code == KEY_K
+			and key_event.pressed
+			and not key_event.echo
+		):
+			_set_tactical_map_open(not tactical_map_open)
+			get_viewport().set_input_as_handled()
+
 
 	if event is InputEventMouseMotion and alive and not downed:
 		rotation.y -= event.relative.x * 0.0025
@@ -528,7 +559,10 @@ func _poll_spawn_menu_toggle() -> void:
 	)
 	if map_pressed and not tactical_map_toggle_latched:
 		tactical_map_toggle_latched = true
-		_set_tactical_map_open(not tactical_map_open)
+		# Physical K is handled in _unhandled_input. This fallback supports
+		# remapped inputs and controllers only.
+		if not Input.is_physical_key_pressed(KEY_K):
+			_set_tactical_map_open(not tactical_map_open)
 	elif not map_pressed:
 		tactical_map_toggle_latched = false
 
@@ -2270,6 +2304,13 @@ func _server_bot_tick(delta: float) -> void:
 		var enemy_distance: float = global_position.distance_to(
 			target_player.global_position
 		)
+		if enemy_distance > 48.0:
+			target_player = null
+
+	if target_player != null:
+		var enemy_distance: float = global_position.distance_to(
+			target_player.global_position
+		)
 		var combat_range: float = minf(
 			_weapon_range_meters(),
 			28.0 if player_class != PlayerClass.SCOUT else 42.0
@@ -2353,21 +2394,6 @@ func _server_bot_tick(delta: float) -> void:
 			movement_goal = target_player.global_position
 			has_movement_goal = true
 
-	if (
-		not has_movement_goal
-		and player_class in [
-			PlayerClass.SOLDIER,
-			PlayerClass.MEDIC,
-			PlayerClass.FIELD_OPS
-		]
-	):
-		var squad_goal: Variant = _bot_squad_support_goal(main)
-		if squad_goal is Vector3:
-			var support_position: Vector3 = Vector3(squad_goal)
-			if global_position.distance_to(support_position) > 4.0:
-				movement_goal = support_position
-				has_movement_goal = true
-
 	if not has_movement_goal:
 		if now >= bot_route_repath_ms:
 			bot_route_repath_ms = now + 3500
@@ -2380,10 +2406,12 @@ func _server_bot_tick(delta: float) -> void:
 				bot_route_index
 			)
 		)
-		var tactical_goal: Vector3 = _bot_class_tactical_goal(main)
+		var objective_goal: Vector3 = Vector3(
+			main.call("bot_goal_position", self)
+		)
 		movement_goal = (
-			tactical_goal
-			if global_position.distance_to(tactical_goal) <= 28.0
+			objective_goal
+			if global_position.distance_to(objective_goal) <= 20.0
 			else routed_goal
 		)
 
@@ -2443,9 +2471,14 @@ func _bot_face_position(world_position: Vector3) -> void:
 	flat_direction.y = 0.0
 	if flat_direction.length() <= 0.01:
 		return
-	look_at(
-		global_position + flat_direction.normalized(),
-		Vector3.UP
+	var desired_yaw: float = atan2(
+		-flat_direction.x,
+		-flat_direction.z
+	)
+	rotation.y = lerp_angle(
+		rotation.y,
+		desired_yaw,
+		0.28
 	)
 
 func _bot_initialize_route() -> void:
@@ -2483,11 +2516,17 @@ func _bot_route_goal(fallback_goal: Vector3) -> Vector3:
 		return fallback_goal
 
 	var waypoint: Vector3 = bot_route[bot_waypoint_index]
-	if global_position.distance_to(waypoint) < 3.0:
-		bot_waypoint_index = (
-			bot_waypoint_index + 1
-		) % bot_route.size()
+	var safety_iterations := 0
+	while (
+		global_position.distance_to(waypoint) < 4.0
+		and safety_iterations < bot_route.size()
+	):
+		bot_waypoint_index = mini(
+			bot_waypoint_index + 1,
+			bot_route.size() - 1
+		)
 		waypoint = bot_route[bot_waypoint_index]
+		safety_iterations += 1
 
 	# Use the objective directly once the bot has reached the central lanes.
 	if global_position.distance_to(fallback_goal) < 18.0:
@@ -5172,9 +5211,16 @@ func _update_hud() -> void:
 	if main_results_panel != null:
 		round_results_open = main_results_panel.visible
 
+	var scoreboard_requested: bool = (
+		scoreboard_key_held
+		or Input.is_action_pressed("scoreboard")
+		or Input.is_physical_key_pressed(KEY_TAB)
+	)
 	scoreboard.visible = (
-		Input.is_action_pressed("scoreboard")
+		scoreboard_requested
 		and not round_results_open
+		and not tactical_map_open
+		and not spawn_menu_open
 	)
 	if scoreboard_panel != null:
 		scoreboard_panel.visible = scoreboard.visible

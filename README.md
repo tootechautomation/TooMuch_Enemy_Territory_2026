@@ -1,40 +1,57 @@
 # Frontline: Objective
 
-## Version 5.9.1 Squad Movement & Tactical Map Hotfix
+## Version 6.0.0 Bot Locomotion, Direct Input & WWII Character Upgrade
 
-### Bot movement fix
-`SquadCoordinator.squad_id()` returned the result of `/` from a function typed
-as `int`. Godot 4 division returns a float, which could interrupt every bot AI
-tick.
+### Bot locomotion reset
+Squad orders and shared enemy information remain, but moving escort formations
+no longer control bot locomotion.
 
-Fixed:
-```gdscript
-return int(posmod(peer_id, 8) / SQUAD_SIZE)
-```
+Bots now:
+- Follow stable team route waypoints
+- Switch directly to the objective within 20 meters
+- Ignore shared enemies beyond 48 meters
+- Smoothly rotate toward goals instead of repeatedly using `look_at`
+- Stop route advancement at the final waypoint instead of wrapping backward
 
-The formation row calculation is also explicitly converted to int.
+This removes the circular formation chasing that caused stationary spinning.
 
-Additional safeguards:
-- Formation roles are clamped to 0-3.
-- Near-zero support goals are ignored.
-- A stationary escort no longer freezes the squad away from the objective.
-- Target-claim counts reset every 0.9 seconds.
+### Direct keyboard controls
+The player now reads the physical keys directly in `_unhandled_input`:
 
-### Tactical map control fix
-Both the tactical map and class menu were bound to M.
+- Tab: hold scoreboard
+- K: toggle tactical map
+- M: spawn/team/class menu
+- Escape: close overlays
 
-New controls:
-- `M`: spawn/team/class menu
-- `K`: tactical map
-- `Escape`: close tactical map or deployed spawn menu
+Input Map actions remain as controller/remapping fallbacks.
 
-The map and spawn menu now dismiss one another. Respawning and deploying also
-force the tactical map closed.
+### WWII character upgrade
+Procedural third-person soldiers now include:
+- Neck, collar, and facial nose shape
+- Separate forearms and lower legs
+- Tunic skirt
+- Defined shoulders
+- Cross-body web straps
+- Canteen and entrenching tool
+- Rougher cloth materials
+- Existing helmet, pack, belt, pouches, gloves, boots, and class gear
+
+### Optional rigged model slots
+The client checks for these optional files:
+
+- `res://assets/models/allied_soldier.glb`
+- `res://assets/models/axis_soldier.glb`
+
+They are loaded only at runtime after Godot imports them. They are not
+parse-time preloads and cannot break headless startup.
+
+For best results, future models should be rigged humanoid GLBs with idle, walk,
+run, crouch, fire, reload, death, and revive animations.
 
 ### Compatibility
-- Build: v5.9.1
+- Build: v6.0.0
 - Protocol: 341
-- Explicit connection-message `+` retained.
-- All v5.9 squad coordination features remain.
+- Explicit connection-message `+` retained
+- Cache-independent VPS startup retained
 
-Expected status: `Connected: v5.9.1 protocol 341`
+Expected status: `Connected: v6.0.0 protocol 341`
