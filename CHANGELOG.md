@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.33.0
+- Added coordinated fallback head, torso, shoulder, and weapon pitch from the existing replicated look direction
+- Added smoothly blended hip-to-aim transitions instead of hard third-person pose switching
+- Identified the firing player locally from the existing shot-effect origin without changing RPC arguments
+- Added a brief shouldered-fire hold for remote shooters so their firing silhouette remains readable
+- Added visible capped world-weapon recoil across the weapon, arms, torso, and head
+- Added fast recoil recovery suitable for semi-automatic and automatic weapons
+- Reset aim-hold and firing-recoil presentation state on respawn
+- Preserved shot RPC compatibility, gameplay recoil, spread, damage, fire rate, networking, and protocol 341
+
 ## 8.32.0
 - Added presentation-only grounded detection suitable for local, server, bot, and interpolated remote characters
 - Added takeoff compression through the torso, legs, knees, and held weapon

@@ -87,7 +87,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.32.0"
+const BUILD_VERSION := "8.33.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -7263,6 +7263,23 @@ func _spawn_world_muzzle_effect(
 		)
 		smoke_tween.chain().tween_callback(smoke.queue_free)
 
+func _notify_world_shot_recoil(start_position: Vector3) -> void:
+	var closest_player: Node = null
+	var closest_distance := 1.25
+	for player_value in players.values():
+		var candidate := player_value as Node3D
+		if candidate == null:
+			continue
+		var candidate_head := candidate.get_node_or_null("Head") as Node3D
+		if candidate_head == null:
+			continue
+		var distance := candidate_head.global_position.distance_to(start_position)
+		if distance < closest_distance:
+			closest_distance = distance
+			closest_player = candidate
+	if closest_player != null and closest_player.has_method("register_world_shot_recoil"):
+		closest_player.call("register_world_shot_recoil")
+
 @rpc("authority", "call_local", "unreliable")
 func show_shot_effect(
 	start_position: Vector3,
@@ -7272,6 +7289,7 @@ func show_shot_effect(
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	_notify_world_shot_recoil(start_position)
 	_spawn_world_muzzle_effect(start_position, end_position)
 
 	var effect_root := Node3D.new()

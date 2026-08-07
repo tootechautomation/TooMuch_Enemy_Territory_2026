@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.32.0 — Airborne, Landing, and Stance Transitions
+## Version 8.33.0 — Third-Person Aim Tracking and Firing Recoil
+
+Fallback soldiers now follow the replicated vertical look direction with coordinated head, torso, shoulder, and weapon pitch. Looking uphill, down from elevated cover, or across uneven terrain therefore changes the full firing silhouette instead of moving only the invisible gameplay ray or camera head node.
+
+Aim-to-hip transitions now blend through the support arm, firing arm, torso, and weapon rather than switching between two hard poses. Remote firing uses the existing shot-effect origin to identify the shooter locally, briefly shoulder the weapon, and apply visible recoil through the weapon, arms, torso, and head. Repeated automatic fire accumulates within a restrained cap and settles quickly.
+
+No arguments were added to the unreliable shot-effect RPC, and no snapshot fields were added. Imported characters retain their animation-controller priority; aim mechanics, recoil values, spread, damage, fire rate, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.32.0 Airborne, Landing, and Stance Transitions
 
 Fallback soldiers now visibly prepare for takeoff, hold a readable airborne silhouette, and absorb their landing instead of continuing the grounded walk cycle in midair. Ascending and descending motion produce different leg balance, knee bend, torso pitch, and weapon response, while landing strength scales with the existing vertical movement state.
 

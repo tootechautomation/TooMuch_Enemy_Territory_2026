@@ -309,6 +309,9 @@ var visual_world_vertical_motion := 0.0
 var visual_world_takeoff_impulse := 0.0
 var visual_world_landing_impulse := 0.0
 var visual_world_stance_blend := 0.0
+var visual_world_aim_blend := 0.0
+var visual_world_aim_hold := 0.0
+var visual_world_fire_recoil := 0.0
 var visual_damage_reaction := 0.0
 var visual_damage_side := 1.0
 var visual_revive_recovery := 0.0
@@ -2066,6 +2069,9 @@ func server_respawn(spawn_position: Vector3) -> void:
 	visual_world_takeoff_impulse = 0.0
 	visual_world_landing_impulse = 0.0
 	visual_world_stance_blend = 1.0 if is_crouching else 0.0
+	visual_world_aim_blend = 0.0
+	visual_world_aim_hold = 0.0
+	visual_world_fire_recoil = 0.0
 	if tactical_map_open:
 		_set_tactical_map_open(false)
 	is_reloading = false
@@ -6077,6 +6083,21 @@ func _update_world_character_animation(delta: float) -> void:
 		1.0 if is_crouching else 0.0,
 		1.0 - exp(-11.0 * delta)
 	)
+	visual_world_aim_blend = lerpf(
+		visual_world_aim_blend,
+		1.0 if aim_requested or is_aiming or visual_world_aim_hold > 0.0 else 0.0,
+		1.0 - exp(-15.0 * delta)
+	)
+	visual_world_aim_hold = move_toward(
+		visual_world_aim_hold,
+		0.0,
+		delta * 2.8
+	)
+	visual_world_fire_recoil = move_toward(
+		visual_world_fire_recoil,
+		0.0,
+		delta * 7.5
+	)
 	var local_velocity: Vector3 = global_transform.basis.inverse() * planar_velocity
 	var target_forward := 0.0
 	var target_strafe := 0.0
@@ -6237,8 +6258,21 @@ func _update_world_character_animation(delta: float) -> void:
 		visual_world_vertical_motion,
 		visual_world_takeoff_impulse,
 		visual_world_landing_impulse,
-		visual_world_stance_blend
+		visual_world_stance_blend,
+		clampf($Head.rotation.x, -1.10, 1.10),
+		visual_world_aim_blend,
+		visual_world_fire_recoil
 	)
+
+func register_world_shot_recoil() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	visual_world_fire_recoil = clampf(
+		visual_world_fire_recoil + 0.72,
+		0.0,
+		1.0
+	)
+	visual_world_aim_hold = 1.0
 
 func _register_visual_damage(amount: int, source_id: int = 0) -> void:
 	if DisplayServer.get_name() == "headless":
