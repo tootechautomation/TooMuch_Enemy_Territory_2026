@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Support LMG"
+magazine_size = 60
+reserve_ammo = 180
+damage = 18
+rounds_per_minute = 720.0
+reload_seconds = 3.4
+range_meters = 110.0
+hip_spread_degrees = 1.15
+moving_spread_degrees = 2.35
+recoil_degrees = 0.75

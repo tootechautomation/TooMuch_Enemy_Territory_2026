@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Field Ops Rifle"
+magazine_size = 30
+reserve_ammo = 150
+damage = 21
+rounds_per_minute = 600.0
+reload_seconds = 2.0
+range_meters = 125.0
+hip_spread_degrees = 0.62
+moving_spread_degrees = 1.25
+recoil_degrees = 0.55

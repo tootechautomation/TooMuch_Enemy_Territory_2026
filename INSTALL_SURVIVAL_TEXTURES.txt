@@ -1,0 +1,47 @@
+FRONTLINE: OBJECTIVE v8.42.0 COMPACT - SURVIVAL CHARACTER TEXTURE INSTALL
+
+This compact package already contains:
+- Frontline Objective v8.42.0 code/project files
+- Axis MP40
+- Axis Walther P38
+- Axis German Model 24 grenade FBX
+- Axis Survival Character FBX
+- Allied M1A1 Thompson
+- Allied TT pistol
+- Allied Private Military Contractor character + textures
+
+The large Survival Character textures are intentionally NOT duplicated in this download.
+Use the two ZIPs you already have: Textures.zip and Body.zip.
+
+STEP 1 - TEXTURES.ZIP
+Extract the CONTENTS of Textures.zip into:
+  assets/external/characters/
+
+After extraction, this folder should exist:
+  assets/external/characters/Textures/Textures/Backpack/
+
+You should also see Jacket, Shoes, HairCap, Gloves, HairStyle, Jeans, Eye, etc. beside Backpack.
+
+STEP 2 - BODY.ZIP
+Extract Body.zip into:
+  assets/external/characters/Textures/Textures/
+
+After extraction, this folder should exist:
+  assets/external/characters/Textures/Textures/Body/
+
+Example expected file:
+  assets/external/characters/Textures/Textures/Body/Body_BaseColor.1001.png
+
+STEP 3 - OPEN GODOT
+Open project.godot from this compact project folder and let Godot import the FBX/textures.
+The first import can take longer because of the high-resolution Survival Character textures.
+
+IMPORTANT
+Do not create an extra nested folder such as:
+  assets/external/characters/Textures/Textures/Textures/
+
+The correct structure is exactly:
+  assets/external/characters/Textures/Textures/Body/
+  assets/external/characters/Textures/Textures/Jacket/
+  assets/external/characters/Textures/Textures/Backpack/
+  ...etc.

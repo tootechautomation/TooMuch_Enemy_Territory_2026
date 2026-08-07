@@ -1,6 +1,12 @@
 # Frontline: Objective
 
-## Version 8.39.0 — Puddles and Rain-Ground Interaction
+## Version 8.41.0 — Real Team Asset Payload
+
+The external-asset pipeline now maps the requested CGTrader models to team-specific combat visuals: Allied M1A1 Thompson primary, Allied TT pistol, Axis MP40 primary, Axis Walther P38 pistol, Axis Model 24 stick grenade, Allied Private Military Contractor character, and Axis Survival Character. GLB, FBX, and OBJ candidates are recognized from `assets/external/` with the bundled v8.39 visuals retained automatically when a downloaded source package is absent. First-person and remote third-person weapon selection now use the same team mapping, and the Axis grenade can replace the spherical fallback with the imported Model 24 mesh.
+
+See `assets/external/CGTRADER_ASSET_SETUP.md` for exact filenames and source links. The CGTrader model binaries are not redistributed in this project archive; place the downloaded free model packages in the listed paths and Godot will import them.
+
+## Previous Phase — 8.39.0 Puddles and Rain-Ground Interaction
 
 Storms now produce visible shallow puddles and localized rain-impact droplets in addition to the v8.38 material wetness. Ten irregularly placed puddles emerge gradually across non-objective portions of the battlefield as accumulated wetness rises, using one shared non-colliding material with restrained reflection and transparency. A capped ground-level particle field adds small upward splash droplets during active rain.
 

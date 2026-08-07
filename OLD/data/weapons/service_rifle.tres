@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Service Rifle"
+magazine_size = 30
+reserve_ammo = 120
+damage = 24
+rounds_per_minute = 500.0
+reload_seconds = 2.1
+range_meters = 120.0
+hip_spread_degrees = 1.4
+moving_spread_degrees = 2.2
+recoil_degrees = 0.7

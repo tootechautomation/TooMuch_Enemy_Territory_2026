@@ -1,5 +1,8 @@
 extends CharacterBody3D
 
+const ExternalAssetRegistryScript = preload("res://scripts/assets/asset_registry.gd")
+const RealAssetAdapterScript = preload("res://scripts/assets/real_asset_adapter.gd")
+
 const GRAVITY := 18.0
 const BOUNCE_FACTOR := 0.42
 const POSITION_SYNC_INTERVAL := 0.05
@@ -15,6 +18,7 @@ var target_position := Vector3.ZERO
 var target_velocity := Vector3.ZERO
 var beep_audio: AudioStreamPlayer3D
 var next_beep_time := 0.0
+var external_visual: Node3D
 
 func configure(
 	new_grenade_id: int,
@@ -34,6 +38,7 @@ func configure(
 	fuse_remaining = fuse_seconds
 	next_beep_time = 0.05
 	if DisplayServer.get_name() != "headless":
+		_build_team_grenade_visual()
 		if ResourceLoader.exists("res://audio/grenade_beep.wav"):
 			var beep_resource: Resource = load(
 				"res://audio/grenade_beep.wav"
@@ -45,6 +50,98 @@ func configure(
 				beep_audio.max_distance = 22.0
 				beep_audio.volume_db = -4.0
 				add_child(beep_audio)
+
+
+func _build_team_grenade_visual() -> void:
+	if external_visual != null:
+		external_visual.queue_free()
+		external_visual = null
+	var scene: PackedScene = ExternalAssetRegistryScript.grenade_scene(owner_team)
+	if scene == null:
+		if owner_team == 1:
+			_build_textured_model24_fallback()
+		return
+	var instance: Node = scene.instantiate()
+	if not instance is Node3D:
+		instance.queue_free()
+		return
+	external_visual = instance as Node3D
+	external_visual.name = "ExternalModel24Grenade"
+	# Model 24 is a long stick grenade; fit it to a compact throwable silhouette.
+	external_visual.rotation_degrees = Vector3(0.0, 0.0, 90.0)
+	add_child(external_visual)
+	RealAssetAdapterScript.adapt_weapon(external_visual, 0.36)
+	var fallback_mesh := get_node_or_null("MeshInstance3D") as MeshInstance3D
+	if fallback_mesh != null:
+		fallback_mesh.visible = false
+
+func _build_textured_model24_fallback() -> void:
+	# v8.41: the uploaded Model 24 package included its PBR maps but not
+	# the mesh. Build the correct stick-grenade silhouette and skin it with
+	# those maps so Axis grenades are no longer generic spheres.
+	var root := Node3D.new()
+	root.name = "TexturedModel24Fallback"
+	root.rotation_degrees = Vector3(0.0, 0.0, 90.0)
+	add_child(root)
+	external_visual = root
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.30, 0.32, 0.18)
+	var base_path := "res://assets/external/weapons/model24_grenade_textures/Grenade_Base_Color.png"
+	if ResourceLoader.exists(base_path):
+		var base_resource: Resource = load(base_path)
+		if base_resource is Texture2D:
+			material.albedo_texture = base_resource as Texture2D
+	var rough_path := "res://assets/external/weapons/model24_grenade_textures/Grenade_Roughness.png"
+	if ResourceLoader.exists(rough_path):
+		var rough_resource: Resource = load(rough_path)
+		if rough_resource is Texture2D:
+			material.roughness_texture = rough_resource as Texture2D
+	var metal_path := "res://assets/external/weapons/model24_grenade_textures/Grenade_Metallic.png"
+	if ResourceLoader.exists(metal_path):
+		var metal_resource: Resource = load(metal_path)
+		if metal_resource is Texture2D:
+			material.metallic_texture = metal_resource as Texture2D
+	var normal_path := "res://assets/external/weapons/model24_grenade_textures/Grenade_Normal_OpenGL.png"
+	if ResourceLoader.exists(normal_path):
+		var normal_resource: Resource = load(normal_path)
+		if normal_resource is Texture2D:
+			material.normal_enabled = true
+			material.normal_texture = normal_resource as Texture2D
+
+	var handle := MeshInstance3D.new()
+	var handle_mesh := CylinderMesh.new()
+	handle_mesh.top_radius = 0.025
+	handle_mesh.bottom_radius = 0.032
+	handle_mesh.height = 0.30
+	handle.mesh = handle_mesh
+	handle.material_override = material
+	handle.position.y = -0.07
+	root.add_child(handle)
+
+	var head := MeshInstance3D.new()
+	var head_mesh := CylinderMesh.new()
+	head_mesh.top_radius = 0.072
+	head_mesh.bottom_radius = 0.072
+	head_mesh.height = 0.12
+	head.mesh = head_mesh
+	head.material_override = material
+	head.position.y = 0.14
+	root.add_child(head)
+
+	var cap := MeshInstance3D.new()
+	var cap_mesh := CylinderMesh.new()
+	cap_mesh.top_radius = 0.037
+	cap_mesh.bottom_radius = 0.037
+	cap_mesh.height = 0.025
+	cap.mesh = cap_mesh
+	cap.material_override = material
+	cap.position.y = -0.235
+	root.add_child(cap)
+
+	var fallback_mesh := get_node_or_null("MeshInstance3D") as MeshInstance3D
+	if fallback_mesh != null:
+		fallback_mesh.visible = false
 
 func _physics_process(delta: float) -> void:
 	if beep_audio != null and fuse_remaining > 0.0:

@@ -1,0 +1,2 @@
+Extract Textures.zip so its included Textures/ folder lands inside this folder.
+The result should be assets/external/characters/Textures/Textures/Backpack, Jacket, etc.

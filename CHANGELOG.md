@@ -1,4 +1,27 @@
+## v8.42.0 — Survival textures + real Model 24 grenade
+- Added complete split Survival Character texture set (Body plus clothing/accessory textures) in the relative texture layout referenced by the FBX.
+- Added the supplied German_Handgrenade FBX as the preferred Axis Model 24 grenade mesh.
+- Retained the textured procedural Model 24 fallback if external import fails.
+- Multiplayer protocol remains 341; this is an asset/visual update.
+
+## 8.41.0
+- Bundled user-supplied MP40, Thompson M1A1, TT pistol, Walther P38, PMC character, and Survival Character FBX assets.
+- Bundled supplied PBR texture sets for weapons and PMC character.
+- Axis Model 24 now uses uploaded PBR maps on a stick-grenade fallback when the external grenade mesh is absent.
+- Retains automatic normalization and procedural fallback behavior.
+- Network protocol remains 341.
+
 # Changelog
+
+## 8.40.0
+- Added explicit Allied M1A1 Thompson and Axis MP40 primary-weapon asset candidates
+- Added team-specific TT pistol (Allied) and Walther P38 (Axis) secondary-weapon candidates
+- Added Axis Model 24 stick-grenade external visual support
+- Added preferred Allied Private Military Contractor and Axis Survival Character candidates
+- Accepted GLB, FBX, or OBJ filenames for each requested external model
+- Routed first-person weapon selection through the same team-specific external registry used by remote characters
+- Preserved bundled weapon, grenade, and animated humanoid fallbacks whenever external files are missing
+- Preserved gameplay, collision, weather, objectives, networking, and protocol 341
 
 ## 8.39.0
 - Added ten shallow non-colliding battlefield puddles driven by accumulated weather wetness

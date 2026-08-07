@@ -459,8 +459,13 @@ func _build_imported_first_person_weapon(
 	is_pistol: bool
 ) -> bool:
 	var selected_scene: PackedScene = (
-		fp_pistol_scene if is_pistol else fp_rifle_scene
+		ExternalAssetRegistryScript.weapon_scene(
+			team,
+			1 if is_pistol else 0
+		)
 	)
+	if selected_scene == null:
+		selected_scene = fp_pistol_scene if is_pistol else fp_rifle_scene
 	if selected_scene == null:
 		return false
 
@@ -482,6 +487,10 @@ func _build_imported_first_person_weapon(
 		else Vector3(0.80, 0.82, 0.86)
 	)
 	weapon_view.add_child(imported_root)
+	RealAssetAdapterScript.adapt_weapon(
+		imported_root,
+		0.38 if is_pistol else 0.82
+	)
 	_apply_first_person_materials(imported_root)
 
 	muzzle_flash = MeshInstance3D.new()
@@ -2301,6 +2310,10 @@ func _refresh_external_weapon_model() -> void:
 		)
 	)
 	if external_weapon_model != null:
+		RealAssetAdapterScript.adapt_weapon(
+			external_weapon_model,
+			0.29 if current_weapon_index == 1 else 0.88
+		)
 		external_weapon_index = current_weapon_index
 
 func _update_external_character_animation() -> void:

@@ -66,6 +66,32 @@ static func adapt_character(
 	)
 	return report
 
+static func adapt_weapon(
+	model: Node3D,
+	target_length: float
+) -> Dictionary:
+	var report := {
+		"valid": false,
+		"size_before": Vector3.ZERO,
+		"size_after": Vector3.ZERO,
+		"scale_multiplier": 1.0,
+		"materials_adjusted": 0
+	}
+	if model == null:
+		return report
+	var before := _bounds(model)
+	report["size_before"] = before.size
+	var longest := maxf(before.size.x, maxf(before.size.y, before.size.z))
+	if longest > 0.001 and target_length > 0.01:
+		var multiplier := clampf(target_length / longest, 0.001, 1000.0)
+		model.scale *= Vector3.ONE * multiplier
+		report["scale_multiplier"] = multiplier
+	var after := _bounds(model)
+	report["size_after"] = after.size
+	report["materials_adjusted"] = _clean_materials(model, false)
+	report["valid"] = after.size.length() > 0.02
+	return report
+
 static func adapt_environment(
 	model: Node3D,
 	target_height: float = 0.0
