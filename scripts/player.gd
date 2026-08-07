@@ -4381,30 +4381,41 @@ func _add_first_person_segment(
 	end_radius: float,
 	material: Material
 ) -> void:
+	# IMPORTANT: start_point/end_point are LOCAL TO parent.
+	# Earlier builds used Node3D.look_at(end_point), but look_at() interprets
+	# its target in global space. That mixed local and global coordinates and
+	# produced the detached black bars/cylinders seen around the weapon.
 	var direction: Vector3 = end_point - start_point
 	var segment_length: float = direction.length()
 	if segment_length <= 0.001:
 		return
 
-	var segment_root: Node3D = Node3D.new()
-	segment_root.name = node_name
-	segment_root.position = (start_point + end_point) * 0.5
-	parent.add_child(segment_root)
-	segment_root.look_at(end_point, Vector3.UP)
+	var y_axis: Vector3 = direction.normalized()
+	var reference: Vector3 = Vector3.FORWARD
+	if absf(y_axis.dot(reference)) > 0.92:
+		reference = Vector3.RIGHT
+
+	var x_axis: Vector3 = reference.cross(y_axis).normalized()
+	var z_axis: Vector3 = x_axis.cross(y_axis).normalized()
+	var local_basis: Basis = Basis(x_axis, y_axis, z_axis).orthonormalized()
+	var midpoint: Vector3 = (start_point + end_point) * 0.5
 
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
+	mesh_instance.name = node_name
 	var mesh: CylinderMesh = CylinderMesh.new()
 	mesh.top_radius = end_radius
 	mesh.bottom_radius = start_radius
 	mesh.height = segment_length
 	mesh.radial_segments = 24
 	mesh_instance.mesh = mesh
-	# Node3D.look_at() points local -Z at the target; rotating the Y-axis cylinder
-	# -90 degrees around X aligns its length with that -Z direction.
-	mesh_instance.rotation.x = deg_to_rad(-90.0)
 	mesh_instance.material_override = material
 	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	segment_root.add_child(mesh_instance)
+
+	# CylinderMesh is Y-axis aligned by default, so assign a local basis whose
+	# Y axis points directly from the sleeve start to the grip. No look_at(),
+	# no secondary 90-degree correction, and no world/local coordinate mixing.
+	parent.add_child(mesh_instance)
+	mesh_instance.transform = Transform3D(local_basis, midpoint)
 
 
 func _add_fps_limb(
@@ -4465,26 +4476,26 @@ func _build_first_person_arms(is_pistol: bool) -> void:
 		# that exist, creating a clean concept-art-like silhouette.
 		_add_fps_limb(
 			"FPS_RightSleeve",
-			Vector3(0.37, -0.69, 0.58),
-			Vector3(0.205, -0.285, 0.305),
+			Vector3(0.40, -0.76, 0.58),
+			Vector3(0.205, -0.315, 0.285),
 			0.064, 0.048, sleeve_material
 		)
 		_add_fps_limb(
 			"FPS_RightGlove",
-			Vector3(0.205, -0.285, 0.305),
-			Vector3(0.128, -0.075, 0.168),
+			Vector3(0.205, -0.315, 0.285),
+			Vector3(0.128, -0.100, 0.168),
 			0.047, 0.037, glove_material
 		)
 		_add_fps_limb(
 			"FPS_LeftSleeve",
-			Vector3(-0.38, -0.70, 0.46),
-			Vector3(-0.165, -0.300, 0.055),
+			Vector3(-0.40, -0.76, 0.46),
+			Vector3(-0.165, -0.325, 0.040),
 			0.061, 0.046, sleeve_material
 		)
 		_add_fps_limb(
 			"FPS_LeftGlove",
-			Vector3(-0.165, -0.300, 0.055),
-			Vector3(-0.055, -0.085, -0.142),
+			Vector3(-0.165, -0.325, 0.040),
+			Vector3(-0.055, -0.105, -0.142),
 			0.045, 0.035, glove_material
 		)
 
