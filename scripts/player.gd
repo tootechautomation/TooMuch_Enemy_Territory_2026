@@ -4407,187 +4407,122 @@ func _add_first_person_segment(
 	segment_root.add_child(mesh_instance)
 
 
-func _add_first_person_hand(
-	node_name: String,
-	wrist_point: Vector3,
-	grip_point: Vector3,
-	hand_rotation: Vector3,
-	right_hand: bool,
-	is_pistol_pose: bool,
-	glove_material: Material
-) -> void:
-	var hand_root: Node3D = Node3D.new()
-	hand_root.name = node_name
-	hand_root.position = grip_point
-	hand_root.rotation_degrees = hand_rotation
-	weapon_view.add_child(hand_root)
-
-	# Stability-first compact grip. Individual free-floating finger chains are
-	# intentionally removed; at FPS distance a single curled grip mass reads
-	# more naturally and cannot separate from the weapon.
-	var palm: MeshInstance3D = MeshInstance3D.new()
-	palm.name = "GlovedPalm"
-	var palm_mesh: SphereMesh = SphereMesh.new()
-	palm_mesh.radius = 0.043
-	palm_mesh.height = 0.086
-	palm_mesh.radial_segments = 20
-	palm_mesh.rings = 9
-	palm.mesh = palm_mesh
-	palm.scale = (
-		Vector3(1.00, 0.68, 1.10)
-		if is_pistol_pose
-		else Vector3(1.04, 0.70, 1.18)
-	)
-	palm.material_override = glove_material
-	palm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	hand_root.add_child(palm)
-
-	var finger_grip: MeshInstance3D = MeshInstance3D.new()
-	finger_grip.name = "ClosedFingerGrip"
-	var finger_mesh: BoxMesh = BoxMesh.new()
-	finger_mesh.size = (
-		Vector3(0.078, 0.055, 0.082)
-		if is_pistol_pose
-		else Vector3(0.084, 0.060, 0.094)
-	)
-	finger_grip.mesh = finger_mesh
-	finger_grip.position = Vector3(
-		0.0,
-		-0.036,
-		-0.024
-	)
-	finger_grip.rotation_degrees.x = -18.0
-	finger_grip.material_override = glove_material
-	finger_grip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	hand_root.add_child(finger_grip)
-
-	# Thumb is a single attached capsule crossing the weapon grip.
-	var thumb: MeshInstance3D = MeshInstance3D.new()
-	thumb.name = "Thumb"
-	var thumb_mesh: CapsuleMesh = CapsuleMesh.new()
-	thumb_mesh.radius = 0.0105
-	thumb_mesh.height = 0.054
-	thumb_mesh.radial_segments = 10
-	thumb_mesh.rings = 4
-	thumb.mesh = thumb_mesh
-	thumb.position = Vector3(
-		0.036 if right_hand else -0.036,
-		0.004,
-		-0.006
-	)
-	thumb.rotation_degrees = Vector3(
-		68.0,
-		-22.0 if right_hand else 22.0,
-		36.0 if right_hand else -36.0
-	)
-	thumb.material_override = glove_material
-	thumb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	hand_root.add_child(thumb)
-
-	# Three tiny knuckle caps give shape without becoming loose geometry.
-	for knuckle_index: int in range(3):
-		var knuckle: MeshInstance3D = MeshInstance3D.new()
-		knuckle.name = "Knuckle_%d" % knuckle_index
-		var knuckle_mesh: SphereMesh = SphereMesh.new()
-		knuckle_mesh.radius = 0.0095
-		knuckle_mesh.height = 0.019
-		knuckle_mesh.radial_segments = 8
-		knuckle_mesh.rings = 4
-		knuckle.mesh = knuckle_mesh
-		knuckle.position = Vector3(
-			(float(knuckle_index) - 1.0) * 0.020,
-			0.027,
-			-0.025
-		)
-		knuckle.material_override = glove_material
-		knuckle.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		hand_root.add_child(knuckle)
-
-	# Short cuff fully bridges the final sleeve section into the palm.
-	var cuff_midpoint: Vector3 = wrist_point.lerp(grip_point, 0.38)
-	_add_first_person_segment(
-		weapon_view,
-		"%s_Cuff" % node_name,
-		wrist_point,
-		cuff_midpoint,
-		0.048,
-		0.043,
-		glove_material
-	)
-
-
 func _add_first_person_arm_to_grip(
 	node_name: String,
 	elbow_point: Vector3,
 	wrist_point: Vector3,
 	grip_point: Vector3,
-	hand_rotation: Vector3,
 	right_hand: bool,
 	is_pistol_pose: bool
 ) -> void:
 	var sleeve_material: StandardMaterial3D = _first_person_sleeve_material()
 	var glove_material: StandardMaterial3D = _first_person_glove_material()
 
+	# v8.55: keep the silhouette continuous. Previous versions used separate
+	# palm/finger/knuckle meshes; because imported weapons have arbitrary pivots
+	# those pieces could visually detach. The hand is now a tapered continuous
+	# glove segment ending exactly at the weapon grip.
 	_add_first_person_segment(
 		weapon_view,
 		"%s_Sleeve" % node_name,
 		elbow_point,
 		wrist_point,
-		0.066,
-		0.048,
+		0.058 if is_pistol_pose else 0.062,
+		0.044,
 		sleeve_material
 	)
-	_add_first_person_hand(
-		"%s_Hand" % node_name,
+
+	var cuff_end: Vector3 = wrist_point.lerp(grip_point, 0.24)
+	_add_first_person_segment(
+		weapon_view,
+		"%s_Cuff" % node_name,
 		wrist_point,
-		grip_point,
-		hand_rotation,
-		right_hand,
-		is_pistol_pose,
+		cuff_end,
+		0.046,
+		0.043,
 		glove_material
 	)
+
+	# Palm/closed grip is one continuous tapered segment. It cannot float away
+	# from either the wrist or grip point.
+	_add_first_person_segment(
+		weapon_view,
+		"%s_GripHand" % node_name,
+		cuff_end,
+		grip_point,
+		0.043,
+		0.036 if is_pistol_pose else 0.038,
+		glove_material
+	)
+
+	# One attached thumb bulge only; no independent fingers/knuckles.
+	var hand_delta: Vector3 = grip_point - cuff_end
+	if hand_delta.length() > 0.01:
+		var thumb_root: Node3D = Node3D.new()
+		thumb_root.name = "%s_Thumb" % node_name
+		thumb_root.position = cuff_end.lerp(grip_point, 0.70)
+		weapon_view.add_child(thumb_root)
+		thumb_root.look_at(grip_point, Vector3.UP)
+
+		var thumb: MeshInstance3D = MeshInstance3D.new()
+		var thumb_mesh: CapsuleMesh = CapsuleMesh.new()
+		thumb_mesh.radius = 0.010
+		thumb_mesh.height = 0.046
+		thumb_mesh.radial_segments = 10
+		thumb_mesh.rings = 4
+		thumb.mesh = thumb_mesh
+		thumb.position = Vector3(
+			0.030 if right_hand else -0.030,
+			0.005,
+			-0.005
+		)
+		thumb.rotation_degrees = Vector3(
+			72.0,
+			0.0,
+			30.0 if right_hand else -30.0
+		)
+		thumb.material_override = glove_material
+		thumb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		thumb_root.add_child(thumb)
 
 
 func _build_first_person_arms(is_pistol: bool) -> void:
 	if is_pistol:
-		# Compact two-handed pistol stance. Both hands sit directly behind the
-		# pistol and the visible sleeves stay low in the frame.
+		# Both pistol sleeves stay mostly below the lower HUD line and converge
+		# tightly on the pistol grip.
 		_add_first_person_arm_to_grip(
 			"Right",
-			Vector3(0.40, -0.55, 0.50),
-			Vector3(0.18, -0.18, 0.24),
-			Vector3(0.095, -0.040, 0.135),
-			Vector3(-8.0, -6.0, -6.0),
+			Vector3(0.34, -0.62, 0.50),
+			Vector3(0.16, -0.24, 0.24),
+			Vector3(0.090, -0.055, 0.135),
 			true,
 			true
 		)
 		_add_first_person_arm_to_grip(
 			"Left",
-			Vector3(-0.39, -0.56, 0.48),
-			Vector3(-0.11, -0.19, 0.23),
-			Vector3(0.025, -0.050, 0.118),
-			Vector3(-10.0, 12.0, 9.0),
+			Vector3(-0.33, -0.63, 0.49),
+			Vector3(-0.08, -0.25, 0.23),
+			Vector3(0.030, -0.065, 0.120),
 			false,
 			true
 		)
 	else:
-		# SMG stance modeled after the visual target: firing hand on rear grip,
-		# support hand farther forward, sleeves entering from lower corners.
+		# Primary weapon: shorten visible sleeves and keep the support hand close
+		# to the fore-end. This intentionally favors a clean FPS silhouette over
+		# procedural finger detail.
 		_add_first_person_arm_to_grip(
 			"Right",
-			Vector3(0.43, -0.58, 0.58),
-			Vector3(0.22, -0.21, 0.30),
-			Vector3(0.135, -0.050, 0.165),
-			Vector3(-6.0, -8.0, -7.0),
+			Vector3(0.36, -0.64, 0.57),
+			Vector3(0.20, -0.27, 0.30),
+			Vector3(0.132, -0.060, 0.165),
 			true,
 			false
 		)
 		_add_first_person_arm_to_grip(
 			"Left",
-			Vector3(-0.42, -0.58, 0.47),
-			Vector3(-0.18, -0.20, 0.06),
-			Vector3(-0.052, -0.050, -0.150),
-			Vector3(-9.0, 15.0, 11.0),
+			Vector3(-0.35, -0.64, 0.45),
+			Vector3(-0.15, -0.27, 0.05),
+			Vector3(-0.050, -0.065, -0.145),
 			false,
 			false
 		)
