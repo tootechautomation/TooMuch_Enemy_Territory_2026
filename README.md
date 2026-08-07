@@ -1,30 +1,53 @@
-FRONTLINE: OBJECTIVE v8.81.0
-PERFORMANCE + LOD STABILIZATION
+FRONTLINE: OBJECTIVE v8.82.0
+DEATH DROPS + CROSS-FACTION WEAPON PICKUPS
 
-WHY THIS PHASE
-Recent builds added a large amount of architecture, rubble, weathering,
-particles, lighting and battlefield microdetail. v8.81 keeps that visual work
-but reduces the cost of rendering detail that cannot meaningfully be seen at
-long distance.
+NEW GAMEPLAY SYSTEM
+When a player is fully eliminated they now drop:
+1. their primary weapon
+2. their secondary pistol
+3. a separate ammunition pouch
 
-NEW
-- distance visibility/fading for tiny surface detail
-- shorter draw range for bullet scars, glass shards, papers and small debris
-- medium-range LOD for crates, sandbags, shutters, awnings and street props
-- tiny decorative objects stop casting shadows
-- close-range rain/drip/dust/ember particle culling
-- longer-range smoke/haze retained
-- secondary/bounce lights forced shadowless
-- small practical-light ranges capped
-- major building/roof silhouettes remain full distance
+INTERACTION
+Use the existing INTERACT action near a dropped item.
+
+WEAPON SWAPS
+- taking a primary replaces slot 0
+- taking a pistol replaces slot 1
+- the picked weapon automatically becomes equipped
+- weapon pickup preserves remaining magazine/reserve ammunition
+- dropped equipment expires after 55 seconds
+
+CROSS-FACTION EXAMPLES
+Allied player can kill Axis and pick up:
+- MP40 to replace Thompson/current primary
+- P38 to replace TT/current pistol
+
+Axis player can kill Allied and pick up:
+- Thompson to replace MP40/current primary
+- TT pistol to replace P38/current pistol
+
+IMPORTANT TECHNICAL CHANGE
+Weapon appearance is no longer assumed to equal player faction.
+Each inventory slot now stores its own weapon-origin team:
+    weapon_slot_teams
+
+So an Allied character can remain Allied while physically carrying/rendering
+an Axis MP40/P38, including first-person and third-person external models.
+
+RESPAWN
+Respawning restores the player's normal faction/class loadout and ammunition.
+
+AMMO
+The separate ammo pouch adds reserve ammunition to the currently equipped
+weapon, capped by that weapon's normal reserve maximum.
 
 PRESERVED
 - working Axis P38 orientation
-- Allied TT / Thompson / MP40
+- Allied TT correction
 - Mouse2 shoulder zoom
 - persistent crosshair
-- collision / objectives / networking
-- all v8.80 battle-damage and earlier visual systems
+- all v8.81 performance/LOD work
+- collision / objectives / networking architecture
 
-Build: 8.81.0
+Build: 8.82.0
 Network protocol: 341

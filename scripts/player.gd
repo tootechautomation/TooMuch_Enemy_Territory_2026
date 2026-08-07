@@ -100,6 +100,7 @@ var external_weapon_socket: Node3D
 var external_model_loaded := false
 var external_weapon_model: Node3D
 var external_weapon_index := -1
+var external_weapon_team := -1
 var fp_gunmetal_albedo: Texture2D
 var fp_gunmetal_normal: Texture2D
 var fp_gunmetal_roughness: Texture2D
@@ -179,6 +180,7 @@ var spectator_index := -1
 var weapon_slots: Array[Resource] = []
 var weapon_magazines: Array[int] = []
 var weapon_reserves: Array[int] = []
+var weapon_slot_teams: Array[int] = []
 var current_weapon_index := 0
 var hit_marker: Label
 var hit_marker_until_ms := 0
@@ -455,13 +457,21 @@ func _first_person_heat_gain() -> float:
 			return 0.24
 	return 0.15
 
+func _weapon_visual_team(slot_index: int) -> int:
+	if slot_index >= 0 and slot_index < weapon_slot_teams.size():
+		return clampi(weapon_slot_teams[slot_index], 0, 1)
+	return team
+
+
 func _build_imported_first_person_weapon(
 	is_pistol: bool
 ) -> bool:
+	var pickup_slot: int = 1 if is_pistol else 0
+	var visual_team: int = _weapon_visual_team(pickup_slot)
 	var selected_scene: PackedScene = (
 		ExternalAssetRegistryScript.weapon_scene(
-			team,
-			1 if is_pistol else 0
+			visual_team,
+			pickup_slot
 		)
 	)
 	if selected_scene == null:
@@ -1604,6 +1614,7 @@ func _configure_class_loadout(
 	if reset_ammunition or weapon_magazines.size() != weapon_slots.size():
 		weapon_magazines.clear()
 		weapon_reserves.clear()
+		weapon_slot_teams = [team, team]
 
 		for slot_value in weapon_slots:
 			var slot_weapon: Resource = slot_value as Resource
@@ -1633,6 +1644,9 @@ func _configure_class_loadout(
 				weapon_reserves[index],
 				maximum_reserve
 			)
+
+	if weapon_slot_teams.size() != weapon_slots.size():
+		weapon_slot_teams = [team, team]
 
 	current_weapon_index = clampi(
 		current_weapon_index,
@@ -1696,6 +1710,135 @@ func _local_request_weapon_switch() -> void:
 			local_peer_id,
 			desired_index
 		)
+
+func server_equip_battlefield_weapon(
+	slot_index: int,
+	resource_path: String,
+	source_team: int,
+	picked_magazine: int,
+	picked_reserve: int
+) -> bool:
+	if not multiplayer.is_server() or not alive or downed:
+		return false
+	if slot_index < 0 or slot_index >= weapon_slots.size():
+		return false
+	if not ResourceLoader.exists(resource_path):
+		return false
+
+	var loaded: Resource = load(resource_path)
+	if loaded == null:
+		return false
+
+	_store_current_weapon_ammo()
+
+	weapon_slots[slot_index] = loaded
+	weapon_slot_teams[slot_index] = clampi(source_team, 0, 1)
+
+	var max_mag: int = _resource_int(loaded, "magazine_size", 30)
+	var max_reserve: int = _resource_int(loaded, "reserve_ammo", 120)
+	weapon_magazines[slot_index] = clampi(picked_magazine, 0, max_mag)
+	weapon_reserves[slot_index] = clampi(picked_reserve, 0, max_reserve)
+
+	_apply_weapon_index(slot_index, false)
+
+	confirm_battlefield_weapon_pickup.rpc_id(
+		peer_id,
+		slot_index,
+		resource_path,
+		weapon_slot_teams[slot_index],
+		weapon_magazines[slot_index],
+		weapon_reserves[slot_index]
+	)
+	return true
+
+
+func server_add_battlefield_ammo(amount: int) -> bool:
+	if not multiplayer.is_server() or not alive or downed:
+		return false
+	if current_weapon_index < 0 or current_weapon_index >= weapon_slots.size():
+		return false
+
+	_store_current_weapon_ammo()
+
+	var max_reserve: int = _resource_int(
+		weapon_slots[current_weapon_index],
+		"reserve_ammo",
+		120
+	)
+	var old_reserve: int = weapon_reserves[current_weapon_index]
+	var new_reserve: int = mini(max_reserve, old_reserve + maxi(0, amount))
+	if new_reserve <= old_reserve:
+		return false
+
+	weapon_reserves[current_weapon_index] = new_reserve
+	reserve_ammo = new_reserve
+	confirm_battlefield_ammo_pickup.rpc_id(
+		peer_id,
+		current_weapon_index,
+		new_reserve,
+		new_reserve - old_reserve
+	)
+	return true
+
+
+@rpc("authority", "call_remote", "reliable")
+func confirm_battlefield_weapon_pickup(
+	slot_index: int,
+	resource_path: String,
+	source_team: int,
+	picked_magazine: int,
+	picked_reserve: int
+) -> void:
+	if not _is_local_player():
+		return
+	if slot_index < 0 or slot_index >= weapon_slots.size():
+		return
+	if not ResourceLoader.exists(resource_path):
+		return
+
+	var loaded: Resource = load(resource_path)
+	if loaded == null:
+		return
+
+	_store_current_weapon_ammo()
+	weapon_slots[slot_index] = loaded
+
+	if weapon_slot_teams.size() != weapon_slots.size():
+		weapon_slot_teams = [team, team]
+	weapon_slot_teams[slot_index] = clampi(source_team, 0, 1)
+
+	weapon_magazines[slot_index] = picked_magazine
+	weapon_reserves[slot_index] = picked_reserve
+
+	_apply_weapon_index(slot_index, true)
+	_clear_external_weapon_model()
+	_refresh_external_weapon_model()
+
+	if selection_status != null:
+		var weapon_name := (
+			"TT PISTOL" if source_team == 0 else "P38"
+			if slot_index == 1
+			else "THOMPSON" if source_team == 0 else "MP40"
+		)
+		selection_status.text = "PICKED UP %s" % weapon_name
+
+
+@rpc("authority", "call_remote", "reliable")
+func confirm_battlefield_ammo_pickup(
+	slot_index: int,
+	new_reserve: int,
+	added_amount: int
+) -> void:
+	if not _is_local_player():
+		return
+	if slot_index >= 0 and slot_index < weapon_reserves.size():
+		weapon_reserves[slot_index] = new_reserve
+	if slot_index == current_weapon_index:
+		reserve_ammo = new_reserve
+
+	if selection_status != null:
+		selection_status.text = "AMMO +%d" % added_amount
+
 
 func server_weapon_switch_request(desired_index: int) -> void:
 	if not multiplayer.is_server():
@@ -2003,6 +2146,16 @@ func _finish_death(attacker_override: int) -> void:
 		else int(get_meta("last_attacker_id", 0))
 	)
 
+	# Drop both weapon slots plus a small ammo pouch at the death position.
+	# This occurs before the player is hidden/respawned.
+	var main_node: Node = get_parent()
+	if (
+		main_node != null
+		and main_node.has_method("server_spawn_player_death_drops")
+	):
+		_store_current_weapon_ammo()
+		main_node.call("server_spawn_player_death_drops", self)
+
 	alive = false
 	downed = false
 	health = 0
@@ -2150,8 +2303,19 @@ func server_interact_request() -> void:
 	if not multiplayer.is_server() or not alive:
 		return
 	var now := Time.get_ticks_msec()
-	if now < next_interact_time: return
-	next_interact_time = now + 500
+	if now < next_interact_time:
+		return
+	next_interact_time = now + 350
+
+	# Battlefield weapon/ammo pickups use the existing INTERACT action.
+	var main_node: Node = get_parent()
+	if (
+		main_node != null
+		and main_node.has_method("server_try_battlefield_pickup")
+		and bool(main_node.call("server_try_battlefield_pickup", self))
+	):
+		return
+
 	if player_class == PlayerClass.MEDIC:
 		for candidate in get_parent().players.values():
 			if candidate != self and candidate.team == team and candidate.alive and candidate.downed and global_position.distance_to(candidate.global_position) <= REVIVE_RANGE:
@@ -2313,6 +2477,7 @@ func _clear_external_weapon_model() -> void:
 		external_weapon_model.queue_free()
 	external_weapon_model = null
 	external_weapon_index = -1
+	external_weapon_team = -1
 
 func _refresh_external_weapon_model() -> void:
 	if external_character_model == null:
@@ -2321,13 +2486,17 @@ func _refresh_external_weapon_model() -> void:
 	if external_weapon_socket == null:
 		_clear_external_weapon_model()
 		return
-	if external_weapon_index == current_weapon_index:
+	var visual_team: int = _weapon_visual_team(current_weapon_index)
+	if (
+		external_weapon_index == current_weapon_index
+		and external_weapon_team == visual_team
+	):
 		return
 
 	_clear_external_weapon_model()
 	var scene: PackedScene = (
 		ExternalAssetRegistryScript.weapon_scene(
-			team,
+			visual_team,
 			current_weapon_index
 		)
 	)
@@ -2354,6 +2523,7 @@ func _refresh_external_weapon_model() -> void:
 			0.29 if current_weapon_index == 1 else 0.88
 		)
 		external_weapon_index = current_weapon_index
+		external_weapon_team = visual_team
 
 func _update_external_character_animation() -> void:
 	if external_character_model == null:

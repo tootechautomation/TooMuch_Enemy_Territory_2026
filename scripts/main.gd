@@ -156,6 +156,9 @@ const BattleDamageDetailPassScript = preload(
 const PerformanceLODPassScript = preload(
 	"res://scripts/visuals/performance_lod_pass.gd"
 )
+const BattlefieldPickupScript = preload(
+	"res://scripts/gameplay/battlefield_pickup.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -189,7 +192,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.81.0"
+const BUILD_VERSION := "8.82.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -303,6 +306,8 @@ var constructibles: Dictionary = {}
 var next_constructible_id := 1
 var engineer_constructibles: Dictionary = {}
 var smoke_clouds: Dictionary = {}
+var battlefield_pickups: Dictionary = {}
+var next_battlefield_pickup_id: int = 1
 var next_smoke_id := 1
 var station_accumulator := 0.0
 var command_health_station: MeshInstance3D
@@ -7046,6 +7051,228 @@ func damage_objective(amount: int, attacker_team: int) -> void:
 	if not multiplayer.is_server() or match_over or attacker_team != 0: return
 	objective_health = maxi(0, objective_health - amount)
 	if objective_health <= 0: _end_match("ATTACKERS WIN — objective destroyed")
+
+func server_spawn_player_death_drops(victim: Node3D) -> void:
+	if not multiplayer.is_server() or victim == null:
+		return
+
+	var slots_variant: Variant = victim.get("weapon_slots")
+	var mags_variant: Variant = victim.get("weapon_magazines")
+	var reserves_variant: Variant = victim.get("weapon_reserves")
+	var teams_variant: Variant = victim.get("weapon_slot_teams")
+
+	if not slots_variant is Array:
+		return
+
+	var slots: Array = slots_variant
+	var mags: Array = mags_variant if mags_variant is Array else []
+	var reserves: Array = reserves_variant if reserves_variant is Array else []
+	var slot_teams: Array = teams_variant if teams_variant is Array else []
+
+	var death_position: Vector3 = victim.global_position
+	death_position.y = maxf(death_position.y, 0.08)
+
+	# Primary and secondary drop separately so either slot can be exchanged.
+	for slot_index: int in range(mini(2, slots.size())):
+		var weapon_resource: Resource = slots[slot_index] as Resource
+		if weapon_resource == null or weapon_resource.resource_path.is_empty():
+			continue
+
+		var source_team: int = (
+			int(slot_teams[slot_index])
+			if slot_index < slot_teams.size()
+			else int(victim.get("team"))
+		)
+		var mag: int = (
+			int(mags[slot_index])
+			if slot_index < mags.size()
+			else 0
+		)
+		var reserve: int = (
+			int(reserves[slot_index])
+			if slot_index < reserves.size()
+			else 0
+		)
+
+		var lateral: float = -0.55 if slot_index == 0 else 0.55
+		var drop_position := death_position + Vector3(
+			lateral,
+			0.10,
+			0.20 if slot_index == 0 else -0.20
+		)
+
+		_server_create_battlefield_pickup(
+			"weapon",
+			slot_index,
+			source_team,
+			weapon_resource.resource_path,
+			mag,
+			reserve,
+			0,
+			drop_position
+		)
+
+	# Separate ammo pouch remains useful even if neither weapon is wanted.
+	var ammo_total: int = 0
+	for reserve_value: Variant in reserves:
+		ammo_total += maxi(0, int(reserve_value))
+	var pouch_amount: int = clampi(int(round(float(ammo_total) * 0.22)), 20, 60)
+
+	_server_create_battlefield_pickup(
+		"ammo",
+		-1,
+		int(victim.get("team")),
+		"",
+		0,
+		0,
+		pouch_amount,
+		death_position + Vector3(0.0, 0.08, 0.65)
+	)
+
+
+func _server_create_battlefield_pickup(
+	kind: String,
+	slot_index: int,
+	source_team: int,
+	resource_path: String,
+	magazine: int,
+	reserve: int,
+	ammo_amount: int,
+	position: Vector3
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var drop_id: int = next_battlefield_pickup_id
+	next_battlefield_pickup_id += 1
+
+	spawn_battlefield_pickup.rpc(
+		drop_id,
+		kind,
+		slot_index,
+		source_team,
+		resource_path,
+		magazine,
+		reserve,
+		ammo_amount,
+		position
+	)
+
+	# Prevent long-running rounds from accumulating old dropped equipment.
+	get_tree().create_timer(55.0).timeout.connect(
+		func() -> void:
+			if multiplayer.is_server():
+				server_remove_battlefield_pickup(drop_id)
+	)
+
+
+@rpc("authority", "call_local", "reliable")
+func spawn_battlefield_pickup(
+	drop_id: int,
+	kind: String,
+	slot_index: int,
+	source_team: int,
+	resource_path: String,
+	magazine: int,
+	reserve: int,
+	ammo_amount: int,
+	position: Vector3
+) -> void:
+	if battlefield_pickups.has(drop_id):
+		return
+
+	var pickup: Node3D = BattlefieldPickupScript.new()
+	pickup.name = "BattlefieldPickup_%d" % drop_id
+	add_child(pickup)
+	pickup.call(
+		"configure",
+		drop_id,
+		kind,
+		slot_index,
+		source_team,
+		resource_path,
+		magazine,
+		reserve,
+		ammo_amount,
+		position
+	)
+	battlefield_pickups[drop_id] = pickup
+
+
+func server_try_battlefield_pickup(player: Node3D) -> bool:
+	if not multiplayer.is_server() or player == null:
+		return false
+	if not bool(player.get("alive")) or bool(player.get("downed")):
+		return false
+
+	var closest_id: int = -1
+	var closest: Node3D = null
+	var closest_distance: float = 2.35
+
+	for drop_id_value: Variant in battlefield_pickups:
+		var drop_id: int = int(drop_id_value)
+		var candidate: Node3D = battlefield_pickups.get(drop_id) as Node3D
+		if candidate == null or not is_instance_valid(candidate):
+			continue
+
+		var distance: float = player.global_position.distance_to(
+			candidate.global_position
+		)
+		if distance < closest_distance:
+			closest_distance = distance
+			closest_id = drop_id
+			closest = candidate
+
+	if closest == null:
+		return false
+
+	var kind: String = str(closest.get("pickup_kind"))
+	if kind == "ammo":
+		var amount: int = int(closest.get("ammo_amount"))
+		if bool(player.call("server_add_battlefield_ammo", amount)):
+			server_remove_battlefield_pickup(closest_id)
+			return true
+		return false
+
+	var slot_index: int = int(closest.get("slot_index"))
+	var resource_path: String = str(closest.get("weapon_resource_path"))
+	var source_team: int = int(closest.get("source_team"))
+	var magazine: int = int(closest.get("magazine_ammo"))
+	var reserve: int = int(closest.get("reserve_ammo"))
+
+	if bool(player.call(
+		"server_equip_battlefield_weapon",
+		slot_index,
+		resource_path,
+		source_team,
+		magazine,
+		reserve
+	)):
+		server_remove_battlefield_pickup(closest_id)
+		return true
+
+	return false
+
+
+func server_remove_battlefield_pickup(drop_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	if not battlefield_pickups.has(drop_id):
+		return
+	remove_battlefield_pickup.rpc(drop_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func remove_battlefield_pickup(drop_id: int) -> void:
+	if not battlefield_pickups.has(drop_id):
+		return
+
+	var pickup: Node3D = battlefield_pickups.get(drop_id) as Node3D
+	battlefield_pickups.erase(drop_id)
+
+	if pickup != null and is_instance_valid(pickup):
+		pickup.queue_free()
+
 
 func register_elimination(victim_id: int, attacker_id: int) -> void:
 	var victim: Node3D = players.get(victim_id) as Node3D
