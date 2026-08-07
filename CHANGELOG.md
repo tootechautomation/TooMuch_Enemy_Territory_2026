@@ -1,5 +1,16 @@
 # Changelog
 
+## 8.38.0
+- Added deterministic real-time wetness driven by the existing dynamic weather intensity
+- Darkened exposed battlefield materials progressively during rainfall
+- Lowered rain-soaked surface roughness for readable wet highlights under existing lights and SSR
+- Added slower drying than wetting for more natural weather transitions
+- Registered roads, ground, masonry, roofs, concrete, rubble, rails, props, fortifications, and structural cover
+- Excluded characters, weapons, HUD markers, particles, clouds, mist, rain, river surfaces, transparent materials, and unshaded materials
+- Duplicated materials before runtime adjustment to avoid mutating shared source resources
+- Throttled material response updates and retained headless exclusion
+- Preserved weather timing, quality tiers, collision, gameplay, networking, and protocol 341
+
 ## 8.37.0
 - Increased imported-character normalization from 1.82 m to a stronger 1.88 m battlefield silhouette
 - Recognized the bundled neutral humanoid surface as uniform material instead of leaving its original alien-like suit response untouched

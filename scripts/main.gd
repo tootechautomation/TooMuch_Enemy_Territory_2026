@@ -45,6 +45,9 @@ const ObjectiveSetpieceFidelityScript = preload(
 const DynamicWeatherSystemScript = preload(
 	"res://scripts/visuals/dynamic_weather_system.gd"
 )
+const WetSurfaceResponseScript = preload(
+	"res://scripts/visuals/wet_surface_response.gd"
+)
 const PeriodInterfaceFidelityScript = preload(
 	"res://scripts/visuals/period_interface_fidelity.gd"
 )
@@ -87,7 +90,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.37.0"
+const BUILD_VERSION := "8.38.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -314,6 +317,7 @@ var combat_effects_manager: Node3D
 var cinematic_environment_pass: Node3D
 var objective_setpiece_fidelity: Node3D
 var dynamic_weather_system: Node3D
+var wet_surface_response: Node
 var period_interface_fidelity: Node
 var visual_quality_manager: Node
 var battlefield_surface_fidelity: Node3D
@@ -2962,6 +2966,20 @@ func _build_dynamic_weather_system() -> void:
 	dynamic_weather_system.name = "DynamicWeatherSystem"
 	add_child(dynamic_weather_system)
 	dynamic_weather_system.call("build", self)
+
+func _build_wet_surface_response() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if wet_surface_response != null:
+		return
+	wet_surface_response = WetSurfaceResponseScript.new()
+	wet_surface_response.name = "WetSurfaceResponse"
+	add_child(wet_surface_response)
+	wet_surface_response.call(
+		"build",
+		self,
+		dynamic_weather_system
+	)
 
 func _build_cinematic_environment_pass() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -9081,6 +9099,7 @@ func _build_world() -> void:
 	dynamite_light.visible = false
 	add_child(dynamite_light)
 	_build_objective_setpiece_fidelity()
+	_build_wet_surface_response()
 	call_deferred("_run_structure_collision_audit")
 
 func _build_objective_setpiece_fidelity() -> void:

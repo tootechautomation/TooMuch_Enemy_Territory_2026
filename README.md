@@ -1,6 +1,12 @@
 # Frontline: Objective
 
-## Version 8.37.0 — Imported Character Military Presentation
+## Version 8.38.0 — Dynamic Wet-Surface Weather Response
+
+Rain now changes the battlefield materials instead of existing only as particles and audio. Roads, masonry, roofs, concrete, rubble, rails, crates, fortifications, and exposed props progressively darken and become smoother as the weather front intensifies, then dry slowly after rain passes. The response is derived from the existing deterministic weather intensity and updates at a restrained interval.
+
+The system duplicates presentation materials locally before changing them, excludes players, weapons, markers, particles, water, and transparent/unshaded surfaces, and adds no collision or gameplay state. Existing SSR, SSAO, fog, volumetrics, quality scaling, and weather behavior remain intact.
+
+## Previous Phase — 8.37.0 Imported Character Military Presentation
 
 The working animated humanoid placeholder now reads more clearly at gameplay distance. Imported characters normalize to a slightly stronger 1.88 m soldier height, while the bundled neutral suit receives distinct Allied olive-drab or opposing field-gray treatment. Metallic response and source emission are removed from recognized uniform surfaces, roughness is raised to cloth-like levels, and normal response is restrained for a less plastic or alien appearance.
 
