@@ -4439,98 +4439,156 @@ func _add_fps_limb(
 	)
 
 
-func _weapon_holder_point(local_point: Vector3) -> Vector3:
-	# Imported weapons are nested under ImportedFirstPersonRig, which carries
-	# the model-specific pivot/orientation correction. Grip targets therefore
-	# need to be authored in holder-local space and converted into weapon_view
-	# space before building the arms.
+func _imported_viewmodel_holder() -> Node3D:
 	if weapon_view == null:
-		return local_point
-
-	var holder: Node3D = weapon_view.get_node_or_null(
+		return null
+	return weapon_view.get_node_or_null(
 		"ImportedFirstPersonRig"
 	) as Node3D
-	if holder == null:
-		return local_point
-
-	return holder.transform * local_point
 
 
-func _fps_pose_point(raw_point: Vector3) -> Vector3:
-	return _weapon_holder_point(raw_point)
+func _weapon_view_point_to_holder(
+	holder: Node3D,
+	weapon_view_point: Vector3
+) -> Vector3:
+	# Convert a point authored in weapon_view-local coordinates into the exact
+	# local space used by ImportedFirstPersonRig.
+	if holder == null or weapon_view == null:
+		return weapon_view_point
+
+	var global_point: Vector3 = weapon_view.to_global(weapon_view_point)
+	return holder.to_local(global_point)
+
+
+func _add_holder_limb(
+	holder: Node3D,
+	node_name: String,
+	start_point: Vector3,
+	end_point: Vector3,
+	start_radius: float,
+	end_radius: float,
+	material: Material
+) -> void:
+	var direction: Vector3 = end_point - start_point
+	var segment_length: float = direction.length()
+	if segment_length <= 0.001:
+		return
+
+	var y_axis: Vector3 = direction.normalized()
+	var reference: Vector3 = Vector3.FORWARD
+	if absf(y_axis.dot(reference)) > 0.92:
+		reference = Vector3.RIGHT
+
+	var x_axis: Vector3 = reference.cross(y_axis).normalized()
+	var z_axis: Vector3 = x_axis.cross(y_axis).normalized()
+	var basis: Basis = Basis(x_axis, y_axis, z_axis).orthonormalized()
+
+	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
+	mesh_instance.name = node_name
+
+	var mesh: CylinderMesh = CylinderMesh.new()
+	mesh.top_radius = end_radius
+	mesh.bottom_radius = start_radius
+	mesh.height = segment_length
+	mesh.radial_segments = 20
+	mesh_instance.mesh = mesh
+	mesh_instance.material_override = material
+	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	holder.add_child(mesh_instance)
+	mesh_instance.transform = Transform3D(
+		basis,
+		(start_point + end_point) * 0.5
+	)
 
 
 func _build_first_person_arms(is_pistol: bool) -> void:
+	var holder: Node3D = _imported_viewmodel_holder()
+	if holder == null:
+		# Procedural fallback weapons keep their original arm-free presentation.
+		return
+
 	var sleeve_material: StandardMaterial3D = _first_person_sleeve_material()
 	var glove_material: StandardMaterial3D = _first_person_glove_material()
 
+	# Clean any stale holder-local FPS pieces before rebuilding.
+	for node_value: Node in holder.find_children("FPSRig_*", "", false):
+		node_value.queue_free()
+
 	if is_pistol:
-		# Author points in imported-weapon-holder space, then transform them
-		# into weapon_view space. This keeps hands attached after FBX rotation.
-		_add_fps_limb(
-			"FPS_RightSleeve",
-			Vector3(0.31, -0.66, 0.50),
-			_fps_pose_point(Vector3(0.16, -0.16, 0.20)),
-			0.058, 0.046, sleeve_material
+		# Grip points are authored DIRECTLY in imported-holder local space.
+		var right_wrist: Vector3 = Vector3(0.15, -0.15, 0.18)
+		var right_grip: Vector3 = Vector3(0.075, -0.045, 0.015)
+		var left_wrist: Vector3 = Vector3(-0.10, -0.16, 0.17)
+		var left_grip: Vector3 = Vector3(0.005, -0.055, 0.000)
+
+		var right_elbow: Vector3 = _weapon_view_point_to_holder(
+			holder,
+			Vector3(0.31, -0.70, 0.50)
 		)
-		_add_fps_limb(
-			"FPS_RightGlove",
-			_fps_pose_point(Vector3(0.16, -0.16, 0.20)),
-			_fps_pose_point(Vector3(0.08, -0.04, 0.02)),
-			0.045, 0.035, glove_material
-		)
-		_add_fps_limb(
-			"FPS_LeftSleeve",
-			Vector3(-0.30, -0.67, 0.49),
-			_fps_pose_point(Vector3(-0.10, -0.17, 0.18)),
-			0.056, 0.044, sleeve_material
-		)
-		_add_fps_limb(
-			"FPS_LeftGlove",
-			_fps_pose_point(Vector3(-0.10, -0.17, 0.18)),
-			_fps_pose_point(Vector3(0.00, -0.05, 0.00)),
-			0.043, 0.034, glove_material
-		)
-	else:
-		# Primary weapon: right hand on rear grip, left hand on fore-end.
-		# The grip points are deliberately authored around the imported gun,
-		# not around the camera.
-		var right_wrist: Vector3 = _fps_pose_point(
-			Vector3(0.12, -0.17, 0.14)
-		)
-		var right_grip: Vector3 = _fps_pose_point(
-			Vector3(0.06, -0.04, -0.03)
-		)
-		var left_wrist: Vector3 = _fps_pose_point(
-			Vector3(-0.10, -0.18, -0.18)
-		)
-		var left_grip: Vector3 = _fps_pose_point(
-			Vector3(-0.03, -0.05, -0.39)
+		var left_elbow: Vector3 = _weapon_view_point_to_holder(
+			holder,
+			Vector3(-0.31, -0.71, 0.49)
 		)
 
-		_add_fps_limb(
-			"FPS_RightSleeve",
-			Vector3(0.38, -0.72, 0.54),
-			right_wrist,
-			0.061, 0.046, sleeve_material
+		_add_holder_limb(
+			holder, "FPSRig_RightSleeve",
+			right_elbow, right_wrist,
+			0.052, 0.041, sleeve_material
 		)
-		_add_fps_limb(
-			"FPS_RightGlove",
-			right_wrist,
-			right_grip,
-			0.045, 0.034, glove_material
+		_add_holder_limb(
+			holder, "FPSRig_RightGlove",
+			right_wrist, right_grip,
+			0.040, 0.030, glove_material
 		)
-		_add_fps_limb(
-			"FPS_LeftSleeve",
-			Vector3(-0.38, -0.72, 0.46),
-			left_wrist,
-			0.059, 0.045, sleeve_material
+		_add_holder_limb(
+			holder, "FPSRig_LeftSleeve",
+			left_elbow, left_wrist,
+			0.050, 0.039, sleeve_material
 		)
-		_add_fps_limb(
-			"FPS_LeftGlove",
-			left_wrist,
-			left_grip,
-			0.044, 0.033, glove_material
+		_add_holder_limb(
+			holder, "FPSRig_LeftGlove",
+			left_wrist, left_grip,
+			0.038, 0.029, glove_material
+		)
+	else:
+		# Thompson/MP40: right hand at pistol/rear grip, left support hand at
+		# the forward receiver/fore-end. Everything is in the SAME local space
+		# as the imported gun.
+		var right_wrist: Vector3 = Vector3(0.11, -0.16, 0.14)
+		var right_grip: Vector3 = Vector3(0.055, -0.045, -0.025)
+
+		var left_wrist: Vector3 = Vector3(-0.085, -0.17, -0.18)
+		var left_grip: Vector3 = Vector3(-0.025, -0.050, -0.36)
+
+		var right_elbow: Vector3 = _weapon_view_point_to_holder(
+			holder,
+			Vector3(0.36, -0.74, 0.54)
+		)
+		var left_elbow: Vector3 = _weapon_view_point_to_holder(
+			holder,
+			Vector3(-0.36, -0.74, 0.45)
+		)
+
+		_add_holder_limb(
+			holder, "FPSRig_RightSleeve",
+			right_elbow, right_wrist,
+			0.055, 0.042, sleeve_material
+		)
+		_add_holder_limb(
+			holder, "FPSRig_RightGlove",
+			right_wrist, right_grip,
+			0.041, 0.030, glove_material
+		)
+		_add_holder_limb(
+			holder, "FPSRig_LeftSleeve",
+			left_elbow, left_wrist,
+			0.053, 0.041, sleeve_material
+		)
+		_add_holder_limb(
+			holder, "FPSRig_LeftGlove",
+			left_wrist, left_grip,
+			0.040, 0.030, glove_material
 		)
 
 
