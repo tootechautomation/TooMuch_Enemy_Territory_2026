@@ -123,6 +123,9 @@ const TerrainVegetationPassScript = preload(
 const ObjectiveIdentityPassScript = preload(
 	"res://scripts/visuals/objective_identity_pass.gd"
 )
+const CombatAtmospherePassScript = preload(
+	"res://scripts/visuals/combat_atmosphere_pass.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -156,7 +159,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.70.0"
+const BUILD_VERSION := "8.71.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
