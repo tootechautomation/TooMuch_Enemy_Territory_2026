@@ -4407,124 +4407,85 @@ func _add_first_person_segment(
 	segment_root.add_child(mesh_instance)
 
 
-func _add_first_person_arm_to_grip(
+func _add_fps_limb(
 	node_name: String,
-	elbow_point: Vector3,
-	wrist_point: Vector3,
-	grip_point: Vector3,
-	right_hand: bool,
-	is_pistol_pose: bool
+	start_point: Vector3,
+	end_point: Vector3,
+	radius_start: float,
+	radius_end: float,
+	material: Material
 ) -> void:
-	var sleeve_material: StandardMaterial3D = _first_person_sleeve_material()
-	var glove_material: StandardMaterial3D = _first_person_glove_material()
-
-	# v8.55: keep the silhouette continuous. Previous versions used separate
-	# palm/finger/knuckle meshes; because imported weapons have arbitrary pivots
-	# those pieces could visually detach. The hand is now a tapered continuous
-	# glove segment ending exactly at the weapon grip.
+	# One continuous tapered mesh per limb section. No palms, fingers,
+	# knuckles, cuffs, or detached thumb objects are spawned.
 	_add_first_person_segment(
 		weapon_view,
-		"%s_Sleeve" % node_name,
-		elbow_point,
-		wrist_point,
-		0.058 if is_pistol_pose else 0.062,
-		0.044,
-		sleeve_material
+		node_name,
+		start_point,
+		end_point,
+		radius_start,
+		radius_end,
+		material
 	)
-
-	var cuff_end: Vector3 = wrist_point.lerp(grip_point, 0.24)
-	_add_first_person_segment(
-		weapon_view,
-		"%s_Cuff" % node_name,
-		wrist_point,
-		cuff_end,
-		0.046,
-		0.043,
-		glove_material
-	)
-
-	# Palm/closed grip is one continuous tapered segment. It cannot float away
-	# from either the wrist or grip point.
-	_add_first_person_segment(
-		weapon_view,
-		"%s_GripHand" % node_name,
-		cuff_end,
-		grip_point,
-		0.043,
-		0.036 if is_pistol_pose else 0.038,
-		glove_material
-	)
-
-	# One attached thumb bulge only; no independent fingers/knuckles.
-	var hand_delta: Vector3 = grip_point - cuff_end
-	if hand_delta.length() > 0.01:
-		var thumb_root: Node3D = Node3D.new()
-		thumb_root.name = "%s_Thumb" % node_name
-		thumb_root.position = cuff_end.lerp(grip_point, 0.70)
-		weapon_view.add_child(thumb_root)
-		thumb_root.look_at(grip_point, Vector3.UP)
-
-		var thumb: MeshInstance3D = MeshInstance3D.new()
-		var thumb_mesh: CapsuleMesh = CapsuleMesh.new()
-		thumb_mesh.radius = 0.010
-		thumb_mesh.height = 0.046
-		thumb_mesh.radial_segments = 10
-		thumb_mesh.rings = 4
-		thumb.mesh = thumb_mesh
-		thumb.position = Vector3(
-			0.030 if right_hand else -0.030,
-			0.005,
-			-0.005
-		)
-		thumb.rotation_degrees = Vector3(
-			72.0,
-			0.0,
-			30.0 if right_hand else -30.0
-		)
-		thumb.material_override = glove_material
-		thumb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		thumb_root.add_child(thumb)
 
 
 func _build_first_person_arms(is_pistol: bool) -> void:
+	var sleeve_material: StandardMaterial3D = _first_person_sleeve_material()
+	var glove_material: StandardMaterial3D = _first_person_glove_material()
+
 	if is_pistol:
-		# Both pistol sleeves stay mostly below the lower HUD line and converge
-		# tightly on the pistol grip.
-		_add_first_person_arm_to_grip(
-			"Right",
-			Vector3(0.34, -0.62, 0.50),
-			Vector3(0.16, -0.24, 0.24),
-			Vector3(0.090, -0.055, 0.135),
-			true,
-			true
+		# Stable two-hand pistol silhouette. The visible portions deliberately
+		# remain low and converge directly under the pistol grip.
+		_add_fps_limb(
+			"FPS_RightSleeve",
+			Vector3(0.31, -0.66, 0.50),
+			Vector3(0.135, -0.255, 0.225),
+			0.060, 0.047, sleeve_material
 		)
-		_add_first_person_arm_to_grip(
-			"Left",
-			Vector3(-0.33, -0.63, 0.49),
-			Vector3(-0.08, -0.25, 0.23),
-			Vector3(0.030, -0.065, 0.120),
-			false,
-			true
+		_add_fps_limb(
+			"FPS_RightGlove",
+			Vector3(0.135, -0.255, 0.225),
+			Vector3(0.080, -0.080, 0.135),
+			0.046, 0.037, glove_material
+		)
+		_add_fps_limb(
+			"FPS_LeftSleeve",
+			Vector3(-0.30, -0.67, 0.49),
+			Vector3(-0.075, -0.270, 0.220),
+			0.058, 0.045, sleeve_material
+		)
+		_add_fps_limb(
+			"FPS_LeftGlove",
+			Vector3(-0.075, -0.270, 0.220),
+			Vector3(0.025, -0.090, 0.125),
+			0.044, 0.035, glove_material
 		)
 	else:
-		# Primary weapon: shorten visible sleeves and keep the support hand close
-		# to the fore-end. This intentionally favors a clean FPS silhouette over
-		# procedural finger detail.
-		_add_first_person_arm_to_grip(
-			"Right",
-			Vector3(0.36, -0.64, 0.57),
-			Vector3(0.20, -0.27, 0.30),
-			Vector3(0.132, -0.060, 0.165),
-			true,
-			false
+		# Primary weapon stance. The old detached procedural hand pieces are
+		# gone completely. Two sleeve segments and two glove segments are all
+		# that exist, creating a clean concept-art-like silhouette.
+		_add_fps_limb(
+			"FPS_RightSleeve",
+			Vector3(0.37, -0.69, 0.58),
+			Vector3(0.205, -0.285, 0.305),
+			0.064, 0.048, sleeve_material
 		)
-		_add_first_person_arm_to_grip(
-			"Left",
-			Vector3(-0.35, -0.64, 0.45),
-			Vector3(-0.15, -0.27, 0.05),
-			Vector3(-0.050, -0.065, -0.145),
-			false,
-			false
+		_add_fps_limb(
+			"FPS_RightGlove",
+			Vector3(0.205, -0.285, 0.305),
+			Vector3(0.128, -0.075, 0.168),
+			0.047, 0.037, glove_material
+		)
+		_add_fps_limb(
+			"FPS_LeftSleeve",
+			Vector3(-0.38, -0.70, 0.46),
+			Vector3(-0.165, -0.300, 0.055),
+			0.061, 0.046, sleeve_material
+		)
+		_add_fps_limb(
+			"FPS_LeftGlove",
+			Vector3(-0.165, -0.300, 0.055),
+			Vector3(-0.055, -0.085, -0.142),
+			0.045, 0.035, glove_material
 		)
 
 
