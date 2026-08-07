@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.39.0
+- Added ten shallow non-colliding battlefield puddles driven by accumulated weather wetness
+- Varied puddle position, footprint, and rotation while keeping them away from primary objective markers
+- Shared one transparent low-roughness material across all puddles for restrained rendering cost
+- Faded puddles in gradually instead of switching them on abruptly with rainfall
+- Added capped ground-level rain-impact splash particles with randomized size and upward velocity
+- Scaled splash emission continuously from the existing wetness state
+- Disabled rain-impact particles automatically on the Performance graphics tier
+- Preserved movement, collision, navigation, objectives, bots, networking, and protocol 341
+
 ## 8.38.0
 - Added deterministic real-time wetness driven by the existing dynamic weather intensity
 - Darkened exposed battlefield materials progressively during rainfall

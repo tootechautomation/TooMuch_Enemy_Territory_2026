@@ -1,6 +1,12 @@
 # Frontline: Objective
 
-## Version 8.38.0 — Dynamic Wet-Surface Weather Response
+## Version 8.39.0 — Puddles and Rain-Ground Interaction
+
+Storms now produce visible shallow puddles and localized rain-impact droplets in addition to the v8.38 material wetness. Ten irregularly placed puddles emerge gradually across non-objective portions of the battlefield as accumulated wetness rises, using one shared non-colliding material with restrained reflection and transparency. A capped ground-level particle field adds small upward splash droplets during active rain.
+
+Puddles do not affect movement, collision, objectives, visibility checks, or navigation. Rain-impact particles are automatically disabled by the Performance graphics tier, while the low-cost shared puddle material remains available. The existing wetting/drying curve, weather timing, fog, mist, lightning, SSR, SSAO, and volumetrics remain intact.
+
+## Previous Phase — 8.38.0 Dynamic Wet-Surface Weather Response
 
 Rain now changes the battlefield materials instead of existing only as particles and audio. Roads, masonry, roofs, concrete, rubble, rails, crates, fortifications, and exposed props progressively darken and become smoother as the weather front intensifies, then dry slowly after rain passes. The response is derived from the existing deterministic weather intensity and updates at a restrained interval.
 

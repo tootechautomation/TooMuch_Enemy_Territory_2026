@@ -155,6 +155,7 @@ func _apply_effect_visibility() -> void:
 	]
 	var hide_performance: Array[String] = [
 		"WetGroundMist",
+		"RainImpactSplashes",
 		"AirborneDust",
 		"MovingOvercastLayer_1",
 		"MovingOvercastLayer_2",
@@ -237,4 +238,3 @@ func _save_selection() -> void:
 	var config := ConfigFile.new()
 	config.set_value("graphics", "quality_mode", selected_mode)
 	config.save(CONFIG_PATH)
-
