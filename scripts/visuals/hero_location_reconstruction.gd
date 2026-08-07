@@ -5,7 +5,7 @@ class_name HeroLocationReconstruction
 # Rebuilds the map's most important combat landmarks with visual-only geometry.
 # Existing gameplay collision and objective nodes remain authoritative.
 
-static func apply(root: Node3D) -> void:
+static func apply(root: Node) -> void:
 	if root == null or root.has_node("HeroLocationReconstruction_v846"):
 		return
 
@@ -103,7 +103,7 @@ static func _cylinder(parent: Node3D, name: String, pos: Vector3, radius: float,
 	return mi
 
 
-static func _rebuild_bridge(root: Node3D, visual_root: Node3D) -> void:
+static func _rebuild_bridge(root: Node, visual_root: Node) -> void:
 	var bridge := root.get_node_or_null("ConstructedBridge") as Node3D
 	if bridge == null:
 		return
@@ -142,7 +142,7 @@ static func _rebuild_bridge(root: Node3D, visual_root: Node3D) -> void:
 			brace.rotation.z = deg_to_rad(38.0 if i % 2 == 0 else -38.0)
 
 
-static func _rebuild_objective_bunker(root: Node3D, visual_root: Node3D) -> void:
+static func _rebuild_objective_bunker(root: Node, visual_root: Node) -> void:
 	var objective := root.get_node_or_null("Objective") as Node3D
 	if objective == null:
 		return
@@ -193,7 +193,7 @@ static func _rebuild_objective_bunker(root: Node3D, visual_root: Node3D) -> void
 			0.025, 0.85, rust, Vector3(deg_to_rad(78.0), 0.2*i, 0.0))
 
 
-static func _rebuild_supply_depot(root: Node3D, visual_root: Node3D) -> void:
+static func _rebuild_supply_depot(root: Node, visual_root: Node) -> void:
 	var depot := root.get_node_or_null("SupplyDepot") as Node3D
 	if depot == null:
 		return
@@ -237,7 +237,7 @@ static func _rebuild_supply_depot(root: Node3D, visual_root: Node3D) -> void:
 		Vector3(2.8, 0.65, 0.10), wood)
 
 
-static func _rebuild_command_post(root: Node3D, visual_root: Node3D) -> void:
+static func _rebuild_command_post(root: Node, visual_root: Node) -> void:
 	var cp := root.get_node_or_null("CommandPost") as Node3D
 	if cp == null:
 		return
@@ -274,7 +274,7 @@ static func _rebuild_command_post(root: Node3D, visual_root: Node3D) -> void:
 		0.045, 4.5, metal)
 
 
-static func _rebuild_fort_gate(root: Node3D, visual_root: Node3D) -> void:
+static func _rebuild_fort_gate(root: Node, visual_root: Node) -> void:
 	var holder := Node3D.new()
 	holder.name = "FortGateHeroGeometry"
 	holder.position = Vector3(18.0, 0.0, 25.0)
@@ -300,7 +300,7 @@ static func _rebuild_fort_gate(root: Node3D, visual_root: Node3D) -> void:
 			beam.rotation = Vector3(deg_to_rad(angle), 0.0, deg_to_rad(48.0))
 
 
-static func _rebuild_fort_watchtower(root: Node3D, visual_root: Node3D) -> void:
+static func _rebuild_fort_watchtower(root: Node, visual_root: Node) -> void:
 	var tower := root.get_node_or_null("FortWatchtower") as Node3D
 	if tower == null:
 		return
@@ -329,7 +329,7 @@ static func _rebuild_fort_watchtower(root: Node3D, visual_root: Node3D) -> void:
 				Vector3(0.44, 0.20, 0.27), sand)
 
 
-static func _build_defensive_positions(root: Node3D, visual_root: Node3D) -> void:
+static func _build_defensive_positions(root: Node, visual_root: Node) -> void:
 	var sand := _mat(root, "", Color(0.30, 0.27, 0.18), 0.99)
 	var wood := _mat(root, "wood", Color(0.19, 0.115, 0.055), 0.95)
 	var rust := _mat(root, "rust", Color(0.16, 0.15, 0.13), 0.80, 0.32)

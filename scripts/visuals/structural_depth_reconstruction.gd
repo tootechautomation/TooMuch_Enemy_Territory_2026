@@ -4,7 +4,7 @@ class_name StructuralDepthReconstruction
 # Geometry-first visual depth pass. All added geometry is visual-only so the
 # existing gameplay collision system remains authoritative.
 
-static func apply(root: Node3D) -> void:
+static func apply(root: Node) -> void:
 	if root == null or root.has_node("StructuralDepthReconstruction_v845"):
 		return
 	var detail_root := Node3D.new()
