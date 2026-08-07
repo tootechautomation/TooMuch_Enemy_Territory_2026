@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.25.0 — Class-Specific First-Person Weapon Rigs
+## Version 8.26.0 — Class-Specific Aim-Down-Sights Composition
+
+Right-click aiming now shoulders each weapon into a deliberate class-specific sight position instead of applying one generic forward nudge. The Support LMG, SMG, carbine, service rifle, scoped rifle, and pistol use separate hip distances and centered aim positions matched to their receiver and sight geometry.
+
+The animation controller is now the sole owner of first-person weapon placement. This removes the previous conflict in which the aim-view update and animation update pulled the weapon toward different targets every frame. Firing feedback remains anchored to the aimed pose, the standard and ET-style crosshairs clear during ADS, and the Scout retains its dedicated scope overlay.
+
+ADS movement bob, landing inertia, camera-turn inertia, and visible recoil are damped for a steadier sight picture, with subtle breathing motion retained so the weapon does not appear frozen. These are presentation changes only: authoritative spread multipliers, recoil values, fire rates, damage, movement penalties, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.25.0 Class-Specific First-Person Weapon Rigs
 
 The bundled first-person fallback weapons now read as five distinct class weapons rather than one generic receiver with multiple magazines stacked underneath it. The Soldier carries a single drum-fed Support LMG silhouette with a jacketed barrel, rear sight, carry handle, and compact folded bipod. Medic, Engineer, Field Ops, and Scout weapons receive their own magazine proportions and fore-end or sight details.
 
@@ -58,5 +66,5 @@ Friendly world nameplates now include a diamond identifier and remain visible at
 
 All additions are client-side presentation. Team assignment, uniforms, objectives, spotting, server authority, networking, and protocol 341 remain unchanged.
 
-Build: v8.25.0
+Build: v8.26.0
 Protocol: 341

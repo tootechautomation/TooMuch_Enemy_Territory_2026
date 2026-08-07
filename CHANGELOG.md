@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.26.0
+- Made first-person animation the single owner of weapon placement, removing the frame-by-frame conflict with the older aim-view position writer
+- Added class-specific hip positions and centered ADS positions for the Support LMG, SMG, carbine, service rifle, scoped rifle, and pistol
+- Added faster shouldering transitions and restrained breathing motion while aiming
+- Reduced ADS recoil presentation, movement bob, landing inertia, and camera-turn inertia without changing authoritative recoil or spread values
+- Kept firing feedback anchored to the active aimed position instead of snapping briefly back to the hip pose
+- Hid the standard and ET-style crosshairs during iron-sight aiming while retaining the Scout scope overlay
+- Preserved v8.25 class weapon rigs, imported-model priority, gameplay balance, networking, and protocol 341
+
 ## 8.25.0
 - Removed the generic long-gun box magazine and floor plate that were stacked beneath every class-specific weapon
 - Rebuilt the Soldier Support LMG as one drum-fed silhouette with a barrel jacket, rear sight, carry handle, and compact folded bipod

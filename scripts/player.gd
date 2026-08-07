@@ -3634,11 +3634,19 @@ func _apply_server_crouch(crouching: bool) -> void:
 	_apply_crouch_visual(crouching)
 
 func _base_weapon_position() -> Vector3:
-	var base_position: Vector3 = (
-		Vector3(0.30, -0.29, -0.82)
-		if current_weapon_index == 1
-		else Vector3(0.34, -0.31, -1.08)
-	)
+	var base_position := Vector3(0.30, -0.29, -0.82)
+	if current_weapon_index != 1:
+		match player_class:
+			PlayerClass.SOLDIER:
+				base_position = Vector3(0.38, -0.33, -1.12)
+			PlayerClass.MEDIC:
+				base_position = Vector3(0.30, -0.29, -0.96)
+			PlayerClass.ENGINEER:
+				base_position = Vector3(0.32, -0.30, -1.00)
+			PlayerClass.FIELD_OPS:
+				base_position = Vector3(0.34, -0.31, -1.05)
+			PlayerClass.SCOUT:
+				base_position = Vector3(0.30, -0.28, -1.12)
 	var fov_clearance: float = clampf(
 		(profile_field_of_view - 75.0) / 35.0,
 		-1.0,
@@ -3648,10 +3656,46 @@ func _base_weapon_position() -> Vector3:
 	base_position.z -= fov_clearance * 0.04
 	return base_position
 
+func _aim_weapon_position() -> Vector3:
+	if current_weapon_index == 1:
+		return Vector3(0.0, 0.13, -0.88)
+	match player_class:
+		PlayerClass.SOLDIER:
+			return Vector3(0.0, 0.17, -1.12)
+		PlayerClass.MEDIC:
+			return Vector3(0.0, 0.13, -1.02)
+		PlayerClass.ENGINEER:
+			return Vector3(0.0, 0.13, -1.05)
+		PlayerClass.FIELD_OPS:
+			return Vector3(0.0, 0.13, -1.08)
+		PlayerClass.SCOUT:
+			return Vector3(0.0, 0.12, -1.12)
+	return Vector3(0.0, 0.13, -1.05)
+
+func _aim_weapon_rotation() -> Vector3:
+	if current_weapon_index == 1:
+		return Vector3(-0.012, 0.0, 0.0)
+	match player_class:
+		PlayerClass.SOLDIER:
+			return Vector3(-0.008, 0.0, 0.0)
+		PlayerClass.MEDIC:
+			return Vector3(-0.010, 0.0, 0.0)
+		PlayerClass.ENGINEER:
+			return Vector3(-0.009, 0.0, 0.0)
+		PlayerClass.FIELD_OPS:
+			return Vector3(-0.008, 0.0, 0.0)
+		PlayerClass.SCOUT:
+			return Vector3.ZERO
+	return Vector3.ZERO
+
 func _apply_weapon_kick() -> void:
 	if weapon_view == null:
 		return
-	var position := _base_weapon_position()
+	var position: Vector3 = (
+		_aim_weapon_position()
+		if is_aiming
+		else _base_weapon_position()
+	)
 	position.z += weapon_kick_offset
 	weapon_view.position = position
 
@@ -3972,22 +4016,13 @@ func _update_aim_view() -> void:
 		clampf(get_process_delta_time() * 14.0, 0.0, 1.0)
 	)
 
-	if weapon_view != null:
-		var target_position: Vector3 = _base_weapon_position()
-		if is_aiming:
-			target_position.x = 0.0
-			target_position.y += 0.04
-			target_position.z -= 0.08
-		weapon_view.position = weapon_view.position.lerp(
-			target_position,
-			clampf(get_process_delta_time() * 16.0, 0.0, 1.0)
-		)
-
 	if scope_overlay != null:
 		scope_overlay.visible = _is_scout_scope_active()
 
 	if crosshair != null:
-		crosshair.visible = not _is_scout_scope_active()
+		crosshair.visible = not is_aiming
+	if et_crosshair_ring != null:
+		et_crosshair_ring.visible = not is_aiming
 
 func _build_first_person_weapon() -> void:
 	weapon_view = Node3D.new()
@@ -5721,7 +5756,8 @@ func _update_first_person_animation(delta: float) -> void:
 	)
 	var speed: float = Vector2(velocity.x, velocity.z).length()
 	var moving: bool = speed > 0.8 and is_on_floor()
-	var sprinting: bool = moving and sprint_requested and replicated_stamina > 1.0 and not aim_requested
+	var visual_aiming: bool = is_aiming or aim_requested
+	var sprinting: bool = moving and sprint_requested and replicated_stamina > 1.0 and not visual_aiming
 	var grounded := is_on_floor()
 	if grounded and not visual_was_on_floor:
 		visual_landing_impulse = clampf(
@@ -5738,14 +5774,22 @@ func _update_first_person_animation(delta: float) -> void:
 	)
 	var target_position: Vector3 = weapon_base_position + recoil_position_impulse
 	var target_rotation: Vector3 = weapon_base_rotation + recoil_rotation_impulse
-	target_position.y -= visual_landing_impulse
-	target_rotation.x += visual_landing_impulse * 0.65
+	if visual_aiming:
+		target_position = (
+			_aim_weapon_position() + recoil_position_impulse * 0.64
+		)
+		target_rotation = (
+			_aim_weapon_rotation() + recoil_rotation_impulse * 0.72
+		)
+	var landing_scale: float = 0.35 if visual_aiming else 1.0
+	target_position.y -= visual_landing_impulse * landing_scale
+	target_rotation.x += visual_landing_impulse * 0.65 * landing_scale
 	recoil_position_impulse = recoil_position_impulse.lerp(Vector3.ZERO,1.0-exp(-18.0*delta))
 	recoil_rotation_impulse = recoil_rotation_impulse.lerp(Vector3.ZERO,1.0-exp(-15.0*delta))
 	if moving:
 		var frequency: float = 11.0 if sprinting else 7.5
 		var amount: float = 0.035 if sprinting else 0.020
-		if aim_requested:
+		if visual_aiming:
 			amount *= 0.28
 		target_position.x += sin(visual_animation_time * frequency) * amount
 		target_position.y += absf(cos(visual_animation_time * frequency)) * amount * 0.65
@@ -5755,9 +5799,11 @@ func _update_first_person_animation(delta: float) -> void:
 		target_position.z += 0.16
 		target_rotation.x += 0.28
 		target_rotation.z -= 0.12
-	elif aim_requested:
-		target_position.y += 0.02
-		target_position.z -= 0.06
+	elif visual_aiming:
+		var breathing: float = sin(visual_animation_time * 1.25)
+		target_position.y += breathing * 0.0012
+		target_rotation.x += breathing * 0.0015
+		target_rotation.y += cos(visual_animation_time * 0.95) * 0.0010
 	elif is_reloading:
 		var reload_motion := sin(visual_animation_time * 4.8)
 		target_position.y -= 0.20
@@ -5775,15 +5821,18 @@ func _update_first_person_animation(delta: float) -> void:
 	target_rotation.x += obstruction * 0.24
 	target_rotation.z -= obstruction * 0.08
 
-	target_rotation.y += camera_inertia.x * 0.008
-	target_rotation.x += camera_inertia.y * 0.006
-	target_position.x += camera_inertia.x * 0.004
-	target_position.y -= absf(camera_inertia.y) * 0.002
+	var inertia_scale: float = 0.28 if visual_aiming else 1.0
+	target_rotation.y += camera_inertia.x * 0.008 * inertia_scale
+	target_rotation.x += camera_inertia.y * 0.006 * inertia_scale
+	target_position.x += camera_inertia.x * 0.004 * inertia_scale
+	target_position.y -= absf(camera_inertia.y) * 0.002 * inertia_scale
 	# Keep the complete weapon, sleeve, and hand hierarchy in front of the
 	# camera near plane even during sprint, reload, recoil, and wall lowering.
 	target_position.z = minf(target_position.z, -0.50)
-	weapon_view.position = weapon_view.position.lerp(target_position, clampf(delta * 10.0,0.0,1.0))
-	weapon_view.rotation = weapon_view.rotation.lerp(target_rotation, clampf(delta * 9.0,0.0,1.0))
+	var position_speed: float = 16.0 if visual_aiming else 10.0
+	var rotation_speed: float = 15.0 if visual_aiming else 9.0
+	weapon_view.position = weapon_view.position.lerp(target_position, clampf(delta * position_speed,0.0,1.0))
+	weapon_view.rotation = weapon_view.rotation.lerp(target_rotation, clampf(delta * rotation_speed,0.0,1.0))
 	_update_first_person_mechanics(delta)
 
 func _visual_part(node_name: String) -> Node3D:
