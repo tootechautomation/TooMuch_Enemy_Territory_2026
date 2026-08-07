@@ -147,6 +147,9 @@ const RainInteractionPassScript = preload(
 const FacadeStreetDressingPassScript = preload(
 	"res://scripts/visuals/facade_street_dressing_pass.gd"
 )
+const LightingPostProcessRefinementPassScript = preload(
+	"res://scripts/visuals/lighting_postprocess_refinement_pass.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -180,7 +183,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.78.0"
+const BUILD_VERSION := "8.79.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -801,6 +804,12 @@ func _build_facade_street_dressing_pass() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	FacadeStreetDressingPassScript.apply(self)
+
+
+func _build_lighting_postprocess_refinement_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	LightingPostProcessRefinementPassScript.apply(self)
 
 
 func _initialize_visual_quality_manager() -> void:
@@ -9072,6 +9081,7 @@ func _build_world() -> void:
 	_build_environmental_animation_pass()
 	_build_rain_interaction_pass()
 	_build_facade_street_dressing_pass()
+	_build_lighting_postprocess_refinement_pass()
 	_build_map_expansion_pass()
 	_build_expanded_ground_collision()
 	_build_structure_collision_pass()
