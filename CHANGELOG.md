@@ -1,5 +1,16 @@
 # Changelog
 
+## 8.34.0
+- Added normalized third-person reload progress derived from the existing reload flag and weapon duration
+- Added class-specific magazine and Soldier drum removal, travel, reinsertion, and authored-pose restoration
+- Added a final bolt-handle cycle synchronized with the end of the reload
+- Replaced the looping generic support-arm motion with a staged reach tied to the hardware animation
+- Reset reload presentation state on interruption and respawn
+- Confirmed the project contains no TextEdit, CodeEdit, or editor gutter API usage
+- Added recoverable Windows and Linux/macOS tools for backing up stale local `.godot` editor state
+- Added editor-state recovery documentation and excluded the backup directory from version control
+- Preserved reload timing, ammo transfer, imported-animation priority, RPC compatibility, networking, and protocol 341
+
 ## 8.33.0
 - Added coordinated fallback head, torso, shoulder, and weapon pitch from the existing replicated look direction
 - Added smoothly blended hip-to-aim transitions instead of hard third-person pose switching

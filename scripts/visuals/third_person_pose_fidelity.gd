@@ -28,7 +28,8 @@ static func apply(
 	stance_blend: float,
 	aim_pitch: float,
 	aim_blend: float,
-	fire_recoil: float
+	fire_recoil: float,
+	reload_progress: float
 ) -> void:
 	if character_visual == null:
 		return
@@ -49,6 +50,8 @@ static func apply(
 	var weapon_profile := 0
 	if actor != null:
 		weapon_profile = int(actor.get("player_class"))
+	var magazine := _weapon_magazine(weapon, weapon_profile)
+	var bolt_handle := _find(weapon, "BoltHandle")
 
 	var alpha_fast := 1.0 - exp(-14.0 * delta)
 	var alpha_body := 1.0 - exp(-9.0 * delta)
@@ -148,8 +151,12 @@ static func apply(
 		_:
 			pass
 	if reloading:
-		var reload_work := sin(animation_time * 5.2)
-		left_arm_target = Vector3(-1.18 + reload_work * 0.10, 0.38, 0.42)
+		var reload_reach := sin(clampf(reload_progress, 0.0, 1.0) * PI)
+		left_arm_target = Vector3(
+			-1.10 - reload_reach * 0.18,
+			0.30 + reload_reach * 0.16,
+			0.34 + reload_reach * 0.14
+		)
 		right_arm_target = Vector3(-0.62, -0.30, -0.22)
 	elif aim_pose > 0.01:
 		left_arm_target += Vector3(-0.20, 0.04, 0.08) * aim_pose
@@ -229,6 +236,87 @@ static func apply(
 		weapon_position += Vector3(damage_side * damage_reaction * 0.06, -damage_reaction * 0.04, damage_reaction * 0.05)
 		weapon.rotation = weapon.rotation.lerp(weapon_rotation, alpha_fast)
 		weapon.position = weapon.position.lerp(weapon_position, alpha_fast)
+
+	_animate_reload_hardware(
+		magazine,
+		bolt_handle,
+		weapon_profile,
+		reloading,
+		reload_progress,
+		alpha_fast
+	)
+
+static func _weapon_magazine(weapon: Node3D, weapon_profile: int) -> Node3D:
+	if weapon == null:
+		return null
+	var magazine_name := "RifleMagazine"
+	match weapon_profile:
+		0:
+			magazine_name = "LMGDrumMagazine"
+		1:
+			magazine_name = "SMGMagazine"
+		2:
+			magazine_name = "CarbineMagazine"
+		_:
+			pass
+	return _find(weapon, magazine_name)
+
+static func _magazine_base_position(weapon_profile: int) -> Vector3:
+	match weapon_profile:
+		0:
+			return Vector3(-0.105, -0.10, -0.02)
+		1:
+			return Vector3(0.0, -0.17, -0.13)
+		2:
+			return Vector3(0.0, -0.15, -0.14)
+		3:
+			return Vector3(0.0, -0.15, -0.07)
+		_:
+			return Vector3(0.0, -0.12, -0.03)
+
+static func _magazine_base_rotation(weapon_profile: int) -> Vector3:
+	match weapon_profile:
+		0:
+			return Vector3(0.0, 0.0, deg_to_rad(90.0))
+		1:
+			return Vector3(deg_to_rad(5.0), 0.0, 0.0)
+		2:
+			return Vector3(deg_to_rad(10.0), 0.0, 0.0)
+		3:
+			return Vector3(deg_to_rad(8.0), 0.0, 0.0)
+		_:
+			return Vector3(deg_to_rad(5.0), 0.0, 0.0)
+
+static func _animate_reload_hardware(
+	magazine: Node3D,
+	bolt_handle: Node3D,
+	weapon_profile: int,
+	reloading: bool,
+	reload_progress: float,
+	alpha: float
+) -> void:
+	var progress := clampf(reload_progress, 0.0, 1.0)
+	var magazine_out := smoothstep(0.12, 0.30, progress)
+	var magazine_in := smoothstep(0.58, 0.80, progress)
+	var magazine_travel := magazine_out * (1.0 - magazine_in) if reloading else 0.0
+	if magazine != null:
+		var magazine_target := _magazine_base_position(weapon_profile)
+		magazine_target += Vector3(0.10, 0.30, 0.06) * magazine_travel
+		magazine.position = magazine.position.lerp(magazine_target, alpha)
+		var magazine_rotation := _magazine_base_rotation(weapon_profile)
+		magazine_rotation.z += magazine_travel * 0.24
+		magazine.rotation = magazine.rotation.lerp(magazine_rotation, alpha)
+	if bolt_handle != null:
+		var bolt_cycle := (
+			smoothstep(0.82, 0.90, progress)
+			* (1.0 - smoothstep(0.92, 1.0, progress))
+			if reloading
+			else 0.0
+		)
+		bolt_handle.position = bolt_handle.position.lerp(
+			Vector3(0.10, -0.015, 0.02 + bolt_cycle * 0.11),
+			alpha
+		)
 
 static func _pose_incapacitated(
 	soldier: Node3D,

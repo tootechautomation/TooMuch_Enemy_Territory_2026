@@ -312,6 +312,8 @@ var visual_world_stance_blend := 0.0
 var visual_world_aim_blend := 0.0
 var visual_world_aim_hold := 0.0
 var visual_world_fire_recoil := 0.0
+var visual_world_reload_progress := 0.0
+var visual_world_was_reloading := false
 var visual_damage_reaction := 0.0
 var visual_damage_side := 1.0
 var visual_revive_recovery := 0.0
@@ -2072,6 +2074,8 @@ func server_respawn(spawn_position: Vector3) -> void:
 	visual_world_aim_blend = 0.0
 	visual_world_aim_hold = 0.0
 	visual_world_fire_recoil = 0.0
+	visual_world_reload_progress = 0.0
+	visual_world_was_reloading = false
 	if tactical_map_open:
 		_set_tactical_map_open(false)
 	is_reloading = false
@@ -6098,6 +6102,17 @@ func _update_world_character_animation(delta: float) -> void:
 		0.0,
 		delta * 7.5
 	)
+	if is_reloading:
+		if not visual_world_was_reloading:
+			visual_world_reload_progress = 0.0
+		visual_world_reload_progress = move_toward(
+			visual_world_reload_progress,
+			1.0,
+			delta / maxf(_weapon_reload_seconds(), 0.10)
+		)
+	else:
+		visual_world_reload_progress = 0.0
+	visual_world_was_reloading = is_reloading
 	var local_velocity: Vector3 = global_transform.basis.inverse() * planar_velocity
 	var target_forward := 0.0
 	var target_strafe := 0.0
@@ -6261,7 +6276,8 @@ func _update_world_character_animation(delta: float) -> void:
 		visual_world_stance_blend,
 		clampf($Head.rotation.x, -1.10, 1.10),
 		visual_world_aim_blend,
-		visual_world_fire_recoil
+		visual_world_fire_recoil,
+		visual_world_reload_progress
 	)
 
 func register_world_shot_recoil() -> void:

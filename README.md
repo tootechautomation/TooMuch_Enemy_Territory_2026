@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.33.0 — Third-Person Aim Tracking and Firing Recoil
+## Version 8.34.0 — Third-Person Reload Mechanics and Editor-State Recovery
+
+Fallback world weapons now perform a staged reload instead of moving only the arms and entire gun as one rigid piece. Each class-specific magazine or Soldier drum leaves its seated position, travels with the support-hand phase, returns to the weapon, and settles before the bolt handle cycles. The support arm follows the same normalized reload timeline, keeping the hand motion and weapon hardware synchronized.
+
+Reload progress is presentation-only and derived from the existing replicated reload flag plus each weapon's existing reload duration. No snapshot fields or RPC arguments were added. Interruptions, weapon switches, respawns, and completed reloads return the magazine and bolt to their authored positions.
+
+This build also documents and provides recoverable reset tools for Godot's editor-side `TextEdit` gutter warning. Frontline: Objective contains no `TextEdit`, `CodeEdit`, or gutter API use; the warning is caused by stale local `.godot` script-editor state when a replacement is extracted over an existing folder. The tools back up that local state rather than deleting project files. Imported-animation priority, reload timing, ammunition transfer, gameplay, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.33.0 Third-Person Aim Tracking and Firing Recoil
 
 Fallback soldiers now follow the replicated vertical look direction with coordinated head, torso, shoulder, and weapon pitch. Looking uphill, down from elevated cover, or across uneven terrain therefore changes the full firing silhouette instead of moving only the invisible gameplay ray or camera head node.
 
