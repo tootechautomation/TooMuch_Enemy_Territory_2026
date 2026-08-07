@@ -120,6 +120,9 @@ const MaterialWeatheringPassScript = preload(
 const TerrainVegetationPassScript = preload(
 	"res://scripts/visuals/terrain_vegetation_pass.gd"
 )
+const ObjectiveIdentityPassScript = preload(
+	"res://scripts/visuals/objective_identity_pass.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -153,7 +156,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.69.0"
+const BUILD_VERSION := "8.70.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -578,6 +581,7 @@ func _ready() -> void:
 	_build_battlefield_life_pass()
 	_build_material_weathering_pass()
 	_build_terrain_vegetation_pass()
+	_build_objective_identity_pass()
 	_initialize_visual_quality_manager()
 	_build_round_results_ui()
 	_initialize_period_interface_fidelity()
@@ -725,6 +729,12 @@ func _build_terrain_vegetation_pass() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	TerrainVegetationPassScript.apply(self)
+
+
+func _build_objective_identity_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	ObjectiveIdentityPassScript.apply(self)
 
 
 func _initialize_visual_quality_manager() -> void:
