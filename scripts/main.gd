@@ -111,6 +111,9 @@ const ArchitecturalRealismPassScript = preload(
 const InteriorBattlefieldPropsPassScript = preload(
 	"res://scripts/visuals/interior_battlefield_props_pass.gd"
 )
+const BattlefieldLifePassScript = preload(
+	"res://scripts/visuals/battlefield_life_pass.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -144,7 +147,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.66.0"
+const BUILD_VERSION := "8.67.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -566,6 +569,7 @@ func _ready() -> void:
 	_build_hero_environment_detail_pass()
 	_build_architectural_realism_pass()
 	_build_interior_battlefield_props_pass()
+	_build_battlefield_life_pass()
 	_initialize_visual_quality_manager()
 	_build_round_results_ui()
 	_initialize_period_interface_fidelity()
@@ -695,6 +699,12 @@ func _build_interior_battlefield_props_pass() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	InteriorBattlefieldPropsPassScript.apply(self)
+
+
+func _build_battlefield_life_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	BattlefieldLifePassScript.apply(self)
 
 
 func _initialize_visual_quality_manager() -> void:
