@@ -2,7 +2,7 @@ extends RefCounted
 class_name PlayerProfile
 
 const PROFILE_PATH := "user://frontline_profile.cfg"
-const PROFILE_VERSION := 3
+const PROFILE_VERSION := 4
 
 const DEFAULTS := {
 	"player_name": "Soldier",
@@ -13,7 +13,7 @@ const DEFAULTS := {
 	"hud_scale": 1.0,
 	"master_volume": 0.85,
 	"effects_volume": 0.90,
-	"music_volume": 0.65,
+	"music_volume": 0.75,
 	"last_server": "127.0.0.1",
 	"last_port": 27960,
 	"player_id": "",

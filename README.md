@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.27.0 — Spatial Firing Effects and Weapon Heat
+## Version 8.28.0 — Audible Adaptive Score and Battlefield Mix
+
+The adaptive soundtrack is now deliberately audible instead of sitting beneath several layers of attenuation. Calm, Tension, and Assault stems have been loudness-normalized to a consistent average level, preventing the score from becoming quieter as combat intensity rises. The director uses a stronger but still restrained mix range controlled by the existing Music slider.
+
+All three synchronized stems receive a short fade-in and are checked once per second for interrupted playback. If an audio player stops after a device transition or other interruption, it resumes at the active stem position. High-intensity combat applies only a small music duck so gunfire and objective effects remain readable without effectively muting the soundtrack.
+
+Battlefield ambience now uses a dedicated Ambience bus derived from the Effects slider rather than sharing the Music bus. New profiles default to 75% Music volume; existing saved settings remain respected. Objectives, combat, bots, classes, headless server behavior, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.27.0 Spatial Firing Effects and Weapon Heat
 
 First-person firing effects now originate at the actual weapon muzzle instead of a stale shared coordinate. Each fallback weapon class uses a barrel endpoint matched to its current geometry, while imported models can provide `MuzzleSocket`, `Muzzle`, `BarrelEnd`, or common lowercase socket names for automatic alignment.
 
@@ -74,5 +82,5 @@ Friendly world nameplates now include a diamond identifier and remain visible at
 
 All additions are client-side presentation. Team assignment, uniforms, objectives, spotting, server authority, networking, and protocol 341 remain unchanged.
 
-Build: v8.27.0
+Build: v8.28.0
 Protocol: 341

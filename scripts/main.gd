@@ -87,7 +87,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.27.0"
+const BUILD_VERSION := "8.28.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -711,8 +711,8 @@ func _initialize_battlefield_ambience() -> void:
 		ambience_wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		ambience_wav.loop_begin = 0
 		ambience_wav.loop_end = int(ambience_wav.data.size() / 2)
-	ambience_player.bus = "Music"
-	ambience_player.volume_db = -20.0
+	ambience_player.bus = "Ambience"
+	ambience_player.volume_db = -8.0
 	add_child(ambience_player)
 	ambience_player.play()
 
@@ -724,7 +724,11 @@ func _initialize_adaptive_music() -> void:
 	adaptive_music_director = AdaptiveMusicDirectorScript.new()
 	adaptive_music_director.name = "AdaptiveMusicDirector"
 	add_child(adaptive_music_director)
-	adaptive_music_director.call("initialize")
+	var initialized: bool = bool(
+		adaptive_music_director.call("initialize")
+	)
+	if not initialized:
+		adaptive_music_director = null
 
 func _update_adaptive_music() -> void:
 	if adaptive_music_director == null:
@@ -4841,7 +4845,7 @@ func _set_bus_volume(bus_name: String, value: float) -> void:
 	)
 
 func _ensure_audio_buses() -> void:
-	var required_buses: Array[String] = ["SFX", "Music"]
+	var required_buses: Array[String] = ["SFX", "Music", "Ambience"]
 	for bus_name: String in required_buses:
 		if AudioServer.get_bus_index(bus_name) >= 0:
 			continue
@@ -4863,7 +4867,11 @@ func _apply_profile_audio_settings() -> void:
 	)
 	_set_bus_volume(
 		"Music",
-		float(local_profile.get("music_volume", 0.65))
+		float(local_profile.get("music_volume", 0.75))
+	)
+	_set_bus_volume(
+		"Ambience",
+		float(local_profile.get("effects_volume", 0.90)) * 0.55
 	)
 
 func _apply_profile_to_local_player() -> void:
@@ -5081,7 +5089,7 @@ func _build_profile_panel() -> void:
 		0.0,
 		1.0,
 		0.05,
-		float(local_profile.get("music_volume", 0.65))
+		float(local_profile.get("music_volume", 0.75))
 	)
 
 	profile_transfer_path = LineEdit.new()

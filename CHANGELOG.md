@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.28.0
+- Loudness-normalized the Calm, Tension, and Assault score stems to a consistent average level
+- Raised the adaptive director's usable score range while retaining Music-bus volume control
+- Added a short score fade-in and automatic synchronized restart checks for stopped audio players
+- Added restrained high-intensity music ducking so gunfire stays readable without making the score disappear
+- Moved battlefield ambience from the Music bus to a dedicated Ambience bus derived from effects volume
+- Raised the new-profile default Music volume from 65% to 75% while preserving existing saved settings
+- Added explicit adaptive-score startup reporting and safe initialization failure handling
+- Preserved objectives, combat, bots, classes, headless isolation, networking, and protocol 341
+
 ## 8.27.0
 - Replaced stale fixed muzzle-effect coordinates with class-specific fallback barrel endpoints
 - Added imported-model muzzle socket discovery for MuzzleSocket, Muzzle, BarrelEnd, and common lowercase variants
