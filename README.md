@@ -1,19 +1,20 @@
-FRONTLINE: OBJECTIVE v8.78.0
-FACADE IDENTITY + WARTIME STREET DRESSING
+FRONTLINE: OBJECTIVE v8.80.0
+BATTLE DAMAGE + IMPACT DETAIL
 
 NEW CODE-BUILT DETAIL
-- shutters and boarded windows
-- canvas awnings and support braces
-- hanging storefront/wall signs
-- wall-mounted utility/electrical boxes
-- conduit and repair patches
-- wall lamps with localized warm light
-- detailed service doors and handles
-- facade-mounted utility cable spans
+- clustered bullet impact scars
+- shell-blast scorch patches
+- chipped plaster / exposed masonry
+- projecting broken facade chunks
+- shattered-window frame remnants
+- jagged glass shard detail
+- localized rubble under damaged structures
+- bent metal fragments
+- additional damage around fighting cover
 
 GOAL
-Break up the remaining repeated-building appearance and give each street-facing
-structure more individual identity and believable wartime use.
+Make the environment look actively fought over rather than simply weathered.
+This pass adds visible evidence of gunfire, shelling and structural damage.
 
 PRESERVED
 - working Axis P38 orientation
@@ -21,8 +22,8 @@ PRESERVED
 - Mouse2 shoulder zoom
 - persistent crosshair
 - collision / objectives / networking
-- v8.77 rain interaction
-- all prior environment/detail systems
+- lighting/post-processing from v8.79
+- all previous environment systems
 
-Build: 8.78.0
+Build: 8.80.0
 Network protocol: 341
