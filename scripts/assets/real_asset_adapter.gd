@@ -39,11 +39,13 @@ static func adapt_character(
 	var final_bounds := _bounds(model)
 	report["height_after"] = final_bounds.size.y
 	report["skeletons"] = model.find_children(
-		"*", "Skeleton3D", true
+		"*", "Skeleton3D", true, false
 	).size()
 
 	var animation_count := 0
-	for value in model.find_children("*", "AnimationPlayer", true):
+	for value in model.find_children(
+		"*", "AnimationPlayer", true, false
+	):
 		var animation_player := value as AnimationPlayer
 		animation_count += animation_player.get_animation_list().size()
 	report["animations"] = animation_count
@@ -121,7 +123,9 @@ static func find_character_socket(model: Node3D) -> Node3D:
 		if found is Node3D:
 			return found as Node3D
 
-	for value in model.find_children("*", "BoneAttachment3D", true):
+	for value in model.find_children(
+		"*", "BoneAttachment3D", true, false
+	):
 		var attachment := value as BoneAttachment3D
 		var lower := attachment.name.to_lower()
 		if "right" in lower and "hand" in lower:
@@ -131,7 +135,9 @@ static func find_character_socket(model: Node3D) -> Node3D:
 static func animation_map(model: Node3D) -> Dictionary:
 	var result := {}
 	var player: AnimationPlayer
-	for value in model.find_children("*", "AnimationPlayer", true):
+	for value in model.find_children(
+		"*", "AnimationPlayer", true, false
+	):
 		player = value as AnimationPlayer
 		break
 	if player == null:
@@ -167,7 +173,9 @@ static func _apply_team_surface_policy(
 		if team_id == 0
 		else Color(0.76, 0.81, 0.75, 1.0)
 	)
-	for value in root.find_children("*", "MeshInstance3D", true):
+	for value in root.find_children(
+		"*", "MeshInstance3D", true, false
+	):
 		var mesh_instance := value as MeshInstance3D
 		if mesh_instance.mesh == null:
 			continue
@@ -213,7 +221,9 @@ static func _is_uniform_surface(identity: String) -> bool:
 
 static func _clean_materials(root: Node3D, environment_asset: bool) -> int:
 	var adjusted := 0
-	for value in root.find_children("*", "MeshInstance3D", true):
+	for value in root.find_children(
+		"*", "MeshInstance3D", true, false
+	):
 		var mesh_instance := value as MeshInstance3D
 		if mesh_instance.mesh == null:
 			continue
@@ -242,7 +252,9 @@ static func _bounds(root: Node3D) -> AABB:
 	var result := AABB()
 	var initialized := false
 	var inverse := root.global_transform.affine_inverse()
-	for value in root.find_children("*", "MeshInstance3D", true):
+	for value in root.find_children(
+		"*", "MeshInstance3D", true, false
+	):
 		var mesh_instance := value as MeshInstance3D
 		if mesh_instance.mesh == null:
 			continue

@@ -1,6 +1,10 @@
 extends RefCounted
 class_name ExternalAssetRegistry
 
+const BUNDLED_CHARACTER_SCENE: PackedScene = preload(
+	"res://assets/models/cc_by/cesium_man/CesiumMan.glb"
+)
+
 const CHARACTER_ALLIED_CANDIDATES: Array[String] = [
 	"res://assets/external/characters/allied_soldier.glb",
 	"res://assets/external/characters/modular_military_2_allied.glb",
@@ -156,11 +160,14 @@ static func first_available_path(
 	return ""
 
 static func available_character(team_id: int) -> PackedScene:
-	return first_available_scene(
+	var selected := first_available_scene(
 		CHARACTER_ALLIED_CANDIDATES
 		if team_id == 0
 		else CHARACTER_AXIS_CANDIDATES
 	)
+	if selected != null:
+		return selected
+	return BUNDLED_CHARACTER_SCENE
 
 static func environment_scene(asset_id: String) -> PackedScene:
 	if not ENVIRONMENT_PATHS.has(asset_id):

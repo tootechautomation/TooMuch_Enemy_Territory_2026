@@ -1,5 +1,11 @@
 # Changelog
 
+## 8.36.1
+- Fixed valid GLB characters being rejected when Godot imported mesh, skeleton, or animation nodes with internal scene ownership
+- Made character adaptation, material processing, bounds calculation, animation discovery, shadow configuration, and validation traverse the full imported hierarchy
+- Preloaded the bundled human scene as a guaranteed fallback when runtime resource-path discovery does not surface the raw GLB
+- Preserved user-supplied Allied and Axis model priority, procedural import-failure fallback, gameplay, and protocol 341
+
 ## 8.36.0
 - Replaced the default third-person primitive soldier presentation with the real skinned CesiumMan humanoid GLB
 - Bundled one shared compact model for both teams and retained existing team HUD, markers, and gameplay identity

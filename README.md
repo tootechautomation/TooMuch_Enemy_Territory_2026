@@ -1,6 +1,10 @@
 # Frontline: Objective
 
-## Version 8.36.0 — Real Rigged Humanoid Character Replacement
+## Version 8.36.1 — Imported Humanoid Activation Hotfix
+
+The bundled humanoid is now preloaded as the guaranteed character fallback, and imported-scene traversal includes Godot's complete internal GLB hierarchy. This fixes the case where the valid CesiumMan mesh and skeleton were present but rejected because their imported nodes were not owned directly by the instantiated root, leaving the procedural soldier visible.
+
+## Previous Phase — 8.36.0 Real Rigged Humanoid Character Replacement
 
 The default third-person character is now a genuine textured, skinned, animated human mesh instead of the articulated primitive fallback. The bundled CesiumMan GLB is normalized automatically to the existing 1.82 m character scale, grounded, validated through the external-character pipeline, and used for both teams with the established team identity, HUD, hitboxes, collision, weapons, and gameplay unchanged.
 

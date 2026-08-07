@@ -4,7 +4,9 @@ class_name ExternalAssetValidator
 static func _bounds_for(root: Node3D) -> AABB:
 	var result := AABB()
 	var initialized := false
-	for child in root.find_children("*", "MeshInstance3D", true):
+	for child in root.find_children(
+		"*", "MeshInstance3D", true, false
+	):
 		var mesh_instance := child as MeshInstance3D
 		if mesh_instance.mesh == null:
 			continue
@@ -38,13 +40,13 @@ static func validate_character(model: Node3D) -> Dictionary:
 		return report
 
 	report["mesh_count"] = model.find_children(
-		"*", "MeshInstance3D", true
+		"*", "MeshInstance3D", true, false
 	).size()
 	report["skeleton_count"] = model.find_children(
-		"*", "Skeleton3D", true
+		"*", "Skeleton3D", true, false
 	).size()
 	var animation_players := model.find_children(
-		"*", "AnimationPlayer", true
+		"*", "AnimationPlayer", true, false
 	)
 	report["animation_player_count"] = animation_players.size()
 	var animation_count := 0

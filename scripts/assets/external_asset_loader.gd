@@ -31,7 +31,9 @@ static func configure_character_model(
 	if model == null:
 		return
 
-	for child in model.find_children("*", "GeometryInstance3D", true):
+	for child in model.find_children(
+		"*", "GeometryInstance3D", true, false
+	):
 		var geometry := child as GeometryInstance3D
 		geometry.cast_shadow = (
 			GeometryInstance3D.SHADOW_CASTING_SETTING_ON
@@ -40,7 +42,9 @@ static func configure_character_model(
 static func animation_player(model: Node3D) -> AnimationPlayer:
 	if model == null:
 		return null
-	for child in model.find_children("*", "AnimationPlayer", true):
+	for child in model.find_children(
+		"*", "AnimationPlayer", true, false
+	):
 		return child as AnimationPlayer
 	return null
 
