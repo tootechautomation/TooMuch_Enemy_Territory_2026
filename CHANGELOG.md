@@ -1,5 +1,17 @@
 # Changelog
 
+## 8.35.0
+- Downloaded ambientCG Bricks097 and Fabric083 in the lightweight 1K JPG PBR format
+- Verified both source assets are distributed under Creative Commons CC0
+- Bundled only Color, OpenGL Normal, and Roughness maps required by Godot
+- Applied damaged industrial red brick to the WWII material library and asset-based village buildings
+- Applied the CC0 brick color and roughness maps to generated brick and townhouse surfaces
+- Applied woven fabric color, normal, and roughness maps to articulated fallback uniforms
+- Applied the same cloth material to legacy fallback bodies and first-person sleeves
+- Preserved Allied olive-drab and opposing field-gray tinting, class accents, and team readability
+- Added source, license, download-date, and original-archive checksum records
+- Preserved imported-asset priority, gameplay, collision, hitboxes, networking, and protocol 341
+
 ## 8.34.0
 - Added normalized third-person reload progress derived from the existing reload flag and weapon duration
 - Added class-specific magazine and Soldier drum removal, travel, reinsertion, and authored-pose restoration

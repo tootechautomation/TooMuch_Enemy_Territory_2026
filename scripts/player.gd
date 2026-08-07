@@ -79,6 +79,8 @@ const SPAWN_PROTECTION_MS := 5000
 
 var tex_uniform_attackers: Texture2D
 var tex_uniform_defenders: Texture2D
+var tex_uniform_normal: Texture2D
+var tex_uniform_roughness: Texture2D
 var tex_weapon_rifle: Texture2D
 var tex_weapon_pistol: Texture2D
 var tex_medal_elimination: Texture2D
@@ -578,10 +580,16 @@ func _ready() -> void:
 	floor_stop_on_slope = true
 	if DisplayServer.get_name() != "headless":
 		tex_uniform_attackers = _load_optional_texture(
-			"res://assets/textures/uniform_allied_wool_v819.png"
+			"res://assets/cc0/ambientcg/Fabric083/Fabric083_Color.jpg"
 		)
 		tex_uniform_defenders = _load_optional_texture(
-			"res://assets/textures/uniform_axis_fieldgray_v819.png"
+			"res://assets/cc0/ambientcg/Fabric083/Fabric083_Color.jpg"
+		)
+		tex_uniform_normal = _load_optional_texture(
+			"res://assets/cc0/ambientcg/Fabric083/Fabric083_NormalGL.jpg"
+		)
+		tex_uniform_roughness = _load_optional_texture(
+			"res://assets/cc0/ambientcg/Fabric083/Fabric083_Roughness.jpg"
 		)
 		tex_weapon_rifle = _load_optional_texture(
 			"res://assets/textures/weapon_rifle.png"
@@ -2402,10 +2410,21 @@ func _refresh_identity_visuals(force: bool = false) -> void:
 		)
 		if uniform_texture != null:
 			body_material.albedo_texture = uniform_texture
-			body_material.albedo_color = Color(0.92, 0.92, 0.92, 1.0)
+			body_material.albedo_color = (
+				Color(0.34, 0.38, 0.22)
+				if team == 0
+				else Color(0.34, 0.35, 0.31)
+			)
 			body_material.roughness = 0.94
 			body_material.metallic = 0.0
 			body_material.emission_enabled = false
+			if tex_uniform_normal != null:
+				body_material.normal_enabled = true
+				body_material.normal_texture = tex_uniform_normal
+				body_material.normal_scale = 0.48
+			if tex_uniform_roughness != null:
+				body_material.roughness_texture = tex_uniform_roughness
+				body_material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 
 	if accent_material != null:
 		accent_material.albedo_color = accent_color
@@ -4216,9 +4235,20 @@ func _first_person_sleeve_material() -> StandardMaterial3D:
 		if team == 0
 		else tex_uniform_defenders
 	)
-	material.albedo_color = Color(0.92, 0.92, 0.92, 1.0)
+	material.albedo_color = (
+		Color(0.34, 0.38, 0.22)
+		if team == 0
+		else Color(0.34, 0.35, 0.31)
+	)
 	material.roughness = 0.94
 	material.metallic = 0.0
+	if tex_uniform_normal != null:
+		material.normal_enabled = true
+		material.normal_texture = tex_uniform_normal
+		material.normal_scale = 0.48
+	if tex_uniform_roughness != null:
+		material.roughness_texture = tex_uniform_roughness
+		material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 	return material
 
 func _first_person_glove_material() -> StandardMaterial3D:

@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.34.0 — Third-Person Reload Mechanics and Editor-State Recovery
+## Version 8.35.0 — CC0 Building and Uniform Material Upgrade
+
+The project now bundles two redistributable 1K PBR materials downloaded from ambientCG under CC0. Bricks097 replaces the temporary procedural brick surface with photographed, damaged industrial red masonry across the WWII material library, asset-based village buildings, townhouses, warehouses, and generated brick surfaces. Color, OpenGL normal, and roughness maps give the walls real mortar variation, chipped faces, and physically readable surface response.
+
+Fabric083 replaces the fallback uniform color texture with a woven cloth material across articulated soldiers, legacy fallback bodies, and first-person sleeves. The material retains Allied olive-drab and opposing field-gray tinting while adding a restrained weave normal and measured roughness. Class accents and team identification remain unchanged.
+
+Only the required color, NormalGL, and roughness maps are included; Blender, USD, MaterialX, displacement, DirectX-normal, and preview files were excluded. Source URLs, download date, CC0 terms, and original archive SHA-256 values are recorded in `assets/cc0/ambientcg/LICENSE_AND_SOURCES.md`. Imported character, weapon, and building assets still take priority; gameplay, collision, hitboxes, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.34.0 Third-Person Reload Mechanics and Editor-State Recovery
 
 Fallback world weapons now perform a staged reload instead of moving only the arms and entire gun as one rigid piece. Each class-specific magazine or Soldier drum leaves its seated position, travels with the support-hand phase, returns to the weapon, and settles before the bolt handle cycles. The support arm follows the same normalized reload timeline, keeping the hand motion and weapon hardware synchronized.
 

@@ -3,6 +3,8 @@ extends Node3D
 var attacker_skins: Array[Resource] = []
 var defender_skins: Array[Resource] = []
 var uniform_texture: Texture2D
+var uniform_normal_texture: Texture2D
+var uniform_roughness_texture: Texture2D
 
 var visual_root: Node3D
 var torso_root: Node3D
@@ -86,14 +88,22 @@ func _rebuild_character() -> void:
 		posmod(int(actor.peer_id), skins.size())
 	]
 
-	var uniform_path := (
-		"res://assets/textures/uniform_allied_wool_v819.png"
-		if last_team == 0
-		else "res://assets/textures/uniform_axis_fieldgray_v819.png"
-	)
+	var uniform_path := "res://assets/cc0/ambientcg/Fabric083/Fabric083_Color.jpg"
 	uniform_texture = (
 		load(uniform_path) as Texture2D
 		if ResourceLoader.exists(uniform_path)
+		else null
+	)
+	var uniform_normal_path := "res://assets/cc0/ambientcg/Fabric083/Fabric083_NormalGL.jpg"
+	uniform_normal_texture = (
+		load(uniform_normal_path) as Texture2D
+		if ResourceLoader.exists(uniform_normal_path)
+		else null
+	)
+	var uniform_roughness_path := "res://assets/cc0/ambientcg/Fabric083/Fabric083_Roughness.jpg"
+	uniform_roughness_texture = (
+		load(uniform_roughness_path) as Texture2D
+		if ResourceLoader.exists(uniform_roughness_path)
 		else null
 	)
 
@@ -674,8 +684,15 @@ func _material_for_part(
 	)
 	if uniform_texture != null and is_uniform:
 		material.albedo_texture = uniform_texture
-		material.albedo_color = Color(0.92, 0.92, 0.92, 1.0)
-		material.uv1_scale = Vector3(3.0, 3.0, 3.0)
+		material.albedo_color = color.lightened(0.10)
+		material.uv1_scale = Vector3(4.2, 4.2, 4.2)
+		if uniform_normal_texture != null:
+			material.normal_enabled = true
+			material.normal_texture = uniform_normal_texture
+			material.normal_scale = 0.48
+		if uniform_roughness_texture != null:
+			material.roughness_texture = uniform_roughness_texture
+			material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 	if (
 		"helmet" in lower_name
 		or "receiver" in lower_name

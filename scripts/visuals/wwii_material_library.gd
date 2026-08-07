@@ -212,9 +212,16 @@ func _apply_pbr_textures(
 	stem: String
 ) -> void:
 	var root_path := "res://assets/pbr/%s" % stem
-	var albedo := _load_texture(root_path + "_albedo.png")
-	var normal := _load_texture(root_path + "_normal.png")
-	var roughness_map := _load_texture(root_path + "_roughness.png")
+	var albedo_path := root_path + "_albedo.png"
+	var normal_path := root_path + "_normal.png"
+	var roughness_path := root_path + "_roughness.png"
+	if stem == "brick":
+		albedo_path = "res://assets/cc0/ambientcg/Bricks097/Bricks097_Color.jpg"
+		normal_path = "res://assets/cc0/ambientcg/Bricks097/Bricks097_NormalGL.jpg"
+		roughness_path = "res://assets/cc0/ambientcg/Bricks097/Bricks097_Roughness.jpg"
+	var albedo := _load_texture(albedo_path)
+	var normal := _load_texture(normal_path)
+	var roughness_map := _load_texture(roughness_path)
 
 	if albedo != null:
 		material.albedo_texture = albedo

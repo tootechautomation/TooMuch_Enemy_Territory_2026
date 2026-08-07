@@ -87,7 +87,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.34.0"
+const BUILD_VERSION := "8.35.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -423,13 +423,13 @@ func _ready() -> void:
 			"res://assets/pbr/cobblestone_roughness.png"
 		)
 		pbr_brick_albedo = _load_optional_texture(
-			"res://assets/pbr/brick_albedo.png"
+			"res://assets/cc0/ambientcg/Bricks097/Bricks097_Color.jpg"
 		)
 		pbr_brick_normal = _load_optional_texture(
-			"res://assets/pbr/brick_normal.png"
+			"res://assets/cc0/ambientcg/Bricks097/Bricks097_NormalGL.jpg"
 		)
 		pbr_brick_roughness = _load_optional_texture(
-			"res://assets/pbr/brick_roughness.png"
+			"res://assets/cc0/ambientcg/Bricks097/Bricks097_Roughness.jpg"
 		)
 		pbr_plaster_albedo = _load_optional_texture(
 			"res://assets/pbr/plaster_albedo.png"
@@ -1614,8 +1614,8 @@ func _generated_surface_material(
 	var roughness_path := ""
 
 	if "brick" in lower_name or "townhouse" in lower_name:
-		albedo_path = "res://assets/pbr/generated/brick_wall_albedo.png"
-		roughness_path = "res://assets/pbr/generated/brick_wall_roughness.png"
+		albedo_path = "res://assets/cc0/ambientcg/Bricks097/Bricks097_Color.jpg"
+		roughness_path = "res://assets/cc0/ambientcg/Bricks097/Bricks097_Roughness.jpg"
 	elif "plaster" in lower_name or "apartment" in lower_name:
 		albedo_path = "res://assets/pbr/generated/plaster_albedo.png"
 		roughness_path = "res://assets/pbr/generated/plaster_roughness.png"
