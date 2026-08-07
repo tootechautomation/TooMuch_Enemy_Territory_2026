@@ -511,9 +511,6 @@ func _build_imported_first_person_weapon(
 	if (
 		"m1a1_thompson" in selected_path
 		or "tt_pistol" in selected_path
-		or "p38" in selected_path
-		or "walther_p38" in selected_path
-		or "walther" in selected_path
 	):
 		asset_forward_yaw = 180.0
 
@@ -523,6 +520,14 @@ func _build_imported_first_person_weapon(
 		asset_forward_yaw,
 		-3.0 if is_pistol else -4.0
 	)
+
+	# v8.63: force the Axis Walther P38 itself to rotate 180 degrees AFTER the
+	# generic FBX adaptation/holder rotation. The previous filename/yaw approach
+	# could be cancelled by the P38 FBX's authored axis correction. Applying the
+	# flip to ImportedWeaponModel guarantees that only the P38 mesh reverses.
+	if is_pistol and team == Team.DEFENDERS:
+		imported_model.rotate_y(PI)
+
 	_apply_first_person_materials(imported_model)
 
 	muzzle_flash = MeshInstance3D.new()
