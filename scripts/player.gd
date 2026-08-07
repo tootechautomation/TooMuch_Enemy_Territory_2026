@@ -512,6 +512,8 @@ func _build_imported_first_person_weapon(
 		"m1a1_thompson" in selected_path
 		or "tt_pistol" in selected_path
 		or "p38" in selected_path
+		or "walther_p38" in selected_path
+		or "walther" in selected_path
 	):
 		asset_forward_yaw = 180.0
 
