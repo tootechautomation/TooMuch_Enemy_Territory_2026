@@ -192,7 +192,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.82.0"
+const BUILD_VERSION := "8.83.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -7069,54 +7069,61 @@ func server_spawn_player_death_drops(victim: Node3D) -> void:
 	var reserves: Array = reserves_variant if reserves_variant is Array else []
 	var slot_teams: Array = teams_variant if teams_variant is Array else []
 
+	# v8.83: ONLY the weapon that was actually in the victim's hands drops.
+	var active_slot: int = clampi(
+		int(victim.get("current_weapon_index")),
+		0,
+		maxi(0, slots.size() - 1)
+	)
+	if active_slot >= slots.size():
+		return
+
+	var active_weapon: Resource = slots[active_slot] as Resource
 	var death_position: Vector3 = victim.global_position
 	death_position.y = maxf(death_position.y, 0.08)
 
-	# Primary and secondary drop separately so either slot can be exchanged.
-	for slot_index: int in range(mini(2, slots.size())):
-		var weapon_resource: Resource = slots[slot_index] as Resource
-		if weapon_resource == null or weapon_resource.resource_path.is_empty():
-			continue
-
+	if (
+		active_weapon != null
+		and not active_weapon.resource_path.is_empty()
+	):
 		var source_team: int = (
-			int(slot_teams[slot_index])
-			if slot_index < slot_teams.size()
+			int(slot_teams[active_slot])
+			if active_slot < slot_teams.size()
 			else int(victim.get("team"))
 		)
 		var mag: int = (
-			int(mags[slot_index])
-			if slot_index < mags.size()
+			int(mags[active_slot])
+			if active_slot < mags.size()
 			else 0
 		)
 		var reserve: int = (
-			int(reserves[slot_index])
-			if slot_index < reserves.size()
+			int(reserves[active_slot])
+			if active_slot < reserves.size()
 			else 0
-		)
-
-		var lateral: float = -0.55 if slot_index == 0 else 0.55
-		var drop_position := death_position + Vector3(
-			lateral,
-			0.10,
-			0.20 if slot_index == 0 else -0.20
 		)
 
 		_server_create_battlefield_pickup(
 			"weapon",
-			slot_index,
+			active_slot,
 			source_team,
-			weapon_resource.resource_path,
+			active_weapon.resource_path,
 			mag,
 			reserve,
 			0,
-			drop_position
+			death_position + Vector3(0.0, 0.10, 0.10)
 		)
 
-	# Separate ammo pouch remains useful even if neither weapon is wanted.
+	# A small loose-ammo pouch still drops independently. This represents
+	# magazines/ammunition carried on the body rather than a second gun.
 	var ammo_total: int = 0
 	for reserve_value: Variant in reserves:
 		ammo_total += maxi(0, int(reserve_value))
-	var pouch_amount: int = clampi(int(round(float(ammo_total) * 0.22)), 20, 60)
+
+	var pouch_amount: int = clampi(
+		int(round(float(ammo_total) * 0.16)),
+		15,
+		45
+	)
 
 	_server_create_battlefield_pickup(
 		"ammo",
@@ -7126,8 +7133,9 @@ func server_spawn_player_death_drops(victim: Node3D) -> void:
 		0,
 		0,
 		pouch_amount,
-		death_position + Vector3(0.0, 0.08, 0.65)
+		death_position + Vector3(0.42, 0.08, 0.48)
 	)
+
 
 
 func _server_create_battlefield_pickup(
@@ -7240,6 +7248,20 @@ func server_try_battlefield_pickup(player: Node3D) -> bool:
 	var magazine: int = int(closest.get("magazine_ammo"))
 	var reserve: int = int(closest.get("reserve_ammo"))
 
+	# If the player already owns this exact weapon in the correct slot,
+	# interacting scavenges the dropped gun's remaining ammunition instead
+	# of pointlessly replacing an identical weapon.
+	if bool(player.call(
+		"server_absorb_matching_dropped_weapon",
+		slot_index,
+		resource_path,
+		magazine,
+		reserve
+	)):
+		server_remove_battlefield_pickup(closest_id)
+		return true
+
+	# Different weapon in the same category: swap it into that slot.
 	if bool(player.call(
 		"server_equip_battlefield_weapon",
 		slot_index,

@@ -65,7 +65,7 @@ func _build_visual() -> void:
 	label.name = "PickupLabel"
 	label.position = Vector3(0.0, 0.48, 0.0)
 	label.text = (
-		"[INTERACT] TAKE %s" % display_name()
+		"[INTERACT] TAKE / SCAVENGE %s" % display_name()
 		if pickup_kind == "weapon"
 		else "[INTERACT] TAKE AMMO"
 	)
@@ -75,6 +75,23 @@ func _build_visual() -> void:
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = false
 	add_child(label)
+
+	var ring := MeshInstance3D.new()
+	ring.name = "PickupGroundRing"
+	var ring_mesh := CylinderMesh.new()
+	ring_mesh.top_radius = 0.42
+	ring_mesh.bottom_radius = 0.42
+	ring_mesh.height = 0.012
+	ring_mesh.radial_segments = 28
+	ring.mesh = ring_mesh
+	ring.position = Vector3(0.0, 0.018, 0.0)
+	var ring_mat := StandardMaterial3D.new()
+	ring_mat.albedo_color = Color(0.78, 0.69, 0.38, 0.16)
+	ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring.material_override = ring_mat
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(ring)
 
 
 func _build_weapon_visual() -> void:

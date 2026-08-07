@@ -1,53 +1,50 @@
-FRONTLINE: OBJECTIVE v8.82.0
-DEATH DROPS + CROSS-FACTION WEAPON PICKUPS
+FRONTLINE: OBJECTIVE v8.83.0
+ACTIVE-WEAPON DROP + MATCHING-WEAPON AMMO SCAVENGE
 
-NEW GAMEPLAY SYSTEM
-When a player is fully eliminated they now drop:
-1. their primary weapon
-2. their secondary pistol
-3. a separate ammunition pouch
+DEATH DROP RULE
+Only the weapon physically active/in the player's hands at the moment of death
+is dropped.
 
-INTERACTION
-Use the existing INTERACT action near a dropped item.
+Examples:
+- Axis dies while holding MP40 -> MP40 drops.
+- Axis dies while holding P38 -> P38 drops.
+- Allied dies while holding Thompson -> Thompson drops.
+- Allied dies while holding TT -> TT drops.
 
-WEAPON SWAPS
-- taking a primary replaces slot 0
-- taking a pistol replaces slot 1
-- the picked weapon automatically becomes equipped
-- weapon pickup preserves remaining magazine/reserve ammunition
-- dropped equipment expires after 55 seconds
-
-CROSS-FACTION EXAMPLES
-Allied player can kill Axis and pick up:
-- MP40 to replace Thompson/current primary
-- P38 to replace TT/current pistol
-
-Axis player can kill Allied and pick up:
-- Thompson to replace MP40/current primary
-- TT pistol to replace P38/current pistol
-
-IMPORTANT TECHNICAL CHANGE
-Weapon appearance is no longer assumed to equal player faction.
-Each inventory slot now stores its own weapon-origin team:
-    weapon_slot_teams
-
-So an Allied character can remain Allied while physically carrying/rendering
-an Axis MP40/P38, including first-person and third-person external models.
-
-RESPAWN
-Respawning restores the player's normal faction/class loadout and ammunition.
+The inactive weapon does NOT appear on the ground.
 
 AMMO
-The separate ammo pouch adds reserve ammunition to the currently equipped
-weapon, capped by that weapon's normal reserve maximum.
+A small separate ammo pouch still drops to represent carried magazines.
+
+MATCHING WEAPON INTERACTION
+If you interact with a dropped weapon that you already own in that same slot,
+the dropped gun is treated as an ammunition source instead of replacing your
+identical weapon.
+
+Example:
+- You already carry an MP40.
+- Another MP40 is on the ground.
+- INTERACT transfers that dropped MP40's magazine + reserve ammunition into
+  your MP40 reserve, capped at your normal reserve maximum.
+- The dropped MP40 disappears only if ammunition was actually transferred.
+
+If the dropped weapon is different, the existing swap behavior remains:
+- primary replaces primary
+- pistol replaces pistol
+
+PICKUP POLISH
+- clearer "TAKE / SCAVENGE" prompt
+- subtle ground marker under dropped equipment
+- 55-second cleanup remains
 
 PRESERVED
-- working Axis P38 orientation
-- Allied TT correction
+- Axis P38 orientation
+- Allied TT / Thompson / MP40 rendering
+- cross-faction weapon rendering
 - Mouse2 shoulder zoom
 - persistent crosshair
-- all v8.81 performance/LOD work
-- collision / objectives / networking architecture
+- collision / objectives / networking
+- v8.81 performance/LOD work
 
-Build: 8.82.0
+Build: 8.83.0
 Network protocol: 341

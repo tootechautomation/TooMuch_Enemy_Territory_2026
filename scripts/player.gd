@@ -1752,33 +1752,79 @@ func server_equip_battlefield_weapon(
 	return true
 
 
-func server_add_battlefield_ammo(amount: int) -> bool:
+func server_add_battlefield_ammo(
+	amount: int,
+	slot_index: int = -1
+) -> bool:
 	if not multiplayer.is_server() or not alive or downed:
 		return false
-	if current_weapon_index < 0 or current_weapon_index >= weapon_slots.size():
+
+	var target_slot: int = (
+		current_weapon_index
+		if slot_index < 0
+		else slot_index
+	)
+	if target_slot < 0 or target_slot >= weapon_slots.size():
 		return false
 
 	_store_current_weapon_ammo()
 
 	var max_reserve: int = _resource_int(
-		weapon_slots[current_weapon_index],
+		weapon_slots[target_slot],
 		"reserve_ammo",
 		120
 	)
-	var old_reserve: int = weapon_reserves[current_weapon_index]
-	var new_reserve: int = mini(max_reserve, old_reserve + maxi(0, amount))
+	var old_reserve: int = weapon_reserves[target_slot]
+	var new_reserve: int = mini(
+		max_reserve,
+		old_reserve + maxi(0, amount)
+	)
 	if new_reserve <= old_reserve:
 		return false
 
-	weapon_reserves[current_weapon_index] = new_reserve
-	reserve_ammo = new_reserve
+	weapon_reserves[target_slot] = new_reserve
+	if target_slot == current_weapon_index:
+		reserve_ammo = new_reserve
+
 	confirm_battlefield_ammo_pickup.rpc_id(
 		peer_id,
-		current_weapon_index,
+		target_slot,
 		new_reserve,
 		new_reserve - old_reserve
 	)
 	return true
+
+
+func server_absorb_matching_dropped_weapon(
+	slot_index: int,
+	resource_path: String,
+	dropped_magazine: int,
+	dropped_reserve: int
+) -> bool:
+	if not multiplayer.is_server() or not alive or downed:
+		return false
+	if slot_index < 0 or slot_index >= weapon_slots.size():
+		return false
+
+	var existing: Resource = weapon_slots[slot_index] as Resource
+	if existing == null:
+		return false
+	if existing.resource_path != resource_path:
+		return false
+
+	# Matching dropped weapon becomes an ammo source. Include both the rounds
+	# left in its magazine and its remaining reserve ammunition.
+	var transferable: int = (
+		maxi(0, dropped_magazine)
+		+ maxi(0, dropped_reserve)
+	)
+	if transferable <= 0:
+		return false
+
+	return server_add_battlefield_ammo(
+		transferable,
+		slot_index
+	)
 
 
 @rpc("authority", "call_remote", "reliable")
