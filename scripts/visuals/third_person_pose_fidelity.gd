@@ -12,7 +12,11 @@ static func apply(
 	aiming: bool,
 	reloading: bool,
 	alive: bool,
-	downed: bool
+	downed: bool,
+	damage_reaction: float,
+	damage_side: float,
+	revive_recovery: float,
+	incapacitation_impact: float
 ) -> void:
 	if character_visual == null:
 		return
@@ -42,11 +46,11 @@ static func apply(
 	var knee_amount := absf(stride) * lerpf(0.08, 0.38, speed_ratio) if moving else 0.0
 
 	if not alive or downed:
-		_pose_incapacitated(soldier, torso, head, arm_l, arm_r, leg_l, leg_r, delta)
+		_pose_incapacitated(soldier, torso, head, arm_l, arm_r, leg_l, leg_r, delta, damage_side, incapacitation_impact)
 		return
 
 	soldier.rotation.z = lerpf(soldier.rotation.z, 0.0, alpha_body)
-	soldier.position.y = lerpf(soldier.position.y, -0.04, alpha_body)
+	soldier.position.y = lerpf(soldier.position.y, -0.04 - revive_recovery * 0.20, alpha_body)
 
 	var torso_target := Vector3.ZERO
 	torso_target.x = 0.15 if crouching else (-0.10 * speed_ratio if moving else breath * 0.012)
@@ -57,12 +61,22 @@ static func apply(
 	if reloading:
 		torso_target.y += 0.12
 		torso_target.z -= 0.08
+	torso_target += Vector3(
+		damage_reaction * 0.18 + revive_recovery * 0.24,
+		damage_side * damage_reaction * 0.22,
+		-damage_side * damage_reaction * 0.14
+	)
 	_lerp_rotation(torso, torso_target, alpha_body)
 
 	var head_target := Vector3.ZERO
 	head_target.x = -0.10 if crouching else breath * 0.008
 	head_target.y = sin(animation_time * 0.58) * 0.035 if not moving and not aiming else 0.0
 	head_target.z = -torso_target.z * 0.45
+	head_target += Vector3(
+		-damage_reaction * 0.12,
+		-damage_side * damage_reaction * 0.28,
+		damage_side * damage_reaction * 0.18
+	)
 	_lerp_rotation(head, head_target, alpha_body)
 
 	var left_arm_target := Vector3(
@@ -98,6 +112,10 @@ static func apply(
 	elif crouching:
 		left_arm_target.x -= 0.24
 		right_arm_target.x -= 0.18
+	left_arm_target += Vector3(damage_reaction * 0.18, damage_side * damage_reaction * 0.12, damage_reaction * 0.16)
+	right_arm_target += Vector3(damage_reaction * 0.12, -damage_side * damage_reaction * 0.10, -damage_reaction * 0.12)
+	left_arm_target.x += revive_recovery * 0.18
+	right_arm_target.x += revive_recovery * 0.14
 	_lerp_rotation(arm_l, left_arm_target, alpha_fast)
 	_lerp_rotation(arm_r, right_arm_target, alpha_fast)
 
@@ -124,6 +142,8 @@ static func apply(
 			weapon_position = Vector3(0.14, -0.05, -0.36)
 		elif moving:
 			weapon_rotation.z = stride * 0.025 * speed_ratio
+		weapon_rotation += Vector3(damage_reaction * 0.18, damage_side * damage_reaction * 0.16, -damage_side * damage_reaction * 0.20)
+		weapon_position += Vector3(damage_side * damage_reaction * 0.06, -damage_reaction * 0.04, damage_reaction * 0.05)
 		weapon.rotation = weapon.rotation.lerp(weapon_rotation, alpha_fast)
 		weapon.position = weapon.position.lerp(weapon_position, alpha_fast)
 
@@ -135,17 +155,20 @@ static func _pose_incapacitated(
 	arm_r: Node3D,
 	leg_l: Node3D,
 	leg_r: Node3D,
-	delta: float
+	delta: float,
+	damage_side: float,
+	impact: float
 ) -> void:
-	var alpha := 1.0 - exp(-7.0 * delta)
-	soldier.rotation.z = lerpf(soldier.rotation.z, 1.34, alpha)
-	soldier.position.y = lerpf(soldier.position.y, -0.72, alpha)
-	_lerp_rotation(torso, Vector3(0.22, 0.0, -0.16), alpha)
-	_lerp_rotation(head, Vector3(-0.18, 0.12, 0.10), alpha)
-	_lerp_rotation(arm_l, Vector3(-0.55, 0.18, 0.52), alpha)
-	_lerp_rotation(arm_r, Vector3(0.48, -0.14, -0.35), alpha)
-	_lerp_rotation(leg_l, Vector3(0.20, 0.0, 0.16), alpha)
-	_lerp_rotation(leg_r, Vector3(-0.32, 0.0, -0.12), alpha)
+	var alpha := 1.0 - exp(-lerpf(7.0, 12.0, impact) * delta)
+	var side := -1.0 if damage_side < 0.0 else 1.0
+	soldier.rotation.z = lerpf(soldier.rotation.z, side * (1.30 + impact * 0.10), alpha)
+	soldier.position.y = lerpf(soldier.position.y, -0.72 - impact * 0.04, alpha)
+	_lerp_rotation(torso, Vector3(0.22 + impact * 0.12, 0.0, -side * 0.16), alpha)
+	_lerp_rotation(head, Vector3(-0.18, side * 0.12, side * 0.10), alpha)
+	_lerp_rotation(arm_l, Vector3(-0.55, side * 0.18, side * 0.52), alpha)
+	_lerp_rotation(arm_r, Vector3(0.48, -side * 0.14, -side * 0.35), alpha)
+	_lerp_rotation(leg_l, Vector3(0.20, 0.0, side * 0.16), alpha)
+	_lerp_rotation(leg_r, Vector3(-0.32, 0.0, -side * 0.12), alpha)
 
 static func _find(root: Node, node_name: String) -> Node3D:
 	if root == null:

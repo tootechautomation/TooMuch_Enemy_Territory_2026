@@ -296,6 +296,11 @@ var et_route_hint_label: Label
 var collision_debug_notice_until_ms := 0
 var visual_stride_phase := 0.0
 var visual_last_speed := 0.0
+var visual_damage_reaction := 0.0
+var visual_damage_side := 1.0
+var visual_revive_recovery := 0.0
+var visual_incapacitation_impact := 0.0
+var visual_snapshot_initialized := false
 var bot_route_index := 0
 var bot_route_repath_ms := 0
 var compass_label: Label
@@ -1170,11 +1175,23 @@ func _server_simulate(delta: float) -> void:
 func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int, magazine: int, reserve: int, is_alive: bool, is_downed: bool, reloading: bool, class_id: int, player_team: int, kill_count: int, death_count: int, experience: int, weapon_index: int, grenade_count: int, crouching: bool, spawn_protection_ms: int, ability_cooldown_ms: int, spotted_ms: int, stamina_value: float, suppression_ms: int, smoke_count: int, heavy_fire_ms: int) -> void:
 	if multiplayer.is_server():
 		return
+	var previous_health: int = health
+	var previous_alive: bool = alive
+	var previous_downed: bool = downed
 	target_position = pos; target_yaw = yaw; target_pitch = head_pitch
 	if _is_local_player(): global_position = pos
 	health = hp
 	alive = is_alive
 	downed = is_downed
+	if visual_snapshot_initialized:
+		if hp < previous_health and previous_alive:
+			_register_visual_damage(previous_health - hp, peer_id + hp)
+		if not previous_downed and is_downed:
+			visual_incapacitation_impact = 1.0
+		elif previous_downed and not is_downed and is_alive:
+			_register_visual_revive()
+	else:
+		visual_snapshot_initialized = true
 	is_reloading = reloading
 	var previous_class: int = player_class
 	player_class = class_id
@@ -1839,6 +1856,7 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 	if _has_spawn_protection():
 		return
 
+	_register_visual_damage(amount, attacker_id)
 	health = maxi(0, health - amount)
 	if attacker_id != peer_id and attacker_id != 0:
 		_apply_suppression()
@@ -1889,6 +1907,7 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 			return
 
 		downed = true
+		visual_incapacitation_impact = 1.0
 		health = 1
 		bleedout_finish_ms = Time.get_ticks_msec() + BLEEDOUT_MS
 		is_reloading = false
@@ -1978,6 +1997,7 @@ func server_revive(reviver_id: int = 0) -> void:
 	if not multiplayer.is_server() or not alive or not downed:
 		return
 	downed = false
+	_register_visual_revive()
 	health = maxi(45, int(_class_health(player_class) * 0.4))
 	bleedout_finish_ms = 0
 	if get_parent().players.has(reviver_id):
@@ -2017,6 +2037,9 @@ func server_respawn(spawn_position: Vector3) -> void:
 	_activate_spawn_protection()
 	alive = true
 	downed = false
+	visual_damage_reaction = 0.0
+	visual_revive_recovery = 0.0
+	visual_incapacitation_impact = 0.0
 	if tactical_map_open:
 		_set_tactical_map_open(false)
 	is_reloading = false
@@ -5965,6 +5988,9 @@ func _visual_part(node_name: String) -> Node3D:
 
 func _update_world_character_animation(delta: float) -> void:
 	_update_external_character_animation()
+	visual_damage_reaction = move_toward(visual_damage_reaction, 0.0, delta * 3.4)
+	visual_revive_recovery = move_toward(visual_revive_recovery, 0.0, delta * 0.9)
+	visual_incapacitation_impact = move_toward(visual_incapacitation_impact, 0.0, delta * 2.0)
 	var character_visual: Node3D = (
 		get_node_or_null("CharacterVisual") as Node3D
 	)
@@ -6074,8 +6100,26 @@ func _update_world_character_animation(delta: float) -> void:
 		aim_requested or is_aiming,
 		is_reloading,
 		alive,
-		downed
+		downed,
+		visual_damage_reaction,
+		visual_damage_side,
+		visual_revive_recovery,
+		visual_incapacitation_impact
 	)
+
+func _register_visual_damage(amount: int, source_id: int = 0) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var impulse := clampf(float(maxi(1, amount)) / 45.0, 0.22, 0.80)
+	visual_damage_reaction = clampf(visual_damage_reaction + impulse, 0.0, 1.0)
+	visual_damage_side = -1.0 if posmod(source_id + peer_id, 2) == 0 else 1.0
+
+func _register_visual_revive() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	visual_revive_recovery = 1.0
+	visual_damage_reaction = 0.0
+	visual_incapacitation_impact = 0.0
 
 func _update_hud() -> void:
 	if hud == null:

@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.30.0
+- Added visible fallback-character flinches driven by existing replicated health changes
+- Added torso, head, arm, and held-weapon displacement scaled by hit severity
+- Added restrained left/right variation so repeated impacts remain readable without looking identical
+- Upgraded the downed transition with faster impact response and two-sided collapse poses
+- Added a brief guarded recovery motion after revival before normal locomotion resumes
+- Reset presentation impulses safely on respawn and excluded headless display mode
+- Preserved imported-animation priority, hitboxes, gameplay, RPC signatures, networking, and protocol 341
+
 ## 8.29.0
 - Made ThirdPersonPoseFidelity the sole owner of fallback character joint and weapon transforms
 - Fixed world weapons lerping toward the torso origin instead of their chest-ready base position

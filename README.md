@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.29.0 — Class-Specific World Weapons and Remote Fire
+## Version 8.30.0 — Character Hit Reactions and Revive Recovery
+
+Fallback soldiers now react visibly when taking damage instead of continuing through fire without physical feedback. Snapshot health changes drive a short presentation-only torso flinch, head recoil, arm displacement, and weapon deflection, with restrained side variation so repeated hits do not look mechanically identical.
+
+Entering the downed state now accelerates into a weighted left- or right-side collapse rather than using the same slow fall every time. Revived soldiers rise through a brief guarded recovery pose before returning to normal locomotion, aim, crouch, and reload animation. These transitions use existing replicated health, alive, and downed state; no RPC arguments or network fields were added.
+
+Imported characters retain their own animation controller and remain the preferred visual path. Damage, hitboxes, collision, weapon balance, revive rules, headless server behavior, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.29.0 Class-Specific World Weapons and Remote Fire
 
 The class-specific weapon work now extends beyond the local first-person view. Fallback soldiers carry distinct Support LMG, SMG, carbine, service-rifle, and scoped-rifle silhouettes with profile-specific receivers, barrels, magazines, fore-ends, stocks, slings, sights, bipods, and muzzle sockets.
 
