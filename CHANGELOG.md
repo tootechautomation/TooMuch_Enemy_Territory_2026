@@ -1,5 +1,13 @@
 # Changelog
 
+## 8.23.0
+- Fixed the first-person weapon animation target initializing at the camera origin, which pulled the sleeve and weapon into the player's face
+- Re-composed pistol and long-gun arms with shorter camera-safe sleeves, hands, cuffs, fingers, thumbs, and class wrist details
+- Added a hard near-plane clearance limit across recoil, sprinting, aiming, reloads, landing inertia, and mechanical-part animation
+- Added wall-aware weapon lowering so the viewmodel tucks down naturally near solid geometry instead of clipping through it
+- Added restrained FOV-aware viewmodel spacing and disabled first-person shadow casting to prevent oversized self-shadows
+- Preserved v8.22 mechanical animations, weapon timing, recoil, damage, movement, class balance, networking, and protocol 341
+
 ## 8.22.0
 - Added visible pistol-slide, rifle-bolt, and charging-handle cycling during fire and reload
 - Added staged magazine removal, handling, and reinsertion for pistol, box, SMG, carbine, and drum magazines

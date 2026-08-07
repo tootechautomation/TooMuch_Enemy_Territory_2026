@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.22.0 — First-Person Mechanical Animation Fidelity
+## Version 8.23.0 — Viewmodel Camera Clearance and Obstruction
+
+The first-person viewmodel now maintains a safe, readable composition at all times. The animation base position is initialized when each weapon is rebuilt, preventing the entire weapon-and-arm hierarchy from being pulled to the camera origin. Pistol and long-gun sleeves have also been shortened and repositioned so cuffs, hands, fingers, thumbs, and class wrist details remain beyond the near plane instead of appearing as an oversized peg across the screen.
+
+Recoil, sprinting, aiming, reloads, landing inertia, and weapon mechanics now share a final camera-clearance clamp. A short local obstruction probe lowers and rotates the weapon near walls, reducing geometry penetration while leaving collision and authoritative gameplay untouched. Viewmodel spacing responds conservatively to field of view, and first-person geometry no longer casts distracting self-shadows.
+
+The v8.22 slide, bolt, charging-handle, magazine, and support-hand animations remain intact. Weapon timing, recoil values, ammo, damage, movement, class balance, server authority, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.22.0 First-Person Mechanical Animation Fidelity
 
 First-person weapons now visibly operate instead of moving only as one rigid object. Pistol slides, rifle bolts, charging handles, magazines, drum magazines, and the support arm respond to firing and reload state. Magazine removal, hand travel, reinsertion, and the final bolt action are timed as presentation layers over the existing authoritative reload duration.
 
@@ -34,5 +42,5 @@ Friendly world nameplates now include a diamond identifier and remain visible at
 
 All additions are client-side presentation. Team assignment, uniforms, objectives, spotting, server authority, networking, and protocol 341 remain unchanged.
 
-Build: v8.22.0
+Build: v8.23.0
 Protocol: 341

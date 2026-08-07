@@ -3634,11 +3634,19 @@ func _apply_server_crouch(crouching: bool) -> void:
 	_apply_crouch_visual(crouching)
 
 func _base_weapon_position() -> Vector3:
-	return (
+	var base_position: Vector3 = (
 		Vector3(0.30, -0.27, -0.62)
 		if current_weapon_index == 1
 		else Vector3(0.34, -0.28, -0.72)
 	)
+	var fov_clearance: float = clampf(
+		(profile_field_of_view - 75.0) / 35.0,
+		-1.0,
+		1.0
+	)
+	base_position.x += fov_clearance * 0.025
+	base_position.z -= fov_clearance * 0.04
+	return base_position
 
 func _apply_weapon_kick() -> void:
 	if weapon_view == null:
@@ -4050,7 +4058,7 @@ func _add_first_person_arm(
 	cuff_mesh.radial_segments = 18
 	cuff.mesh = cuff_mesh
 	cuff.rotation_degrees.x = 90.0
-	cuff.position.z = length * 0.78
+	cuff.position.z = length * 0.70
 	cuff.material_override = _first_person_glove_material()
 	arm_root.add_child(cuff)
 
@@ -4065,7 +4073,7 @@ func _add_first_person_arm(
 	hand.position = Vector3(
 		0.025 if right_hand else -0.025,
 		0.0,
-		length * 0.88
+		length * 0.80
 	)
 	hand.material_override = _first_person_glove_material()
 	arm_root.add_child(hand)
@@ -4082,7 +4090,7 @@ func _add_first_person_arm(
 		finger.position = Vector3(
 			(float(finger_index) - 1.5) * 0.030,
 			-0.02,
-			length * 0.98
+			length * 0.89
 		)
 		finger.material_override = _first_person_glove_material()
 		arm_root.add_child(finger)
@@ -4103,7 +4111,7 @@ func _add_first_person_arm(
 	thumb.position = Vector3(
 		0.075 if right_hand else -0.075,
 		0.0,
-		length * 0.93
+		length * 0.85
 	)
 	thumb.material_override = _first_person_glove_material()
 	arm_root.add_child(thumb)
@@ -4121,7 +4129,7 @@ func _add_first_person_wrist_detail(
 	material.roughness = 0.74
 	material.metallic = 0.06
 	var detail := MeshInstance3D.new()
-	detail.position = Vector3(0.0, -0.10, length * 0.70)
+	detail.position = Vector3(0.0, -0.10, length * 0.64)
 	match player_class:
 		PlayerClass.SOLDIER:
 			detail.name = "SoldierWristWatch"
@@ -4175,33 +4183,43 @@ func _build_first_person_arms(is_pistol: bool) -> void:
 	if is_pistol:
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.18, 0.18, 0.30),
+			Vector3(0.18, 0.18, 0.08),
 			Vector3(-12.0, -4.0, -8.0),
-			0.58,
+			0.40,
 			true
 		)
 		_add_first_person_arm(
 			"LeftSupportArm",
-			Vector3(-0.16, 0.22, 0.18),
+			Vector3(-0.16, 0.22, -0.02),
 			Vector3(-18.0, 10.0, 8.0),
-			0.48,
+			0.34,
 			false
 		)
 	else:
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.24, 0.22, 0.36),
+			Vector3(0.24, 0.22, 0.10),
 			Vector3(-15.0, -9.0, -12.0),
-			0.70,
+			0.46,
 			true
 		)
 		_add_first_person_arm(
 			"LeftArm",
-			Vector3(-0.24, 0.18, -0.02),
+			Vector3(-0.24, 0.18, -0.18),
 			Vector3(-24.0, 12.0, 10.0),
-			0.82,
+			0.60,
 			false
 		)
+
+func _finalize_first_person_viewmodel() -> void:
+	if weapon_view == null:
+		return
+	for child in weapon_view.find_children("*", "GeometryInstance3D", true):
+		var geometry := child as GeometryInstance3D
+		if geometry == null:
+			continue
+		geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		geometry.extra_cull_margin = 0.35
 
 func _rebuild_first_person_weapon() -> void:
 	if weapon_view == null:
@@ -4214,10 +4232,14 @@ func _rebuild_first_person_weapon() -> void:
 	var receiver_length: float = 0.72
 	var barrel_length: float = 0.55
 	var primary_profile: int = player_class
-	weapon_view.position = _base_weapon_position()
+	weapon_base_position = _base_weapon_position()
+	weapon_base_rotation = Vector3.ZERO
+	weapon_view.position = weapon_base_position
+	weapon_view.rotation = weapon_base_rotation
 
 	if _build_imported_first_person_weapon(is_pistol):
 		_build_first_person_arms(is_pistol)
+		_finalize_first_person_viewmodel()
 		return
 
 	var receiver_height: float = 0.16
@@ -4392,6 +4414,7 @@ func _rebuild_first_person_weapon() -> void:
 	muzzle_flash.material_override = flash_material
 	muzzle_flash.visible = false
 	weapon_view.add_child(muzzle_flash)
+	_finalize_first_person_viewmodel()
 
 func _initialize_optional_client_systems() -> void:
 	if not _is_local_player():
@@ -5627,6 +5650,31 @@ func _update_first_person_mechanics(delta: float) -> void:
 		Vector3(0.0, -0.14 * reload_arc, 0.18 * reload_arc)
 	)
 
+func _first_person_obstruction_fraction() -> float:
+	var view_camera := get_node_or_null("Head/Camera3D") as Camera3D
+	if view_camera == null or get_world_3d() == null:
+		return 0.0
+	var ray_start: Vector3 = view_camera.global_position
+	var ray_end: Vector3 = (
+		ray_start - view_camera.global_transform.basis.z * 1.15
+	)
+	var query := PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+	query.exclude = [self]
+	query.collision_mask = 1
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	var hit: Dictionary = (
+		get_world_3d().direct_space_state.intersect_ray(query)
+	)
+	if hit.is_empty():
+		return 0.0
+	var hit_position_value: Variant = hit.get("position")
+	if not hit_position_value is Vector3:
+		return 0.0
+	var hit_position: Vector3 = hit_position_value
+	var hit_distance: float = ray_start.distance_to(hit_position)
+	return 1.0 - clampf((hit_distance - 0.24) / 0.82, 0.0, 1.0)
+
 func _update_first_person_animation(delta: float) -> void:
 	if weapon_view == null or not _is_local_player():
 		return
@@ -5685,11 +5733,19 @@ func _update_first_person_animation(delta: float) -> void:
 	else:
 		target_rotation.y += sin(visual_animation_time * 1.4) * 0.008
 		target_rotation.x += cos(visual_animation_time * 1.1) * 0.006
+	var obstruction: float = _first_person_obstruction_fraction()
+	target_position.y -= obstruction * 0.11
+	target_position.z += obstruction * 0.15
+	target_rotation.x += obstruction * 0.24
+	target_rotation.z -= obstruction * 0.08
 
 	target_rotation.y += camera_inertia.x * 0.008
 	target_rotation.x += camera_inertia.y * 0.006
 	target_position.x += camera_inertia.x * 0.004
 	target_position.y -= absf(camera_inertia.y) * 0.002
+	# Keep the complete weapon, sleeve, and hand hierarchy in front of the
+	# camera near plane even during sprint, reload, recoil, and wall lowering.
+	target_position.z = minf(target_position.z, -0.50)
 	weapon_view.position = weapon_view.position.lerp(target_position, clampf(delta * 10.0,0.0,1.0))
 	weapon_view.rotation = weapon_view.rotation.lerp(target_rotation, clampf(delta * 9.0,0.0,1.0))
 	_update_first_person_mechanics(delta)
