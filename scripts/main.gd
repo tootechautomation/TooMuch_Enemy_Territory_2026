@@ -60,6 +60,9 @@ const BattlefieldSurfaceFidelityScript = preload(
 const ConceptArtRealismPassScript = preload(
 	"res://scripts/visuals/concept_art_realism_pass.gd"
 )
+const ConceptArtRealismPass2Script = preload(
+	"res://scripts/visuals/concept_art_realism_pass2.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -93,7 +96,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.43.0"
+const BUILD_VERSION := "8.44.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -498,6 +501,7 @@ func _ready() -> void:
 	_update_external_asset_overlay()
 	_apply_high_visual_quality()
 	_build_concept_art_realism_pass()
+	_build_concept_art_realism_pass2()
 	_initialize_visual_quality_manager()
 	_build_round_results_ui()
 	_initialize_period_interface_fidelity()
@@ -525,6 +529,14 @@ func _build_concept_art_realism_pass() -> void:
 	realism_pass.name = "ConceptArtRealismPass"
 	add_child(realism_pass)
 	realism_pass.call("build", self)
+
+func _build_concept_art_realism_pass2() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var realism_pass2 := ConceptArtRealismPass2Script.new()
+	realism_pass2.name = "ConceptArtRealismPass2"
+	add_child(realism_pass2)
+	realism_pass2.call("build", self)
 
 func _initialize_visual_quality_manager() -> void:
 	if DisplayServer.get_name() == "headless":

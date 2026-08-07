@@ -4279,50 +4279,97 @@ func _first_person_skin_material() -> StandardMaterial3D:
 	material.roughness = 0.88
 	return material
 
+func _safe_first_person_texture(path: String) -> Texture2D:
+	if not ResourceLoader.exists(path):
+		return null
+	var resource: Resource = load(path)
+	if resource is Texture2D:
+		return resource as Texture2D
+	return null
+
 func _first_person_sleeve_material() -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
-	material.albedo_texture = (
-		tex_uniform_attackers
-		if team == 0
-		else tex_uniform_defenders
-	)
-	material.albedo_color = (
-		Color(0.34, 0.38, 0.22)
-		if team == 0
-		else Color(0.34, 0.35, 0.31)
-	)
-	material.roughness = 0.94
+	var imported_albedo: Texture2D = null
+	var imported_normal: Texture2D = null
+	var imported_roughness: Texture2D = null
+	if team == 0:
+		imported_albedo = _safe_first_person_texture(
+			"res://assets/external/characters/private contractor1_body_BaseColor.jpg"
+		)
+		imported_normal = _safe_first_person_texture(
+			"res://assets/external/characters/private contractor1_body_Normal.jpg"
+		)
+		imported_roughness = _safe_first_person_texture(
+			"res://assets/external/characters/private contractor1_body_Roughness.jpg"
+		)
+	else:
+		imported_albedo = _safe_first_person_texture(
+			"res://assets/external/characters/Textures/Textures/Jacket/Jacket_BaseColor.jpg"
+		)
+		imported_normal = _safe_first_person_texture(
+			"res://assets/external/characters/Textures/Textures/Jacket/Jacket_Normal.jpg"
+		)
+	if imported_albedo != null:
+		material.albedo_texture = imported_albedo
+	else:
+		material.albedo_texture = (
+			tex_uniform_attackers if team == 0 else tex_uniform_defenders
+		)
+	material.albedo_color = Color(0.72, 0.72, 0.68) if team == 0 else Color(0.60, 0.62, 0.56)
+	material.roughness = 0.92
 	material.metallic = 0.0
-	if tex_uniform_normal != null:
+	if imported_normal != null:
+		material.normal_enabled = true
+		material.normal_texture = imported_normal
+		material.normal_scale = 0.72
+	elif tex_uniform_normal != null:
 		material.normal_enabled = true
 		material.normal_texture = tex_uniform_normal
 		material.normal_scale = 0.48
-	if tex_uniform_roughness != null:
+	if imported_roughness != null:
+		material.roughness_texture = imported_roughness
+		material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	elif tex_uniform_roughness != null:
 		material.roughness_texture = tex_uniform_roughness
 		material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 	return material
 
 func _first_person_glove_material() -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
-	material.albedo_color = (
-		Color(0.18, 0.145, 0.082)
-		if team == 0
-		else Color(0.115, 0.108, 0.092)
-	)
-	material.roughness = 0.91
+	var glove_albedo: Texture2D = null
+	var glove_normal: Texture2D = null
+	var glove_roughness: Texture2D = null
+	if team == 0:
+		glove_albedo = _safe_first_person_texture(
+			"res://assets/external/characters/private_contractor1_gloves_BaseColor.jpg"
+		)
+		glove_normal = _safe_first_person_texture(
+			"res://assets/external/characters/private_contractor1_gloves_Normal.jpg"
+		)
+		glove_roughness = _safe_first_person_texture(
+			"res://assets/external/characters/private_contractor1_gloves_Roughness.jpg"
+		)
+	else:
+		glove_albedo = _safe_first_person_texture(
+			"res://assets/external/characters/Textures/Textures/Gloves/Gloves_BaseColor.jpg"
+		)
+		glove_normal = _safe_first_person_texture(
+			"res://assets/external/characters/Textures/Textures/Gloves/Gloves_Normal.jpg"
+		)
+	if glove_albedo != null:
+		material.albedo_texture = glove_albedo
+	else:
+		material.albedo_color = Color(0.16,0.13,0.08) if team == 0 else Color(0.10,0.10,0.085)
+	material.albedo_color = Color(0.78,0.78,0.74)
+	material.roughness = 0.90
 	material.metallic = 0.0
-	# Procedural micro-grain keeps the gloves from reading as smooth plastic.
-	var noise := FastNoiseLite.new()
-	noise.seed = 8432 + team
-	noise.frequency = 0.085
-	noise.fractal_octaves = 3
-	var texture := NoiseTexture2D.new()
-	texture.width = 128
-	texture.height = 128
-	texture.seamless = true
-	texture.noise = noise
-	material.albedo_texture = texture
-	material.uv1_scale = Vector3(5.0, 5.0, 5.0)
+	if glove_normal != null:
+		material.normal_enabled = true
+		material.normal_texture = glove_normal
+		material.normal_scale = 0.82
+	if glove_roughness != null:
+		material.roughness_texture = glove_roughness
+		material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 	return material
 
 func _add_first_person_arm(
@@ -4346,7 +4393,7 @@ func _add_first_person_arm(
 	sleeve_mesh.top_radius = 0.048
 	sleeve_mesh.bottom_radius = 0.067
 	sleeve_mesh.height = length
-	sleeve_mesh.radial_segments = 18
+	sleeve_mesh.radial_segments = 24
 	sleeve.mesh = sleeve_mesh
 	sleeve.rotation_degrees.x = 90.0
 	sleeve.position.z = length * 0.43
@@ -4372,8 +4419,8 @@ func _add_first_person_arm(
 	var palm_mesh := SphereMesh.new()
 	palm_mesh.radius = 0.050
 	palm_mesh.height = 0.105
-	palm_mesh.radial_segments = 16
-	palm_mesh.rings = 8
+	palm_mesh.radial_segments = 20
+	palm_mesh.rings = 10
 	palm.mesh = palm_mesh
 	palm.scale = Vector3(1.08, 0.62, 1.38)
 	palm.rotation_degrees.x = 12.0
@@ -4385,13 +4432,30 @@ func _add_first_person_arm(
 	palm.material_override = _first_person_glove_material()
 	arm_root.add_child(palm)
 
+	for knuckle_index in range(4):
+		var knuckle := MeshInstance3D.new()
+		knuckle.name = "GloveKnuckle%d" % knuckle_index
+		var knuckle_mesh := SphereMesh.new()
+		knuckle_mesh.radius = 0.012
+		knuckle_mesh.height = 0.024
+		knuckle_mesh.radial_segments = 10
+		knuckle_mesh.rings = 5
+		knuckle.mesh = knuckle_mesh
+		knuckle.position = Vector3(
+			(float(knuckle_index) - 1.5) * 0.020,
+			-0.043,
+			length * 0.905
+		)
+		knuckle.material_override = _first_person_glove_material()
+		arm_root.add_child(knuckle)
+
 	for finger_index in range(4):
 		var finger := MeshInstance3D.new()
 		finger.name = "GlovedFinger%d" % finger_index
 		var finger_mesh := CapsuleMesh.new()
 		finger_mesh.radius = 0.010
 		finger_mesh.height = 0.070
-		finger_mesh.radial_segments = 8
+		finger_mesh.radial_segments = 10
 		finger_mesh.rings = 3
 		finger.mesh = finger_mesh
 		finger.rotation_degrees.x = 90.0
