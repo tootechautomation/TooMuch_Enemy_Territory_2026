@@ -5,13 +5,15 @@ const CHARACTER_ALLIED_CANDIDATES: Array[String] = [
 	"res://assets/external/characters/allied_soldier.glb",
 	"res://assets/external/characters/modular_military_2_allied.glb",
 	"res://assets/external/characters/modular_military_2_allied.fbx",
-	"res://assets/external/characters/modular_military_2_allied.blend"
+	"res://assets/external/characters/modular_military_2_allied.blend",
+	"res://assets/models/cc_by/cesium_man/CesiumMan.glb"
 ]
 const CHARACTER_AXIS_CANDIDATES: Array[String] = [
 	"res://assets/external/characters/axis_soldier.glb",
 	"res://assets/external/characters/modular_military_2_axis.glb",
 	"res://assets/external/characters/modular_military_2_axis.fbx",
-	"res://assets/external/characters/modular_military_2_axis.blend"
+	"res://assets/external/characters/modular_military_2_axis.blend",
+	"res://assets/models/cc_by/cesium_man/CesiumMan.glb"
 ]
 
 const CHARACTER_CONFIG := {

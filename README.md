@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.35.0 — CC0 Building and Uniform Material Upgrade
+## Version 8.36.0 — Real Rigged Humanoid Character Replacement
+
+The default third-person character is now a genuine textured, skinned, animated human mesh instead of the articulated primitive fallback. The bundled CesiumMan GLB is normalized automatically to the existing 1.82 m character scale, grounded, validated through the external-character pipeline, and used for both teams with the established team identity, HUD, hitboxes, collision, weapons, and gameplay unchanged.
+
+CesiumMan is a compact neutral placeholder rather than the final WWII soldier. It is included under CC BY 4.0 with the required Cesium attribution and trademark notice in `assets/models/cc_by/cesium_man/LICENSE_AND_SOURCE.md`. User-supplied Allied or Axis models remain supported and will take priority when placed in the existing external-character slots.
+
+The character's single authored animation is now accepted as a safe presentation fallback when an imported rig does not use the project's standard animation names. Network protocol remains 341.
+
+## Previous Phase — 8.35.0 CC0 Building and Uniform Material Upgrade
 
 The project now bundles two redistributable 1K PBR materials downloaded from ambientCG under CC0. Bricks097 replaces the temporary procedural brick surface with photographed, damaged industrial red masonry across the WWII material library, asset-based village buildings, townhouses, warehouses, and generated brick surfaces. Color, OpenGL normal, and roughness maps give the walls real mortar variation, chipped faces, and physically readable surface response.
 

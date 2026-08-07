@@ -32,6 +32,19 @@ func _find_animation(state: String) -> StringName:
 			return candidate
 	return &""
 
+func _find_single_authored_animation() -> StringName:
+	if player == null:
+		return &""
+	var authored: Array[StringName] = []
+	for animation_name in player.get_animation_list():
+		var lower := str(animation_name).to_lower()
+		if lower == "reset" or lower.ends_with("/reset"):
+			continue
+		authored.append(animation_name)
+	if authored.size() == 1:
+		return authored[0]
+	return &""
+
 func set_state(state: String, blend_time: float = 0.16) -> StringName:
 	if player == null:
 		return &""
@@ -41,6 +54,8 @@ func set_state(state: String, blend_time: float = 0.16) -> StringName:
 	var animation := _find_animation(state)
 	if animation == &"":
 		animation = _find_animation("idle")
+	if animation == &"":
+		animation = _find_single_authored_animation()
 	if animation == &"":
 		return &""
 

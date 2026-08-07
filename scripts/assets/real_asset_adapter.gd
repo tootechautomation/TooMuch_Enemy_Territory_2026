@@ -113,7 +113,8 @@ static func find_character_socket(model: Node3D) -> Node3D:
 		"hand_r",
 		"RightHand",
 		"mixamorig:RightHand",
-		"mixamorig_RightHand"
+		"mixamorig_RightHand",
+		"Skeleton_arm_joint_R__3_"
 	]
 	for socket_name in exact_names:
 		var found := model.find_child(socket_name, true, false)

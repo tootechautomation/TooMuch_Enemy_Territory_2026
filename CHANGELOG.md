@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.36.0
+- Replaced the default third-person primitive soldier presentation with the real skinned CesiumMan humanoid GLB
+- Bundled one shared compact model for both teams and retained existing team HUD, markers, and gameplay identity
+- Normalized and grounded the imported character through the existing real-asset adapter
+- Added a right-hand bone fallback for weapon-socket discovery on the bundled skeleton
+- Added safe playback support for imported rigs that contain one authored animation with a nonstandard name
+- Preserved user-supplied Allied and Axis character slots as the preferred future WWII upgrade path
+- Added complete CC BY 4.0 attribution, trademark notice, source URL, and SHA-256 provenance
+- Preserved collision, hitboxes, combat, classes, objectives, networking, and protocol 341
+
 ## 8.35.0
 - Downloaded ambientCG Bricks097 and Fabric083 in the lightweight 1K JPG PBR format
 - Verified both source assets are distributed under Creative Commons CC0
