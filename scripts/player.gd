@@ -4503,93 +4503,11 @@ func _add_holder_limb(
 
 
 func _build_first_person_arms(is_pistol: bool) -> void:
-	var holder: Node3D = _imported_viewmodel_holder()
-	if holder == null:
-		# Procedural fallback weapons keep their original arm-free presentation.
-		return
-
-	var sleeve_material: StandardMaterial3D = _first_person_sleeve_material()
-	var glove_material: StandardMaterial3D = _first_person_glove_material()
-
-	# Clean any stale holder-local FPS pieces before rebuilding.
-	for node_value: Node in holder.find_children("FPSRig_*", "", false):
-		node_value.queue_free()
-
-	if is_pistol:
-		# Grip points are authored DIRECTLY in imported-holder local space.
-		var right_wrist: Vector3 = Vector3(0.15, -0.15, 0.18)
-		var right_grip: Vector3 = Vector3(0.075, -0.045, 0.015)
-		var left_wrist: Vector3 = Vector3(-0.10, -0.16, 0.17)
-		var left_grip: Vector3 = Vector3(0.005, -0.055, 0.000)
-
-		var right_elbow: Vector3 = _weapon_view_point_to_holder(
-			holder,
-			Vector3(0.31, -0.70, 0.50)
-		)
-		var left_elbow: Vector3 = _weapon_view_point_to_holder(
-			holder,
-			Vector3(-0.31, -0.71, 0.49)
-		)
-
-		_add_holder_limb(
-			holder, "FPSRig_RightSleeve",
-			right_elbow, right_wrist,
-			0.052, 0.041, sleeve_material
-		)
-		_add_holder_limb(
-			holder, "FPSRig_RightGlove",
-			right_wrist, right_grip,
-			0.040, 0.030, glove_material
-		)
-		_add_holder_limb(
-			holder, "FPSRig_LeftSleeve",
-			left_elbow, left_wrist,
-			0.050, 0.039, sleeve_material
-		)
-		_add_holder_limb(
-			holder, "FPSRig_LeftGlove",
-			left_wrist, left_grip,
-			0.038, 0.029, glove_material
-		)
-	else:
-		# Thompson/MP40: right hand at pistol/rear grip, left support hand at
-		# the forward receiver/fore-end. Everything is in the SAME local space
-		# as the imported gun.
-		var right_wrist: Vector3 = Vector3(0.11, -0.16, 0.14)
-		var right_grip: Vector3 = Vector3(0.055, -0.045, -0.025)
-
-		var left_wrist: Vector3 = Vector3(-0.085, -0.17, -0.18)
-		var left_grip: Vector3 = Vector3(-0.025, -0.050, -0.36)
-
-		var right_elbow: Vector3 = _weapon_view_point_to_holder(
-			holder,
-			Vector3(0.36, -0.74, 0.54)
-		)
-		var left_elbow: Vector3 = _weapon_view_point_to_holder(
-			holder,
-			Vector3(-0.36, -0.74, 0.45)
-		)
-
-		_add_holder_limb(
-			holder, "FPSRig_RightSleeve",
-			right_elbow, right_wrist,
-			0.055, 0.042, sleeve_material
-		)
-		_add_holder_limb(
-			holder, "FPSRig_RightGlove",
-			right_wrist, right_grip,
-			0.041, 0.030, glove_material
-		)
-		_add_holder_limb(
-			holder, "FPSRig_LeftSleeve",
-			left_elbow, left_wrist,
-			0.053, 0.041, sleeve_material
-		)
-		_add_holder_limb(
-			holder, "FPSRig_LeftGlove",
-			left_wrist, left_grip,
-			0.040, 0.030, glove_material
-		)
+	# v8.60: procedural first-person arms are intentionally disabled.
+	# Imported weapons remain clean and unobstructed. A future hand/arm pass
+	# should use a properly rigged first-person asset rather than procedural
+	# cylinders that can drift across differently-authored FBX weapon pivots.
+	return
 
 
 func _finalize_first_person_viewmodel() -> void:
