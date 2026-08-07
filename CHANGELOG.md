@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.29.0
+- Made ThirdPersonPoseFidelity the sole owner of fallback character joint and weapon transforms
+- Fixed world weapons lerping toward the torso origin instead of their chest-ready base position
+- Kept both hands connected to the weapon during idle movement, aiming, crouching, and reload presentation
+- Added distinct third-person Support LMG, SMG, carbine, service-rifle, and scoped-rifle silhouettes
+- Added class-specific receiver, barrel, magazine, fore-end, optic, stock, sling, bipod, and muzzle-socket proportions
+- Expanded world-weapon material recognition for magazines, shrouds, bipods, handles, and butt plates
+- Added brief world-space muzzle flash, light, and smoke to the existing shot-effect RPC without changing its arguments
+- Preserved imported-character and weapon priority, hitboxes, gameplay, headless isolation, networking, and protocol 341
+
 ## 8.28.0
 - Loudness-normalized the Calm, Tension, and Assault score stems to a consistent average level
 - Raised the adaptive director's usable score range while retaining Music-bus volume control

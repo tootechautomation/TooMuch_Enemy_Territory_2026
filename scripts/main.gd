@@ -87,7 +87,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.28.0"
+const BUILD_VERSION := "8.29.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -7183,6 +7183,86 @@ func broadcast_match_state(
 
 	_update_objective_visuals()
 
+func _spawn_world_muzzle_effect(
+	start_position: Vector3,
+	end_position: Vector3
+) -> void:
+	var local_id: int = multiplayer.get_unique_id()
+	if players.has(local_id):
+		var local_player := players.get(local_id) as Node3D
+		if local_player != null:
+			var local_head := local_player.get_node_or_null(
+				"Head"
+			) as Node3D
+			if (
+				local_head != null
+				and local_head.global_position.distance_to(start_position) < 0.55
+			):
+				return
+	var shot_direction: Vector3 = end_position - start_position
+	if shot_direction.length_squared() <= 0.000001:
+		return
+	shot_direction = shot_direction.normalized()
+	var muzzle_position: Vector3 = (
+		start_position + shot_direction * 0.62 + Vector3.DOWN * 0.13
+	)
+	var flash := MeshInstance3D.new()
+	flash.name = "RemoteMuzzleFlash"
+	var flash_mesh := SphereMesh.new()
+	flash_mesh.radius = 0.075
+	flash_mesh.height = 0.15
+	flash.mesh = flash_mesh
+	flash.position = muzzle_position
+	var flash_material := StandardMaterial3D.new()
+	flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	flash_material.albedo_color = Color(1.0, 0.62, 0.12, 0.95)
+	flash_material.emission_enabled = true
+	flash_material.emission = Color(1.0, 0.30, 0.025)
+	flash.material_override = flash_material
+	add_child(flash)
+
+	var light := OmniLight3D.new()
+	light.name = "RemoteMuzzleLight"
+	light.position = muzzle_position
+	light.light_color = Color(1.0, 0.40, 0.07)
+	light.light_energy = 2.6
+	light.omni_range = 3.4
+	light.shadow_enabled = false
+	add_child(light)
+
+	var flash_tween := create_tween()
+	flash_tween.set_parallel(true)
+	flash_tween.tween_property(flash, "scale", Vector3.ONE * 0.20, 0.065)
+	flash_tween.tween_property(light, "light_energy", 0.0, 0.065)
+	flash_tween.chain().tween_callback(flash.queue_free)
+	flash_tween.chain().tween_callback(light.queue_free)
+
+	if muzzle_smoke_texture != null:
+		var smoke := Sprite3D.new()
+		smoke.name = "RemoteMuzzleSmoke"
+		smoke.texture = muzzle_smoke_texture
+		smoke.pixel_size = 0.0017
+		smoke.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		smoke.position = muzzle_position
+		smoke.modulate = Color(0.72, 0.73, 0.70, 0.42)
+		add_child(smoke)
+		var smoke_tween := create_tween()
+		smoke_tween.set_parallel(true)
+		smoke_tween.tween_property(
+			smoke,
+			"position",
+			muzzle_position + Vector3(0.0, 0.18, 0.0),
+			0.34
+		)
+		smoke_tween.tween_property(smoke, "scale", Vector3.ONE * 2.1, 0.34)
+		smoke_tween.tween_property(
+			smoke,
+			"modulate",
+			Color(0.72, 0.73, 0.70, 0.0),
+			0.34
+		)
+		smoke_tween.chain().tween_callback(smoke.queue_free)
+
 @rpc("authority", "call_local", "unreliable")
 func show_shot_effect(
 	start_position: Vector3,
@@ -7192,6 +7272,7 @@ func show_shot_effect(
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	_spawn_world_muzzle_effect(start_position, end_position)
 
 	var effect_root := Node3D.new()
 	effect_root.name = "ShotEffect"

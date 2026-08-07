@@ -29,6 +29,10 @@ static func apply(
 	var knee_l := _find(leg_l, "KneeJoint")
 	var knee_r := _find(leg_r, "KneeJoint")
 	var weapon := _find(soldier, "FallbackWeapon")
+	var actor: Node = character_visual.get_parent()
+	var weapon_profile := 0
+	if actor != null:
+		weapon_profile = int(actor.get("player_class"))
 
 	var alpha_fast := 1.0 - exp(-14.0 * delta)
 	var alpha_body := 1.0 - exp(-9.0 * delta)
@@ -61,15 +65,36 @@ static func apply(
 	head_target.z = -torso_target.z * 0.45
 	_lerp_rotation(head, head_target, alpha_body)
 
-	var left_arm_target := Vector3(opposite_stride * locomotion_amount, 0.0, -0.05)
-	var right_arm_target := Vector3(stride * locomotion_amount, 0.0, 0.05)
-	if aiming:
-		left_arm_target = Vector3(-1.02, 0.22, 0.30)
-		right_arm_target = Vector3(-0.88, -0.14, -0.20)
-	elif reloading:
+	var left_arm_target := Vector3(
+		-0.82 + opposite_stride * locomotion_amount * 0.10,
+		0.18,
+		0.22
+	)
+	var right_arm_target := Vector3(
+		-0.72 + stride * locomotion_amount * 0.08,
+		-0.12,
+		-0.16
+	)
+	match weapon_profile:
+		0:
+			left_arm_target += Vector3(-0.10, 0.05, 0.06)
+			right_arm_target += Vector3(-0.06, -0.02, -0.03)
+		1:
+			left_arm_target += Vector3(0.12, -0.08, -0.08)
+			right_arm_target += Vector3(0.08, 0.02, 0.04)
+		2:
+			left_arm_target += Vector3(0.06, -0.03, -0.04)
+		4:
+			left_arm_target += Vector3(-0.08, 0.03, 0.05)
+		_:
+			pass
+	if reloading:
 		var reload_work := sin(animation_time * 5.2)
 		left_arm_target = Vector3(-1.18 + reload_work * 0.10, 0.38, 0.42)
 		right_arm_target = Vector3(-0.62, -0.30, -0.22)
+	elif aiming:
+		left_arm_target += Vector3(-0.20, 0.04, 0.08)
+		right_arm_target += Vector3(-0.16, -0.02, -0.04)
 	elif crouching:
 		left_arm_target.x -= 0.24
 		right_arm_target.x -= 0.18
@@ -90,13 +115,13 @@ static func apply(
 
 	if weapon != null:
 		var weapon_rotation := Vector3(-0.10, 0.0, 0.0)
-		var weapon_position := Vector3(0.0, 0.0, 0.0)
+		var weapon_position := Vector3(0.05, 0.03, -0.42)
 		if aiming:
 			weapon_rotation = Vector3(-0.28, -0.03, 0.02)
-			weapon_position = Vector3(0.0, 0.035, -0.045)
+			weapon_position = Vector3(0.02, 0.10, -0.50)
 		elif reloading:
 			weapon_rotation = Vector3(0.24, 0.28, -0.18)
-			weapon_position = Vector3(0.08, -0.11, 0.06)
+			weapon_position = Vector3(0.14, -0.05, -0.36)
 		elif moving:
 			weapon_rotation.z = stride * 0.025 * speed_ratio
 		weapon.rotation = weapon.rotation.lerp(weapon_rotation, alpha_fast)
@@ -133,4 +158,3 @@ static func _lerp_rotation(node: Node3D, target: Vector3, alpha: float) -> void:
 	if node == null:
 		return
 	node.rotation = node.rotation.lerp(target, alpha)
-

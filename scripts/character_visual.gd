@@ -49,7 +49,9 @@ func _process(delta: float) -> void:
 		return
 
 	animation_time += delta
-	_animate_character(delta)
+	# Joint animation is owned by ThirdPersonPoseFidelity from player.gd.
+	# Keeping one writer prevents arm, weapon, and reload transforms fighting
+	# each other on alternating process and physics frames.
 
 func _load_skin_resources(paths: Array[String]) -> Array[Resource]:
 	var result: Array[Resource] = []
@@ -417,6 +419,8 @@ func _build_equipment(skin: Resource) -> void:
 	)
 
 func _build_weapon(skin: Resource) -> void:
+	var actor = get_parent()
+	var weapon_profile := int(actor.player_class)
 	weapon_root = Node3D.new()
 	weapon_root.name = "FallbackWeapon"
 	weapon_root.position = Vector3(0.05, 0.03, -0.42)
@@ -424,51 +428,70 @@ func _build_weapon(skin: Resource) -> void:
 	torso_root.add_child(weapon_root)
 
 	var metal := Color(0.095, 0.105, 0.105)
+	var dark_metal := Color(0.045, 0.052, 0.055)
 	var wood := Color(0.27, 0.14, 0.065)
+	var receiver_length := 0.68
+	var barrel_length := 0.58
+	match weapon_profile:
+		0:
+			receiver_length = 0.78
+			barrel_length = 0.68
+		1:
+			receiver_length = 0.48
+			barrel_length = 0.38
+		2:
+			receiver_length = 0.56
+			barrel_length = 0.44
+		3:
+			receiver_length = 0.66
+			barrel_length = 0.56
+		4:
+			receiver_length = 0.76
+			barrel_length = 0.76
 	_add_box(
 		weapon_root,
 		"Receiver",
 		Vector3(0.0, 0.0, 0.0),
-		Vector3(0.13, 0.14, 0.68),
+		Vector3(0.13, 0.14, receiver_length),
 		metal
 	)
 	_add_cylinder(
 		weapon_root,
 		"Barrel",
-		Vector3(0.0, 0.0, -0.56),
+		Vector3(0.0, 0.0, -(receiver_length * 0.5 + barrel_length * 0.42)),
 		0.025,
-		0.58,
+		barrel_length,
 		metal,
 		Vector3(90.0, 0.0, 0.0)
 	)
 	_add_box(
 		weapon_root,
-		"WoodStock",
-		Vector3(0.0, 0.03, 0.46),
-		Vector3(0.18, 0.20, 0.43),
+		"WoodStockBody",
+		Vector3(0.0, 0.03, receiver_length * 0.5 + 0.18),
+		Vector3(0.16, 0.18, 0.32),
 		wood
+	)
+	_add_box(
+		weapon_root,
+		"MetalButtPlate",
+		Vector3(0.0, 0.035, receiver_length * 0.5 + 0.35),
+		Vector3(0.17, 0.19, 0.028),
+		dark_metal
 	)
 	_add_capsule(
 		weapon_root,
 		"WoodHandguard",
-		Vector3(0.0, 0.015, -0.30),
+		Vector3(0.0, 0.015, -(receiver_length * 0.5 + 0.10)),
 		0.075,
-		0.46,
+		minf(0.46, barrel_length * 0.72),
 		wood.darkened(0.03),
 		Vector3(0.82, 1.0, 0.72),
 		Vector3(90.0, 0.0, 0.0)
 	)
 	_add_box(
 		weapon_root,
-		"Magazine",
-		Vector3(0.0, -0.15, -0.05),
-		Vector3(0.11, 0.28, 0.18),
-		metal.darkened(0.05)
-	)
-	_add_box(
-		weapon_root,
 		"FrontSight",
-		Vector3(0.0, -0.07, -0.82),
+		Vector3(0.0, -0.07, -(receiver_length * 0.5 + barrel_length * 0.82)),
 		Vector3(0.025, 0.13, 0.035),
 		metal
 	)
@@ -493,10 +516,41 @@ func _build_weapon(skin: Resource) -> void:
 		weapon_root,
 		"CanvasWeaponSling",
 		Vector3(-0.10, 0.10, 0.05),
-		Vector3(0.025, 0.025, 1.12),
+		Vector3(0.025, 0.025, receiver_length + barrel_length * 0.72),
 		Color(0.24, 0.19, 0.10),
 		Vector3(0.0, -5.0, 0.0)
 	)
+
+	match weapon_profile:
+		0:
+			_add_cylinder(weapon_root, "LMGDrumMagazine", Vector3(-0.105, -0.10, -0.02), 0.13, 0.095, dark_metal, Vector3(0.0, 0.0, 90.0))
+			_add_cylinder(weapon_root, "LMGBarrelJacket", Vector3(0.0, 0.0, -0.66), 0.047, 0.60, dark_metal.lightened(0.04), Vector3(90.0, 0.0, 0.0))
+			_add_box(weapon_root, "LMGCarryHandle", Vector3(-0.11, -0.11, -0.28), Vector3(0.022, 0.13, 0.22), dark_metal, Vector3(0.0, 0.0, -18.0))
+			_add_box(weapon_root, "FoldedBipodLeft", Vector3(-0.055, 0.07, -0.75), Vector3(0.018, 0.22, 0.018), metal, Vector3(0.0, 0.0, -10.0))
+			_add_box(weapon_root, "FoldedBipodRight", Vector3(0.055, 0.07, -0.75), Vector3(0.018, 0.22, 0.018), metal, Vector3(0.0, 0.0, 10.0))
+		1:
+			_add_box(weapon_root, "SMGMagazine", Vector3(0.0, -0.17, -0.13), Vector3(0.10, 0.31, 0.105), dark_metal, Vector3(5.0, 0.0, 0.0))
+			_add_cylinder(weapon_root, "SMGBarrelShroud", Vector3(0.0, 0.0, -0.43), 0.042, 0.36, dark_metal.lightened(0.04), Vector3(90.0, 0.0, 0.0))
+		2:
+			_add_box(weapon_root, "CarbineMagazine", Vector3(0.0, -0.15, -0.14), Vector3(0.105, 0.25, 0.13), dark_metal, Vector3(10.0, 0.0, 0.0))
+			_add_box(weapon_root, "CarbineForeEnd", Vector3(0.0, 0.015, -0.38), Vector3(0.14, 0.13, 0.32), wood)
+		3:
+			_add_box(weapon_root, "RifleMagazine", Vector3(0.0, -0.15, -0.07), Vector3(0.105, 0.25, 0.145), dark_metal, Vector3(8.0, 0.0, 0.0))
+			_add_box(weapon_root, "GrenadeSight", Vector3(-0.09, -0.08, -0.43), Vector3(0.022, 0.14, 0.03), metal, Vector3(0.0, 0.0, -18.0))
+		4:
+			_add_box(weapon_root, "RifleMagazine", Vector3(0.0, -0.12, -0.03), Vector3(0.095, 0.18, 0.12), dark_metal, Vector3(5.0, 0.0, 0.0))
+			_add_cylinder(weapon_root, "Scope", Vector3(0.0, -0.12, -0.12), 0.05, 0.30, dark_metal, Vector3(0.0, 0.0, 90.0))
+		_:
+			pass
+
+	var muzzle_socket := Node3D.new()
+	muzzle_socket.name = "MuzzleSocket"
+	muzzle_socket.position = Vector3(
+		0.0,
+		0.0,
+		-(receiver_length * 0.5 + barrel_length * 0.92)
+	)
+	weapon_root.add_child(muzzle_socket)
 
 func _build_class_gear(skin: Resource) -> void:
 	var actor = get_parent()
@@ -529,7 +583,6 @@ func _build_class_gear(skin: Resource) -> void:
 			_add_cylinder(torso_root, "RadioAntenna", Vector3(0.23, 0.60, 0.46), 0.018, 1.00, Color(0.07, 0.07, 0.06), Vector3.ZERO)
 			_add_box(torso_root, "RadioHandset", Vector3(-0.39, 0.12, -0.28), Vector3(0.10, 0.29, 0.08), Color(0.075, 0.08, 0.065), Vector3(0.0, 0.0, -8.0))
 		4:
-			_add_cylinder(weapon_root, "Scope", Vector3(0.0, -0.12, -0.12), 0.05, 0.30, Color(0.07, 0.075, 0.075), Vector3(0.0, 0.0, 90.0))
 			for binocular_x in [-0.07, 0.07]:
 				_add_cylinder(torso_root, "ScoutBinocularTube", Vector3(binocular_x, -0.04, -0.36), 0.055, 0.18, Color(0.075, 0.08, 0.07), Vector3(90.0, 0.0, 0.0))
 			_add_box(torso_root, "ScoutMapCase", Vector3(0.36, -0.17, 0.19), Vector3(0.25, 0.34, 0.11), Color(0.30, 0.20, 0.09), Vector3(0.0, 0.0, -7.0))
@@ -631,6 +684,11 @@ func _material_for_part(
 		or "bolt" in lower_name
 		or "buckle" in lower_name
 		or "trigger" in lower_name
+		or "magazine" in lower_name
+		or "bipod" in lower_name
+		or "shroud" in lower_name
+		or "handle" in lower_name
+		or "buttplate" in lower_name
 	):
 		material.roughness = 0.48
 		material.metallic = 0.68

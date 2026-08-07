@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.28.0 — Audible Adaptive Score and Battlefield Mix
+## Version 8.29.0 — Class-Specific World Weapons and Remote Fire
+
+The class-specific weapon work now extends beyond the local first-person view. Fallback soldiers carry distinct Support LMG, SMG, carbine, service-rifle, and scoped-rifle silhouettes with profile-specific receivers, barrels, magazines, fore-ends, stocks, slings, sights, bipods, and muzzle sockets.
+
+Third-person pose fidelity is now the sole owner of fallback joint and weapon transforms. This removes competing animation writers, fixes weapons drifting toward the torso origin, and keeps both hands connected during ready movement, aiming, crouching, and reload poses. Gunmetal material response now covers magazines, shrouds, bipods, handles, and butt plates as well as the receiver and barrel.
+
+The existing unreliable shot-effects RPC now adds a brief world-space muzzle flash, unshadowed light, and smoke near remote shooters. Its arguments and network behavior are unchanged, local first-person fire avoids the duplicate world flash, and headless servers remain excluded. Imported character and weapon scenes still take priority; hitboxes, gameplay, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.28.0 Audible Adaptive Score and Battlefield Mix
 
 The adaptive soundtrack is now deliberately audible instead of sitting beneath several layers of attenuation. Calm, Tension, and Assault stems have been loudness-normalized to a consistent average level, preventing the score from becoming quieter as combat intensity rises. The director uses a stronger but still restrained mix range controlled by the existing Music slider.
 
@@ -82,5 +90,5 @@ Friendly world nameplates now include a diamond identifier and remain visible at
 
 All additions are client-side presentation. Team assignment, uniforms, objectives, spotting, server authority, networking, and protocol 341 remain unchanged.
 
-Build: v8.28.0
+Build: v8.29.0
 Protocol: 341
