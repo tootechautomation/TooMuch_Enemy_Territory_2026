@@ -525,12 +525,15 @@ func _build_imported_first_person_weapon(
 	# generic FBX adaptation/holder rotation. The previous filename/yaw approach
 	# could be cancelled by the P38 FBX's authored axis correction. Applying the
 	# flip to ImportedWeaponModel guarantees that only the P38 mesh reverses.
-	# v8.64: force Axis pistol direction in FINAL VIEWMODEL HOLDER SPACE.
-	# This mirrors the successful Allied-pistol approach but does not depend on
-	# filename matching or the P38's internal FBX axes. Rotating the complete
-	# holder after auto_rotation guarantees the assembled pistol turns 180°.
+	# v8.64.1: force the finished Axis pistol to reverse in weapon_view space.
+	# Do NOT add 180 degrees to the holder's Euler Y component: the P38 may
+	# already have an X-axis adaptation, and Euler composition can make that
+	# rotate around the wrong effective axis. Pre-multiplying the completed
+	# basis applies a true 180-degree yaw in the holder PARENT coordinate space
+	# (weapon_view/camera space), regardless of the FBX's authored axes.
 	if is_pistol and team == 1:
-		holder.rotation_degrees.y += 180.0
+		var axis_pistol_flip: Basis = Basis(Vector3.UP, PI)
+		holder.basis = axis_pistol_flip * holder.basis
 
 	_apply_first_person_materials(imported_model)
 
