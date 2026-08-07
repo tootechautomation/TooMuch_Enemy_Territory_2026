@@ -503,10 +503,18 @@ func _build_imported_first_person_weapon(
 	var auto_rotation := Vector3(
 		adaptation.get("orientation_degrees", Vector3.ZERO)
 	)
+	# Axis detection tells us which local axis is the weapon's length, but it
+	# cannot tell which END of that axis is the muzzle. Keep per-asset forward
+	# corrections explicit so one CGTrader model cannot break all the others.
+	var asset_forward_yaw := 0.0
+	var selected_path := selected_scene.resource_path.to_lower()
+	if "m1a1_thompson" in selected_path:
+		asset_forward_yaw = 180.0
+
 	# Small presentation tilt only; the large axis correction is model-specific.
 	holder.rotation_degrees = auto_rotation + Vector3(
 		2.0 if is_pistol else 1.5,
-		0.0,
+		asset_forward_yaw,
 		-3.0 if is_pistol else -4.0
 	)
 	_apply_first_person_materials(imported_model)
