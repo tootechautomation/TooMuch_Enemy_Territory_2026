@@ -525,7 +525,10 @@ func _build_imported_first_person_weapon(
 	# generic FBX adaptation/holder rotation. The previous filename/yaw approach
 	# could be cancelled by the P38 FBX's authored axis correction. Applying the
 	# flip to ImportedWeaponModel guarantees that only the P38 mesh reverses.
-	if is_pistol and team == Team.DEFENDERS:
+	# Team values in Frontline Objective are numeric:
+	# 0 = Attackers / Allies, 1 = Defenders / Axis.
+	# Apply the forced P38 reversal only to the Axis pistol slot.
+	if is_pistol and team == 1:
 		imported_model.rotate_y(PI)
 
 	_apply_first_person_materials(imported_model)
