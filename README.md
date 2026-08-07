@@ -1,28 +1,28 @@
-FRONTLINE: OBJECTIVE v8.75.0
-INTERIOR STORYTELLING + ROOM DENSITY
+FRONTLINE: OBJECTIVE v8.78.0
+FACADE IDENTITY + WARTIME STREET DRESSING
 
 NEW CODE-BUILT DETAIL
-- command-post briefing/map table with papers
-- stacked field-radio equipment
-- pinned notice/tactical papers
-- dense supply-depot shelving and supply boxes
-- hanging canvas divider
-- tool/pipe rack
-- bunker workbench and ammunition/tool boxes
-- tactical notes and overhead conduit
-- practical field lamps with warm local lighting
-- scattered interior paper, timber and metal debris
+- shutters and boarded windows
+- canvas awnings and support braces
+- hanging storefront/wall signs
+- wall-mounted utility/electrical boxes
+- conduit and repair patches
+- wall lamps with localized warm light
+- detailed service doors and handles
+- facade-mounted utility cable spans
 
 GOAL
-Make objective interiors feel occupied, functional and historically grounded
-rather than empty rooms surrounded by detailed exteriors.
+Break up the remaining repeated-building appearance and give each street-facing
+structure more individual identity and believable wartime use.
 
 PRESERVED
-- Axis P38 fix
+- working Axis P38 orientation
 - Allied TT / Thompson / MP40
-- zoom and crosshair behavior
-- collision and objective logic
-- all previous environment/detail passes
+- Mouse2 shoulder zoom
+- persistent crosshair
+- collision / objectives / networking
+- v8.77 rain interaction
+- all prior environment/detail systems
 
-Build: 8.75.0
+Build: 8.78.0
 Network protocol: 341
