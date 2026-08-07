@@ -9,7 +9,7 @@ static func apply(root: Node) -> void:
 	if root == null or root.has_node("HeroLocationReconstruction_v846"):
 		return
 
-	var visual_root := Node3D.new()
+	var visual_root: Node3D = Node3D.new()
 	visual_root.name = "HeroLocationReconstruction_v846"
 	root.add_child(visual_root)
 
@@ -23,7 +23,7 @@ static func apply(root: Node) -> void:
 
 
 static func _mat(root: Node, kind: String, color: Color, rough := 0.9, metallic := 0.0) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
+	var m: StandardMaterial3D = StandardMaterial3D.new()
 	m.albedo_color = color
 	m.roughness = rough
 	m.metallic = metallic
@@ -71,10 +71,10 @@ static func _mat(root: Node, kind: String, color: Color, rough := 0.9, metallic 
 
 
 static func _box(parent: Node3D, name: String, pos: Vector3, size: Vector3,
-		mat: Material, rotation_y := 0.0) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
+		mat: Material, rotation_y: float = 0.0) -> MeshInstance3D:
+	var mi: MeshInstance3D = MeshInstance3D.new()
 	mi.name = name
-	var mesh := BoxMesh.new()
+	var mesh: BoxMesh = BoxMesh.new()
 	mesh.size = size
 	mi.mesh = mesh
 	mi.position = pos
@@ -86,10 +86,10 @@ static func _box(parent: Node3D, name: String, pos: Vector3, size: Vector3,
 
 
 static func _cylinder(parent: Node3D, name: String, pos: Vector3, radius: float,
-		height: float, mat: Material, rotation := Vector3.ZERO) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
+		height: float, mat: Material, rotation: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	var mi: MeshInstance3D = MeshInstance3D.new()
 	mi.name = name
-	var mesh := CylinderMesh.new()
+	var mesh: CylinderMesh = CylinderMesh.new()
 	mesh.top_radius = radius
 	mesh.bottom_radius = radius
 	mesh.height = height
@@ -104,16 +104,16 @@ static func _cylinder(parent: Node3D, name: String, pos: Vector3, radius: float,
 
 
 static func _rebuild_bridge(root: Node, visual_root: Node) -> void:
-	var bridge := root.get_node_or_null("ConstructedBridge") as Node3D
+	var bridge: Node3D = root.get_node_or_null("ConstructedBridge") as Node3D
 	if bridge == null:
 		return
 
-	var holder := Node3D.new()
+	var holder: Node3D = Node3D.new()
 	holder.name = "BridgeHeroGeometry"
 	bridge.add_child(holder)
 
-	var wood := _mat(root, "wood", Color(0.22, 0.13, 0.065), 0.94)
-	var metal := _mat(root, "rust", Color(0.20, 0.17, 0.14), 0.72, 0.35)
+	var wood: StandardMaterial3D = _mat(root, "wood", Color(0.22, 0.13, 0.065), 0.94)
+	var metal: StandardMaterial3D = _mat(root, "rust", Color(0.20, 0.17, 0.14), 0.72, 0.35)
 
 	# Heavy timber deck slats over the existing collision slab.
 	for i in range(11):
@@ -137,23 +137,23 @@ static func _rebuild_bridge(root: Node, visual_root: Node) -> void:
 	for side in [-1.0, 1.0]:
 		for i in range(4):
 			var z := -1.8 + float(i) * 1.2
-			var brace := _box(holder, "SideBrace", Vector3(side*2.20, 0.72, z),
+			var brace: MeshInstance3D = _box(holder, "SideBrace", Vector3(side*2.20, 0.72, z),
 				Vector3(0.12, 1.55, 0.13), metal)
 			brace.rotation.z = deg_to_rad(38.0 if i % 2 == 0 else -38.0)
 
 
 static func _rebuild_objective_bunker(root: Node, visual_root: Node) -> void:
-	var objective := root.get_node_or_null("Objective") as Node3D
+	var objective: Node3D = root.get_node_or_null("Objective") as Node3D
 	if objective == null:
 		return
 
-	var holder := Node3D.new()
+	var holder: Node3D = Node3D.new()
 	holder.name = "BunkerHeroGeometry"
 	objective.add_child(holder)
 
-	var concrete := _mat(root, "concrete", Color(0.25, 0.255, 0.245), 0.96)
-	var dark := _mat(root, "", Color(0.035, 0.038, 0.036), 0.75)
-	var rust := _mat(root, "rust", Color(0.20, 0.15, 0.11), 0.78, 0.25)
+	var concrete: StandardMaterial3D = _mat(root, "concrete", Color(0.25, 0.255, 0.245), 0.96)
+	var dark: StandardMaterial3D = _mat(root, "", Color(0.035, 0.038, 0.036), 0.75)
+	var rust: StandardMaterial3D = _mat(root, "rust", Color(0.20, 0.15, 0.11), 0.78, 0.25)
 
 	# Existing objective is 4 x 3 x 7. Build a layered bunker shell around it.
 	_box(holder, "RoofSlab", Vector3(0.0, 1.72, 0.0),
@@ -182,7 +182,7 @@ static func _rebuild_objective_bunker(root: Node, visual_root: Node) -> void:
 
 	# Angled blast wings build a stronger silhouette.
 	for side in [-1.0, 1.0]:
-		var wing := _box(holder, "BlastWing", Vector3(side*2.85, -0.10, 2.55),
+		var wing: MeshInstance3D = _box(holder, "BlastWing", Vector3(side*2.85, -0.10, 2.55),
 			Vector3(1.5, 2.6, 0.58), concrete, deg_to_rad(side * 24.0))
 		wing.position.x = side * 2.75
 
@@ -194,17 +194,17 @@ static func _rebuild_objective_bunker(root: Node, visual_root: Node) -> void:
 
 
 static func _rebuild_supply_depot(root: Node, visual_root: Node) -> void:
-	var depot := root.get_node_or_null("SupplyDepot") as Node3D
+	var depot: Node3D = root.get_node_or_null("SupplyDepot") as Node3D
 	if depot == null:
 		return
 
-	var holder := Node3D.new()
+	var holder: Node3D = Node3D.new()
 	holder.name = "SupplyDepotHeroGeometry"
 	depot.add_child(holder)
 
-	var wood := _mat(root, "wood", Color(0.25, 0.15, 0.075), 0.94)
-	var metal := _mat(root, "rust", Color(0.17, 0.18, 0.16), 0.78, 0.30)
-	var tarp := _mat(root, "", Color(0.16, 0.20, 0.12), 0.98)
+	var wood: StandardMaterial3D = _mat(root, "wood", Color(0.25, 0.15, 0.075), 0.94)
+	var metal: StandardMaterial3D = _mat(root, "rust", Color(0.17, 0.18, 0.16), 0.78, 0.30)
+	var tarp: StandardMaterial3D = _mat(root, "", Color(0.16, 0.20, 0.12), 0.98)
 
 	# Four-post covered depot shelter.
 	for x in [-2.45, 2.45]:
@@ -238,17 +238,17 @@ static func _rebuild_supply_depot(root: Node, visual_root: Node) -> void:
 
 
 static func _rebuild_command_post(root: Node, visual_root: Node) -> void:
-	var cp := root.get_node_or_null("CommandPost") as Node3D
+	var cp: Node3D = root.get_node_or_null("CommandPost") as Node3D
 	if cp == null:
 		return
 
-	var holder := Node3D.new()
+	var holder: Node3D = Node3D.new()
 	holder.name = "CommandPostHeroGeometry"
 	cp.add_child(holder)
 
-	var wood := _mat(root, "wood", Color(0.20, 0.125, 0.065), 0.95)
-	var canvas := _mat(root, "", Color(0.23, 0.25, 0.18), 0.98)
-	var metal := _mat(root, "rust", Color(0.16, 0.17, 0.15), 0.80, 0.28)
+	var wood: StandardMaterial3D = _mat(root, "wood", Color(0.20, 0.125, 0.065), 0.95)
+	var canvas: StandardMaterial3D = _mat(root, "", Color(0.23, 0.25, 0.18), 0.98)
+	var metal: StandardMaterial3D = _mat(root, "rust", Color(0.16, 0.17, 0.15), 0.80, 0.28)
 
 	# Field command shelter with a sloped canopy.
 	for x in [-2.3, 2.3]:
@@ -256,7 +256,7 @@ static func _rebuild_command_post(root: Node, visual_root: Node) -> void:
 			_box(holder, "CPPost", Vector3(x, 1.4, z),
 				Vector3(0.18, 2.8, 0.18), wood)
 
-	var roof := _box(holder, "CPCanopy", Vector3(0.0, 2.82, 0.0),
+	var roof: MeshInstance3D = _box(holder, "CPCanopy", Vector3(0.0, 2.82, 0.0),
 		Vector3(5.2, 0.16, 4.25), canvas)
 	roof.rotation.x = deg_to_rad(-5.0)
 
@@ -275,13 +275,13 @@ static func _rebuild_command_post(root: Node, visual_root: Node) -> void:
 
 
 static func _rebuild_fort_gate(root: Node, visual_root: Node) -> void:
-	var holder := Node3D.new()
+	var holder: Node3D = Node3D.new()
 	holder.name = "FortGateHeroGeometry"
 	holder.position = Vector3(18.0, 0.0, 25.0)
 	visual_root.add_child(holder)
 
-	var concrete := _mat(root, "concrete", Color(0.24, 0.245, 0.235), 0.96)
-	var metal := _mat(root, "rust", Color(0.13, 0.14, 0.13), 0.78, 0.38)
+	var concrete: StandardMaterial3D = _mat(root, "concrete", Color(0.24, 0.245, 0.235), 0.96)
+	var metal: StandardMaterial3D = _mat(root, "rust", Color(0.13, 0.14, 0.13), 0.78, 0.38)
 
 	# Gate lintel + inner steel frame connect the two existing gate wall blocks.
 	_box(holder, "GateLintel", Vector3(0.0, 4.45, 0.0),
@@ -295,34 +295,34 @@ static func _rebuild_fort_gate(root: Node, visual_root: Node) -> void:
 		var z := -2.7 + float(i) * 2.7
 		var p := Vector3(-2.2, 0.55, z)
 		for angle in [0.0, 60.0, -60.0]:
-			var beam := _box(holder, "GateObstacle", p,
+			var beam: MeshInstance3D = _box(holder, "GateObstacle", p,
 				Vector3(0.18, 1.8, 0.18), metal)
 			beam.rotation = Vector3(deg_to_rad(angle), 0.0, deg_to_rad(48.0))
 
 
 static func _rebuild_fort_watchtower(root: Node, visual_root: Node) -> void:
-	var tower := root.get_node_or_null("FortWatchtower") as Node3D
+	var tower: Node3D = root.get_node_or_null("FortWatchtower") as Node3D
 	if tower == null:
 		return
 
-	var holder := Node3D.new()
+	var holder: Node3D = Node3D.new()
 	holder.name = "WatchtowerHeroGeometry"
 	tower.add_child(holder)
 
-	var wood := _mat(root, "wood", Color(0.18, 0.115, 0.055), 0.95)
-	var dark := _mat(root, "", Color(0.055, 0.060, 0.055), 0.88)
+	var wood: StandardMaterial3D = _mat(root, "wood", Color(0.18, 0.115, 0.055), 0.95)
+	var dark: StandardMaterial3D = _mat(root, "", Color(0.055, 0.060, 0.055), 0.88)
 
 	# Extra X-bracing, roof overhang and sandbag parapet.
 	for side_x in [-1.0, 1.0]:
 		for side_z in [-1.0, 1.0]:
-			var brace := _box(holder, "TowerBrace", Vector3(side_x*0.72, 2.2, side_z*0.72),
+			var brace: MeshInstance3D = _box(holder, "TowerBrace", Vector3(side_x*0.72, 2.2, side_z*0.72),
 				Vector3(0.10, 3.2, 0.12), wood)
 			brace.rotation.z = deg_to_rad(28.0 * side_x * side_z)
 
 	_box(holder, "TowerRoof", Vector3(0.0, 4.65, 0.0),
 		Vector3(2.7, 0.16, 2.7), dark)
 
-	var sand := _mat(root, "", Color(0.30, 0.27, 0.18), 0.99)
+	var sand: StandardMaterial3D = _mat(root, "", Color(0.30, 0.27, 0.18), 0.99)
 	for side in [-1.0, 1.0]:
 		for i in range(4):
 			_box(holder, "TowerSandbag", Vector3(-0.75 + i*0.50, 3.72, side*0.98),
@@ -330,37 +330,73 @@ static func _rebuild_fort_watchtower(root: Node, visual_root: Node) -> void:
 
 
 static func _build_defensive_positions(root: Node, visual_root: Node) -> void:
-	var sand := _mat(root, "", Color(0.30, 0.27, 0.18), 0.99)
-	var wood := _mat(root, "wood", Color(0.19, 0.115, 0.055), 0.95)
-	var rust := _mat(root, "rust", Color(0.16, 0.15, 0.13), 0.80, 0.32)
+	var sand: StandardMaterial3D = _mat(
+		root, "", Color(0.30, 0.27, 0.18), 0.99
+	)
+	var wood: StandardMaterial3D = _mat(
+		root, "wood", Color(0.19, 0.115, 0.055), 0.95
+	)
+	var rust: StandardMaterial3D = _mat(
+		root, "rust", Color(0.16, 0.15, 0.13), 0.80, 0.32
+	)
 
-	var nests := [
-		[Vector3(8.0, 0.0, 8.2), 25.0],
-		[Vector3(9.5, 0.0, -9.0), -20.0],
-		[Vector3(23.0, 0.0, 13.8), 5.0],
-		[Vector3(24.0, 0.0, 35.7), 178.0]
+	var nest_positions: Array[Vector3] = [
+		Vector3(8.0, 0.0, 8.2),
+		Vector3(9.5, 0.0, -9.0),
+		Vector3(23.0, 0.0, 13.8),
+		Vector3(24.0, 0.0, 35.7)
+	]
+	var nest_yaws: Array[float] = [
+		25.0,
+		-20.0,
+		5.0,
+		178.0
 	]
 
-	for n in range(nests.size()):
-		var data = nests[n]
-		var nest := Node3D.new()
+	for n: int in range(nest_positions.size()):
+		var nest: Node3D = Node3D.new()
 		nest.name = "DefensiveNest_%d" % n
-		nest.position = data[0]
-		nest.rotation.y = deg_to_rad(float(data[1]))
+		nest.position = nest_positions[n]
+		nest.rotation.y = deg_to_rad(nest_yaws[n])
 		visual_root.add_child(nest)
 
 		# Curved-looking sandbag wall assembled from offset bags.
-		for row in range(3):
-			for i in range(7):
-				var x := -1.45 + float(i) * 0.48 + (0.24 if row % 2 else 0.0)
-				var z := 0.12 * abs(i - 3)
-				_box(nest, "Sandbag", Vector3(x, 0.18 + row*0.19, z),
-					Vector3(0.46, 0.18, 0.28), sand)
+		for row: int in range(3):
+			for i: int in range(7):
+				var row_offset: float = 0.24 if row % 2 != 0 else 0.0
+				var x: float = -1.45 + float(i) * 0.48 + row_offset
+				var distance_from_center: int = absi(i - 3)
+				var z: float = 0.12 * float(distance_from_center)
+				var y: float = 0.18 + float(row) * 0.19
+
+				_box(
+					nest,
+					"Sandbag",
+					Vector3(x, y, z),
+					Vector3(0.46, 0.18, 0.28),
+					sand
+				)
 
 		# Rear timber revetment and ammo details.
-		_box(nest, "Revetment", Vector3(0.0, 0.55, 1.1),
-			Vector3(3.2, 1.0, 0.16), wood)
-		_box(nest, "AmmoBox", Vector3(1.1, 0.32, 0.65),
-			Vector3(0.65, 0.48, 0.48), wood)
-		_cylinder(nest, "SpentDrum", Vector3(-1.05, 0.32, 0.68),
-			0.28, 0.60, rust)
+		_box(
+			nest,
+			"Revetment",
+			Vector3(0.0, 0.55, 1.1),
+			Vector3(3.2, 1.0, 0.16),
+			wood
+		)
+		_box(
+			nest,
+			"AmmoBox",
+			Vector3(1.1, 0.32, 0.65),
+			Vector3(0.65, 0.48, 0.48),
+			wood
+		)
+		_cylinder(
+			nest,
+			"SpentDrum",
+			Vector3(-1.05, 0.32, 0.68),
+			0.28,
+			0.60,
+			rust
+		)
