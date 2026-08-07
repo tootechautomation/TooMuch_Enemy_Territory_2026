@@ -1,6 +1,10 @@
 # Frontline: Objective
 
-## Version 8.36.1 — Imported Humanoid Activation Hotfix
+## Version 8.36.2 — Duplicate Fallback Body Visibility Hotfix
+
+Validated imported characters now exclusively own the remote third-person body. The recurring snapshot visibility update no longer turns the procedural barrel-shaped soldier back on over the imported rig. The old body is displayed only when no imported character passed validation.
+
+## Previous Phase — 8.36.1 Imported Humanoid Activation Hotfix
 
 The bundled humanoid is now preloaded as the guaranteed character fallback, and imported-scene traversal includes Godot's complete internal GLB hierarchy. This fixes the case where the valid CesiumMan mesh and skeleton were present but rejected because their imported nodes were not owned directly by the instantiated root, leaving the procedural soldier visible.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 8.36.2
+- Fixed snapshot and first-person visibility refreshes re-enabling the barrel-shaped procedural body over a validated imported humanoid
+- Made imported-character success the authoritative switch for the complete fallback `Body` and `CharacterVisual` hierarchy
+- Reset imported-model state before each rebuild so genuine load failures still restore the procedural safety fallback
+- Preserved team markers, class identity, custom model priority, gameplay, networking, and protocol 341
+
 ## 8.36.1
 - Fixed valid GLB characters being rejected when Godot imported mesh, skeleton, or animation nodes with internal scene ownership
 - Made character adaptation, material processing, bounds calculation, animation discovery, shadow configuration, and validation traverse the full imported hierarchy

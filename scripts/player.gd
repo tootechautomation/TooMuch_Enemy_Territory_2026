@@ -2153,6 +2153,9 @@ func _class_short_name(class_id: int) -> String:
 func _build_external_character_model() -> bool:
 	if DisplayServer.get_name() == "headless":
 		return false
+	external_model_loaded = false
+	external_character_animator = null
+	external_animation_controller = null
 
 	var scene: PackedScene = (
 		ExternalAssetRegistryScript.available_character(team)
@@ -2447,11 +2450,16 @@ func _apply_first_person_body_visibility() -> void:
 	var character_visual: Node3D = (
 		get_node_or_null("CharacterVisual") as Node3D
 	)
+	var fallback_visible := (
+		not local_view
+		and alive
+		and not external_model_loaded
+	)
 
 	if body_node != null:
-		body_node.visible = not local_view and alive
+		body_node.visible = fallback_visible
 	if character_visual != null:
-		character_visual.visible = not local_view and alive
+		character_visual.visible = fallback_visible
 	if class_accent_mesh != null:
 		class_accent_mesh.visible = not local_view and alive
 
