@@ -474,29 +474,42 @@ func _build_imported_first_person_weapon(
 		instance.queue_free()
 		return false
 
-	var imported_root := instance as Node3D
-	imported_root.name = "ImportedFirstPersonRig"
-	# CGTrader weapon meshes are authored lengthwise on +X. Turn that axis
-	# toward the camera's -Z forward direction and use a conservative FPS pose.
-	# RealAssetAdapter recenters the visible geometry so FBX pivot offsets do
-	# not push the model away from the camera.
-	imported_root.position = (
-		Vector3(0.16, -0.16, -0.46)
+	# Keep camera pose and imported-file transforms on separate nodes. This lets
+	# us normalize arbitrary FBX pivots/axes without flattening their hierarchy.
+	var holder := Node3D.new()
+	holder.name = "ImportedFirstPersonRig"
+	holder.position = (
+		Vector3(0.02, -0.015, 0.15)
 		if is_pistol
-		else Vector3(0.20, -0.19, -0.56)
+		else Vector3(0.04, -0.025, 0.24)
 	)
-	imported_root.rotation_degrees = (
-		Vector3(2.0, 90.0, -3.0)
-		if is_pistol
-		else Vector3(1.5, 90.0, -4.0)
+	weapon_view.add_child(holder)
+
+	var imported_model := instance as Node3D
+	imported_model.name = "ImportedWeaponModel"
+	imported_model.position = Vector3.ZERO
+	imported_model.rotation = Vector3.ZERO
+	imported_model.scale = Vector3.ONE
+	holder.add_child(imported_model)
+
+	var adaptation: Dictionary = RealAssetAdapterScript.adapt_weapon(
+		imported_model,
+		0.38 if is_pistol else 0.92
 	)
-	imported_root.scale = Vector3.ONE
-	weapon_view.add_child(imported_root)
-	RealAssetAdapterScript.adapt_weapon(
-		imported_root,
-		0.32 if is_pistol else 0.76
+	if not bool(adaptation.get("valid", false)):
+		holder.queue_free()
+		return false
+
+	var auto_rotation := Vector3(
+		adaptation.get("orientation_degrees", Vector3.ZERO)
 	)
-	_apply_first_person_materials(imported_root)
+	# Small presentation tilt only; the large axis correction is model-specific.
+	holder.rotation_degrees = auto_rotation + Vector3(
+		2.0 if is_pistol else 1.5,
+		0.0,
+		-3.0 if is_pistol else -4.0
+	)
+	_apply_first_person_materials(imported_model)
 
 	muzzle_flash = MeshInstance3D.new()
 	var flash_mesh := SphereMesh.new()
