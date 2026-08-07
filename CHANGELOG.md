@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.31.0
+- Added locally derived forward, backward, strafe, turn, and acceleration motion channels
+- Added shorter reverse-direction steps and guarded upper-body balance while backpedaling
+- Added lateral hip, leg, torso, head, and weapon response during strafing
+- Added acceleration lean and braking recovery without changing movement physics
+- Added restrained turn anticipation through the torso, head, legs, and held weapon
+- Added alternating knee stabilization at stride plant points to reduce visible foot skating
+- Reset transient locomotion state on respawn to prevent stale pose impulses
+- Preserved imported-animation priority, v8.30 combat reactions, gameplay, networking, and protocol 341
+
 ## 8.30.0
 - Added visible fallback-character flinches driven by existing replicated health changes
 - Added torso, head, arm, and held-weapon displacement scaled by hit severity

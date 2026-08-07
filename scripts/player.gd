@@ -296,6 +296,13 @@ var et_route_hint_label: Label
 var collision_debug_notice_until_ms := 0
 var visual_stride_phase := 0.0
 var visual_last_speed := 0.0
+var visual_previous_planar_velocity := Vector3.ZERO
+var visual_forward_motion := 0.0
+var visual_strafe_motion := 0.0
+var visual_turn_motion := 0.0
+var visual_acceleration_motion := 0.0
+var visual_last_body_yaw := 0.0
+var visual_yaw_initialized := false
 var visual_damage_reaction := 0.0
 var visual_damage_side := 1.0
 var visual_revive_recovery := 0.0
@@ -2040,6 +2047,13 @@ func server_respawn(spawn_position: Vector3) -> void:
 	visual_damage_reaction = 0.0
 	visual_revive_recovery = 0.0
 	visual_incapacitation_impact = 0.0
+	visual_previous_planar_velocity = Vector3.ZERO
+	visual_forward_motion = 0.0
+	visual_strafe_motion = 0.0
+	visual_turn_motion = 0.0
+	visual_acceleration_motion = 0.0
+	visual_last_body_yaw = rotation.y
+	visual_yaw_initialized = true
 	if tactical_map_open:
 		_set_tactical_map_open(false)
 	is_reloading = false
@@ -5997,8 +6011,50 @@ func _update_world_character_animation(delta: float) -> void:
 	if character_visual == null:
 		return
 
-	var speed: float = Vector2(velocity.x, velocity.z).length()
+	var planar_velocity := Vector3(velocity.x, 0.0, velocity.z)
+	var speed: float = planar_velocity.length()
 	var speed_ratio: float = clampf(speed / SPRINT_SPEED, 0.0, 1.0)
+	var local_velocity: Vector3 = global_transform.basis.inverse() * planar_velocity
+	var target_forward := 0.0
+	var target_strafe := 0.0
+	if speed > 0.05:
+		target_forward = clampf(-local_velocity.z / speed, -1.0, 1.0)
+		target_strafe = clampf(local_velocity.x / speed, -1.0, 1.0)
+	visual_forward_motion = lerpf(
+		visual_forward_motion,
+		target_forward,
+		1.0 - exp(-10.0 * delta)
+	)
+	visual_strafe_motion = lerpf(
+		visual_strafe_motion,
+		target_strafe,
+		1.0 - exp(-10.0 * delta)
+	)
+	var acceleration_scale := maxf(SPRINT_SPEED * maxf(delta, 0.001), 0.001)
+	var target_acceleration := clampf(
+		(planar_velocity - visual_previous_planar_velocity).dot(
+			planar_velocity.normalized() if speed > 0.05 else Vector3.ZERO
+		) / acceleration_scale,
+		-1.0,
+		1.0
+	)
+	visual_acceleration_motion = lerpf(
+		visual_acceleration_motion,
+		target_acceleration,
+		1.0 - exp(-8.0 * delta)
+	)
+	visual_previous_planar_velocity = planar_velocity
+	if not visual_yaw_initialized:
+		visual_last_body_yaw = rotation.y
+		visual_yaw_initialized = true
+	var yaw_delta := angle_difference(visual_last_body_yaw, rotation.y)
+	var target_turn := clampf(yaw_delta / maxf(delta * 4.0, 0.001), -1.0, 1.0)
+	visual_turn_motion = lerpf(
+		visual_turn_motion,
+		target_turn,
+		1.0 - exp(-12.0 * delta)
+	)
+	visual_last_body_yaw = rotation.y
 	var target_phase_speed: float = lerpf(4.8, 9.4, speed_ratio)
 	visual_stride_phase += delta * target_phase_speed
 	visual_last_speed = lerpf(
@@ -6104,7 +6160,11 @@ func _update_world_character_animation(delta: float) -> void:
 		visual_damage_reaction,
 		visual_damage_side,
 		visual_revive_recovery,
-		visual_incapacitation_impact
+		visual_incapacitation_impact,
+		visual_forward_motion,
+		visual_strafe_motion,
+		visual_turn_motion,
+		visual_acceleration_motion
 	)
 
 func _register_visual_damage(amount: int, source_id: int = 0) -> void:

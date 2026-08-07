@@ -16,7 +16,11 @@ static func apply(
 	damage_reaction: float,
 	damage_side: float,
 	revive_recovery: float,
-	incapacitation_impact: float
+	incapacitation_impact: float,
+	forward_motion: float,
+	strafe_motion: float,
+	turn_motion: float,
+	acceleration_motion: float
 ) -> void:
 	if character_visual == null:
 		return
@@ -49,13 +53,25 @@ static func apply(
 		_pose_incapacitated(soldier, torso, head, arm_l, arm_r, leg_l, leg_r, delta, damage_side, incapacitation_impact)
 		return
 
-	soldier.rotation.z = lerpf(soldier.rotation.z, 0.0, alpha_body)
+	var planted_strafe := strafe_motion * speed_ratio
+	var planted_turn := turn_motion * (1.0 - speed_ratio * 0.35)
+	soldier.rotation.z = lerpf(
+		soldier.rotation.z,
+		-planted_strafe * 0.08 - planted_turn * 0.035,
+		alpha_body
+	)
 	soldier.position.y = lerpf(soldier.position.y, -0.04 - revive_recovery * 0.20, alpha_body)
+	soldier.position.x = lerpf(soldier.position.x, -planted_strafe * 0.025, alpha_body)
 
 	var torso_target := Vector3.ZERO
 	torso_target.x = 0.15 if crouching else (-0.10 * speed_ratio if moving else breath * 0.012)
 	torso_target.y = -stride * 0.035 * speed_ratio
 	torso_target.z = stride * 0.025 * speed_ratio
+	torso_target.x += -acceleration_motion * 0.12 * absf(forward_motion)
+	torso_target.y += planted_turn * 0.16
+	torso_target.z += -planted_strafe * 0.18
+	if forward_motion < -0.15:
+		torso_target.x += 0.08 * absf(forward_motion) * speed_ratio
 	if aiming:
 		torso_target.y -= 0.10
 	if reloading:
@@ -72,6 +88,8 @@ static func apply(
 	head_target.x = -0.10 if crouching else breath * 0.008
 	head_target.y = sin(animation_time * 0.58) * 0.035 if not moving and not aiming else 0.0
 	head_target.z = -torso_target.z * 0.45
+	head_target.y += planted_turn * 0.10
+	head_target.z += planted_strafe * 0.07
 	head_target += Vector3(
 		-damage_reaction * 0.12,
 		-damage_side * damage_reaction * 0.28,
@@ -119,8 +137,13 @@ static func apply(
 	_lerp_rotation(arm_l, left_arm_target, alpha_fast)
 	_lerp_rotation(arm_r, right_arm_target, alpha_fast)
 
-	var left_leg_target := Vector3(stride * locomotion_amount, 0.0, 0.025)
-	var right_leg_target := Vector3(opposite_stride * locomotion_amount, 0.0, -0.025)
+	var gait_direction := 1.0 if forward_motion >= -0.10 else -0.72
+	var left_leg_target := Vector3(stride * locomotion_amount * gait_direction, 0.0, 0.025)
+	var right_leg_target := Vector3(opposite_stride * locomotion_amount * gait_direction, 0.0, -0.025)
+	left_leg_target.z += planted_strafe * (0.18 + stride * 0.08)
+	right_leg_target.z += planted_strafe * (0.18 - stride * 0.08)
+	left_leg_target.y += planted_turn * 0.08
+	right_leg_target.y -= planted_turn * 0.08
 	if crouching:
 		left_leg_target.x -= 0.44
 		right_leg_target.x -= 0.44
@@ -128,8 +151,11 @@ static func apply(
 		right_leg_target.z -= 0.08
 	_lerp_rotation(leg_l, left_leg_target, alpha_fast)
 	_lerp_rotation(leg_r, right_leg_target, alpha_fast)
-	_lerp_rotation(knee_l, Vector3(knee_amount + (0.42 if crouching else 0.0), 0.0, 0.0), alpha_fast)
-	_lerp_rotation(knee_r, Vector3(knee_amount + (0.42 if crouching else 0.0), 0.0, 0.0), alpha_fast)
+	var crouch_knee := 0.42 if crouching else 0.0
+	var left_plant := clampf(-stride, 0.0, 1.0) * speed_ratio
+	var right_plant := clampf(stride, 0.0, 1.0) * speed_ratio
+	_lerp_rotation(knee_l, Vector3(knee_amount + crouch_knee - left_plant * 0.08, 0.0, planted_strafe * 0.05), alpha_fast)
+	_lerp_rotation(knee_r, Vector3(knee_amount + crouch_knee - right_plant * 0.08, 0.0, planted_strafe * 0.05), alpha_fast)
 
 	if weapon != null:
 		var weapon_rotation := Vector3(-0.10, 0.0, 0.0)
@@ -142,6 +168,8 @@ static func apply(
 			weapon_position = Vector3(0.14, -0.05, -0.36)
 		elif moving:
 			weapon_rotation.z = stride * 0.025 * speed_ratio
+		weapon_rotation.y += planted_turn * 0.05
+		weapon_rotation.z -= planted_strafe * 0.045
 		weapon_rotation += Vector3(damage_reaction * 0.18, damage_side * damage_reaction * 0.16, -damage_side * damage_reaction * 0.20)
 		weapon_position += Vector3(damage_side * damage_reaction * 0.06, -damage_reaction * 0.04, damage_reaction * 0.05)
 		weapon.rotation = weapon.rotation.lerp(weapon_rotation, alpha_fast)

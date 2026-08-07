@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.30.0 — Character Hit Reactions and Revive Recovery
+## Version 8.31.0 — Directional Locomotion and Foot Planting
+
+Fallback soldiers now move according to their actual direction instead of playing one forward gait for every velocity. Forward movement, backpedaling, and lateral strafing drive separate leg direction, stance width, torso balance, and weapon stabilization. Backpedaling uses a shorter guarded stride, while strafing shifts the hips and legs laterally without turning the entire pose into an exaggerated lean.
+
+Acceleration and braking now influence upper-body pitch, and body turns produce a restrained anticipatory twist through the torso, head, legs, and held weapon. Alternating knee stabilization reduces the skating appearance at planted points of the stride, with smoother blending through idle, crouch, aim, reload, damage reaction, incapacitation, and revive recovery states.
+
+The motion data is derived locally from existing velocity and body rotation. Imported characters retain their animation-controller priority; movement speed, acceleration, collision, hitboxes, weapon handling, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.30.0 Character Hit Reactions and Revive Recovery
 
 Fallback soldiers now react visibly when taking damage instead of continuing through fire without physical feedback. Snapshot health changes drive a short presentation-only torso flinch, head recoil, arm displacement, and weapon deflection, with restrained side variation so repeated hits do not look mechanically identical.
 
