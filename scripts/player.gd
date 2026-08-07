@@ -3851,36 +3851,49 @@ func _base_weapon_position() -> Vector3:
 	return base_position
 
 func _aim_weapon_position() -> Vector3:
+	# v8.61 uses shoulder zoom rather than center-screen iron-sight ADS.
+	# The camera still zooms to ADS_FOV/SCOUT_ADS_FOV, but the weapon drops
+	# lower/right so it does not cover the crosshair or the target.
 	if current_weapon_index == 1:
-		return Vector3(0.0, 0.13, -0.88)
+		return Vector3(0.20, -0.40, -0.94)
+
 	match player_class:
 		PlayerClass.SOLDIER:
-			return Vector3(0.0, 0.17, -1.12)
+			return Vector3(0.27, -0.46, -1.20)
 		PlayerClass.MEDIC:
-			return Vector3(0.0, 0.13, -1.02)
+			return Vector3(0.24, -0.42, -1.08)
 		PlayerClass.ENGINEER:
-			return Vector3(0.0, 0.13, -1.05)
+			return Vector3(0.25, -0.43, -1.11)
 		PlayerClass.FIELD_OPS:
-			return Vector3(0.0, 0.13, -1.08)
+			return Vector3(0.26, -0.44, -1.15)
 		PlayerClass.SCOUT:
-			return Vector3(0.0, 0.12, -1.12)
-	return Vector3(0.0, 0.13, -1.05)
+			# Scout retains strong optical zoom but the rifle also lowers enough
+			# that the persistent crosshair remains unobstructed.
+			return Vector3(0.23, -0.41, -1.20)
+
+	return Vector3(0.25, -0.43, -1.12)
+
 
 func _aim_weapon_rotation() -> Vector3:
+	# Slight downward/outward cant reinforces the lowered shoulder position
+	# without rotating imported weapon geometry into a new orientation.
 	if current_weapon_index == 1:
-		return Vector3(-0.012, 0.0, 0.0)
+		return Vector3(0.055, 0.0, -0.030)
+
 	match player_class:
 		PlayerClass.SOLDIER:
-			return Vector3(-0.008, 0.0, 0.0)
+			return Vector3(0.065, 0.0, -0.045)
 		PlayerClass.MEDIC:
-			return Vector3(-0.010, 0.0, 0.0)
+			return Vector3(0.060, 0.0, -0.040)
 		PlayerClass.ENGINEER:
-			return Vector3(-0.009, 0.0, 0.0)
+			return Vector3(0.060, 0.0, -0.040)
 		PlayerClass.FIELD_OPS:
-			return Vector3(-0.008, 0.0, 0.0)
+			return Vector3(0.062, 0.0, -0.042)
 		PlayerClass.SCOUT:
-			return Vector3.ZERO
-	return Vector3.ZERO
+			return Vector3(0.050, 0.0, -0.035)
+
+	return Vector3(0.060, 0.0, -0.040)
+
 
 func _apply_weapon_kick() -> void:
 	if weapon_view == null:
@@ -4262,10 +4275,13 @@ func _update_aim_view() -> void:
 	if scope_overlay != null:
 		scope_overlay.visible = _is_scout_scope_active()
 
+	# v8.61 shoulder-zoom: keep the aiming reticle visible while Mouse2 is held.
+	# Zoom improves target acquisition without forcing an obstructive iron-sight
+	# view or removing the player's center reference.
 	if crosshair != null:
-		crosshair.visible = not is_aiming
+		crosshair.visible = alive and not downed
 	if et_crosshair_ring != null:
-		et_crosshair_ring.visible = not is_aiming
+		et_crosshair_ring.visible = alive and not downed
 
 func _build_first_person_weapon() -> void:
 	weapon_view = Node3D.new()
@@ -6060,7 +6076,7 @@ func _update_first_person_animation(delta: float) -> void:
 		var frequency: float = 11.0 if sprinting else 7.5
 		var amount: float = 0.035 if sprinting else 0.020
 		if visual_aiming:
-			amount *= 0.28
+			amount *= 0.18
 		target_position.x += sin(visual_animation_time * frequency) * amount
 		target_position.y += absf(cos(visual_animation_time * frequency)) * amount * 0.65
 		target_rotation.z += sin(visual_animation_time * frequency) * 0.018
