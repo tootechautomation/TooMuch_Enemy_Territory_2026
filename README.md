@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.31.0 — Directional Locomotion and Foot Planting
+## Version 8.32.0 — Airborne, Landing, and Stance Transitions
+
+Fallback soldiers now visibly prepare for takeoff, hold a readable airborne silhouette, and absorb their landing instead of continuing the grounded walk cycle in midair. Ascending and descending motion produce different leg balance, knee bend, torso pitch, and weapon response, while landing strength scales with the existing vertical movement state.
+
+Ground contact for remote characters is resolved with a short presentation-only floor probe combined with their interpolated velocity. This allows multiplayer jumps and falls to animate without adding snapshot data. Locomotion bob fades while airborne, stride planting resumes after contact, and landing compression flows back into the v8.31 directional gait.
+
+Crouching and standing now blend the full body-height and joint pose rather than snapping between two offsets. Imported characters retain their animation-controller priority; jump velocity, gravity, fall damage, movement, collision, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.31.0 Directional Locomotion and Foot Planting
 
 Fallback soldiers now move according to their actual direction instead of playing one forward gait for every velocity. Forward movement, backpedaling, and lateral strafing drive separate leg direction, stance width, torso balance, and weapon stabilization. Backpedaling uses a shorter guarded stride, while strafing shifts the hips and legs laterally without turning the entire pose into an exaggerated lean.
 

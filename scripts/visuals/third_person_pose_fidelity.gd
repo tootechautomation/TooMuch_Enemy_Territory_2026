@@ -20,7 +20,12 @@ static func apply(
 	forward_motion: float,
 	strafe_motion: float,
 	turn_motion: float,
-	acceleration_motion: float
+	acceleration_motion: float,
+	airborne_amount: float,
+	vertical_motion: float,
+	takeoff_impulse: float,
+	landing_impulse: float,
+	stance_blend: float
 ) -> void:
 	if character_visual == null:
 		return
@@ -60,11 +65,25 @@ static func apply(
 		-planted_strafe * 0.08 - planted_turn * 0.035,
 		alpha_body
 	)
-	soldier.position.y = lerpf(soldier.position.y, -0.04 - revive_recovery * 0.20, alpha_body)
+	var stance := clampf(stance_blend, 0.0, 1.0)
+	var vertical_pose_offset := (
+		-airborne_amount * 0.03
+		- takeoff_impulse * 0.10
+		- landing_impulse * 0.16
+	)
+	soldier.position.y = lerpf(
+		soldier.position.y,
+		-0.04 - revive_recovery * 0.20 + vertical_pose_offset,
+		alpha_body
+	)
 	soldier.position.x = lerpf(soldier.position.x, -planted_strafe * 0.025, alpha_body)
 
 	var torso_target := Vector3.ZERO
-	torso_target.x = 0.15 if crouching else (-0.10 * speed_ratio if moving else breath * 0.012)
+	torso_target.x = lerpf(
+		-0.10 * speed_ratio if moving else breath * 0.012,
+		0.15,
+		stance
+	)
 	torso_target.y = -stride * 0.035 * speed_ratio
 	torso_target.z = stride * 0.025 * speed_ratio
 	torso_target.x += -acceleration_motion * 0.12 * absf(forward_motion)
@@ -72,6 +91,8 @@ static func apply(
 	torso_target.z += -planted_strafe * 0.18
 	if forward_motion < -0.15:
 		torso_target.x += 0.08 * absf(forward_motion) * speed_ratio
+	torso_target.x += takeoff_impulse * 0.10 + landing_impulse * 0.24
+	torso_target.x += -vertical_motion * airborne_amount * 0.08
 	if aiming:
 		torso_target.y -= 0.10
 	if reloading:
@@ -85,7 +106,7 @@ static func apply(
 	_lerp_rotation(torso, torso_target, alpha_body)
 
 	var head_target := Vector3.ZERO
-	head_target.x = -0.10 if crouching else breath * 0.008
+	head_target.x = lerpf(breath * 0.008, -0.10, stance)
 	head_target.y = sin(animation_time * 0.58) * 0.035 if not moving and not aiming else 0.0
 	head_target.z = -torso_target.z * 0.45
 	head_target.y += planted_turn * 0.10
@@ -127,9 +148,11 @@ static func apply(
 	elif aiming:
 		left_arm_target += Vector3(-0.20, 0.04, 0.08)
 		right_arm_target += Vector3(-0.16, -0.02, -0.04)
-	elif crouching:
-		left_arm_target.x -= 0.24
-		right_arm_target.x -= 0.18
+	elif stance > 0.01:
+		left_arm_target.x -= 0.24 * stance
+		right_arm_target.x -= 0.18 * stance
+	left_arm_target.x += landing_impulse * 0.12
+	right_arm_target.x += landing_impulse * 0.10
 	left_arm_target += Vector3(damage_reaction * 0.18, damage_side * damage_reaction * 0.12, damage_reaction * 0.16)
 	right_arm_target += Vector3(damage_reaction * 0.12, -damage_side * damage_reaction * 0.10, -damage_reaction * 0.12)
 	left_arm_target.x += revive_recovery * 0.18
@@ -144,18 +167,33 @@ static func apply(
 	right_leg_target.z += planted_strafe * (0.18 - stride * 0.08)
 	left_leg_target.y += planted_turn * 0.08
 	right_leg_target.y -= planted_turn * 0.08
-	if crouching:
-		left_leg_target.x -= 0.44
-		right_leg_target.x -= 0.44
-		left_leg_target.z += 0.08
-		right_leg_target.z -= 0.08
+	left_leg_target.x -= 0.44 * stance
+	right_leg_target.x -= 0.44 * stance
+	left_leg_target.z += 0.08 * stance
+	right_leg_target.z -= 0.08 * stance
+	if airborne_amount > 0.01:
+		var rising := clampf(vertical_motion, 0.0, 1.0)
+		var falling := clampf(-vertical_motion, 0.0, 1.0)
+		left_leg_target = left_leg_target.lerp(
+			Vector3(-0.22 - falling * 0.10, 0.0, 0.14),
+			airborne_amount
+		)
+		right_leg_target = right_leg_target.lerp(
+			Vector3(0.16 - rising * 0.12, 0.0, -0.11),
+			airborne_amount
+		)
+	left_leg_target.x -= takeoff_impulse * 0.16 + landing_impulse * 0.34
+	right_leg_target.x -= takeoff_impulse * 0.16 + landing_impulse * 0.34
 	_lerp_rotation(leg_l, left_leg_target, alpha_fast)
 	_lerp_rotation(leg_r, right_leg_target, alpha_fast)
-	var crouch_knee := 0.42 if crouching else 0.0
+	var crouch_knee := 0.42 * stance
 	var left_plant := clampf(-stride, 0.0, 1.0) * speed_ratio
 	var right_plant := clampf(stride, 0.0, 1.0) * speed_ratio
-	_lerp_rotation(knee_l, Vector3(knee_amount + crouch_knee - left_plant * 0.08, 0.0, planted_strafe * 0.05), alpha_fast)
-	_lerp_rotation(knee_r, Vector3(knee_amount + crouch_knee - right_plant * 0.08, 0.0, planted_strafe * 0.05), alpha_fast)
+	var airborne_left_knee := airborne_amount * (0.40 + clampf(-vertical_motion, 0.0, 1.0) * 0.12)
+	var airborne_right_knee := airborne_amount * (0.28 + clampf(vertical_motion, 0.0, 1.0) * 0.12)
+	var compression := takeoff_impulse * 0.30 + landing_impulse * 0.62
+	_lerp_rotation(knee_l, Vector3(knee_amount + crouch_knee - left_plant * 0.08 + airborne_left_knee + compression, 0.0, planted_strafe * 0.05), alpha_fast)
+	_lerp_rotation(knee_r, Vector3(knee_amount + crouch_knee - right_plant * 0.08 + airborne_right_knee + compression, 0.0, planted_strafe * 0.05), alpha_fast)
 
 	if weapon != null:
 		var weapon_rotation := Vector3(-0.10, 0.0, 0.0)
@@ -170,6 +208,8 @@ static func apply(
 			weapon_rotation.z = stride * 0.025 * speed_ratio
 		weapon_rotation.y += planted_turn * 0.05
 		weapon_rotation.z -= planted_strafe * 0.045
+		weapon_rotation.x += landing_impulse * 0.10 - takeoff_impulse * 0.05
+		weapon_position.y -= landing_impulse * 0.05
 		weapon_rotation += Vector3(damage_reaction * 0.18, damage_side * damage_reaction * 0.16, -damage_side * damage_reaction * 0.20)
 		weapon_position += Vector3(damage_side * damage_reaction * 0.06, -damage_reaction * 0.04, damage_reaction * 0.05)
 		weapon.rotation = weapon.rotation.lerp(weapon_rotation, alpha_fast)

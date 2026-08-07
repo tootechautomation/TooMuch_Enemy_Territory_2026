@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.32.0
+- Added presentation-only grounded detection suitable for local, server, bot, and interpolated remote characters
+- Added takeoff compression through the torso, legs, knees, and held weapon
+- Added distinct rising and falling airborne silhouettes instead of continuing the grounded gait in midair
+- Added landing absorption scaled by the existing vertical motion state
+- Faded locomotion bob and planted stride motion while airborne, then restored them after contact
+- Replaced hard crouch-height switching with a smoothly blended stance transition
+- Reset airborne, landing, and stance presentation state on respawn
+- Preserved gravity, jump speed, fall damage, movement physics, imported-animation priority, networking, and protocol 341
+
 ## 8.31.0
 - Added locally derived forward, backward, strafe, turn, and acceleration motion channels
 - Added shorter reverse-direction steps and guarded upper-body balance while backpedaling

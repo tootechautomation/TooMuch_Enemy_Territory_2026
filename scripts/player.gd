@@ -303,6 +303,12 @@ var visual_turn_motion := 0.0
 var visual_acceleration_motion := 0.0
 var visual_last_body_yaw := 0.0
 var visual_yaw_initialized := false
+var visual_world_was_grounded := true
+var visual_world_airborne := 0.0
+var visual_world_vertical_motion := 0.0
+var visual_world_takeoff_impulse := 0.0
+var visual_world_landing_impulse := 0.0
+var visual_world_stance_blend := 0.0
 var visual_damage_reaction := 0.0
 var visual_damage_side := 1.0
 var visual_revive_recovery := 0.0
@@ -2054,6 +2060,12 @@ func server_respawn(spawn_position: Vector3) -> void:
 	visual_acceleration_motion = 0.0
 	visual_last_body_yaw = rotation.y
 	visual_yaw_initialized = true
+	visual_world_was_grounded = true
+	visual_world_airborne = 0.0
+	visual_world_vertical_motion = 0.0
+	visual_world_takeoff_impulse = 0.0
+	visual_world_landing_impulse = 0.0
+	visual_world_stance_blend = 1.0 if is_crouching else 0.0
 	if tactical_map_open:
 		_set_tactical_map_open(false)
 	is_reloading = false
@@ -6000,6 +6012,22 @@ func _visual_part(node_name: String) -> Node3D:
 		return null
 	return character_visual.get_node_or_null(node_name) as Node3D
 
+func _visual_is_grounded() -> bool:
+	if is_on_floor():
+		return true
+	if get_world_3d() == null:
+		return absf(velocity.y) < 0.15
+	var ray_start := global_position + Vector3.UP * 0.12
+	var query := PhysicsRayQueryParameters3D.create(
+		ray_start,
+		global_position - Vector3.UP * 0.24
+	)
+	query.exclude = [self]
+	query.collision_mask = 1
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	return not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
 func _update_world_character_animation(delta: float) -> void:
 	_update_external_character_animation()
 	visual_damage_reaction = move_toward(visual_damage_reaction, 0.0, delta * 3.4)
@@ -6014,6 +6042,41 @@ func _update_world_character_animation(delta: float) -> void:
 	var planar_velocity := Vector3(velocity.x, 0.0, velocity.z)
 	var speed: float = planar_velocity.length()
 	var speed_ratio: float = clampf(speed / SPRINT_SPEED, 0.0, 1.0)
+	var grounded := _visual_is_grounded()
+	if visual_world_was_grounded and not grounded:
+		visual_world_takeoff_impulse = 1.0
+	elif not visual_world_was_grounded and grounded:
+		visual_world_landing_impulse = clampf(
+			absf(visual_world_vertical_motion) * 0.55,
+			0.28,
+			1.0
+		)
+	visual_world_was_grounded = grounded
+	visual_world_airborne = lerpf(
+		visual_world_airborne,
+		0.0 if grounded else 1.0,
+		1.0 - exp(-(16.0 if grounded else 10.0) * delta)
+	)
+	visual_world_vertical_motion = lerpf(
+		visual_world_vertical_motion,
+		clampf(velocity.y / maxf(JUMP_SPEED, 0.001), -1.0, 1.0),
+		1.0 - exp(-12.0 * delta)
+	)
+	visual_world_takeoff_impulse = move_toward(
+		visual_world_takeoff_impulse,
+		0.0,
+		delta * 4.8
+	)
+	visual_world_landing_impulse = move_toward(
+		visual_world_landing_impulse,
+		0.0,
+		delta * 3.8
+	)
+	visual_world_stance_blend = lerpf(
+		visual_world_stance_blend,
+		1.0 if is_crouching else 0.0,
+		1.0 - exp(-11.0 * delta)
+	)
 	var local_velocity: Vector3 = global_transform.basis.inverse() * planar_velocity
 	var target_forward := 0.0
 	var target_strafe := 0.0
@@ -6063,7 +6126,11 @@ func _update_world_character_animation(delta: float) -> void:
 		1.0 - exp(-8.0 * delta)
 	)
 
-	var moving: bool = alive and visual_last_speed > 0.35
+	var moving: bool = (
+		alive
+		and visual_last_speed > 0.35
+		and visual_world_airborne < 0.82
+	)
 	var stride: float = sin(visual_stride_phase)
 	var opposite_stride: float = sin(visual_stride_phase + PI)
 	var stride_amount: float = (
@@ -6072,10 +6139,11 @@ func _update_world_character_animation(delta: float) -> void:
 		else 0.0
 	)
 	var arm_amount: float = stride_amount * 0.82
-	var crouch_offset: float = -0.34 if is_crouching else 0.0
+	var crouch_offset: float = -0.34 * visual_world_stance_blend
 	var body_bob: float = (
 		absf(sin(visual_stride_phase * 2.0))
 		* lerpf(0.005, 0.035, speed_ratio)
+		* (1.0 - visual_world_airborne)
 		if moving
 		else 0.0
 	)
@@ -6164,7 +6232,12 @@ func _update_world_character_animation(delta: float) -> void:
 		visual_forward_motion,
 		visual_strafe_motion,
 		visual_turn_motion,
-		visual_acceleration_motion
+		visual_acceleration_motion,
+		visual_world_airborne,
+		visual_world_vertical_motion,
+		visual_world_takeoff_impulse,
+		visual_world_landing_impulse,
+		visual_world_stance_blend
 	)
 
 func _register_visual_damage(amount: int, source_id: int = 0) -> void:
