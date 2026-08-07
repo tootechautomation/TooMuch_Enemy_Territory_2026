@@ -1,27 +1,28 @@
-FRONTLINE: OBJECTIVE v8.74.0
-COMBAT COVER + MICRODETAIL PHASE
-
-PRESERVED
-- working Axis P38 orientation untouched
-- Allied TT / Thompson / MP40 untouched
-- Mouse2 shoulder zoom + persistent crosshair
-- v8.73 road/street detail
-- all previous architecture/terrain/atmosphere systems
+FRONTLINE: OBJECTIVE v8.75.0
+INTERIOR STORYTELLING + ROOM DENSITY
 
 NEW CODE-BUILT DETAIL
-- heavy timber checkpoint barricades
-- bolts/fasteners and warning plates
-- detailed crates with external slats and metal bands
-- layered sandbag stacks with visible seam strips
-- fighting positions with timber braces and canvas cover
-- anti-infantry wire/stake obstacle silhouettes
-- loose wood and metal debris around cover
+- command-post briefing/map table with papers
+- stacked field-radio equipment
+- pinned notice/tactical papers
+- dense supply-depot shelving and supply boxes
+- hanging canvas divider
+- tool/pipe rack
+- bunker workbench and ammunition/tool boxes
+- tactical notes and overhead conduit
+- practical field lamps with warm local lighting
+- scattered interior paper, timber and metal debris
 
 GOAL
-Improve the objects players spend the most time fighting around. Cover should
-now read as assembled battlefield equipment rather than simple boxes/walls.
+Make objective interiors feel occupied, functional and historically grounded
+rather than empty rooms surrounded by detailed exteriors.
 
-All additions are visual-only. Existing collision remains authoritative.
+PRESERVED
+- Axis P38 fix
+- Allied TT / Thompson / MP40
+- zoom and crosshair behavior
+- collision and objective logic
+- all previous environment/detail passes
 
-Build: 8.74.0
+Build: 8.75.0
 Network protocol: 341
