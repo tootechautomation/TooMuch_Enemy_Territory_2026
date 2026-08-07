@@ -476,20 +476,25 @@ func _build_imported_first_person_weapon(
 
 	var imported_root := instance as Node3D
 	imported_root.name = "ImportedFirstPersonRig"
+	# CGTrader weapon meshes are authored lengthwise on +X. Turn that axis
+	# toward the camera's -Z forward direction and use a conservative FPS pose.
+	# RealAssetAdapter recenters the visible geometry so FBX pivot offsets do
+	# not push the model away from the camera.
 	imported_root.position = (
-		Vector3(0.0, 0.0, 0.06)
+		Vector3(0.16, -0.16, -0.46)
 		if is_pistol
-		else Vector3(0.08, 0.07, 0.17)
+		else Vector3(0.20, -0.19, -0.56)
 	)
-	imported_root.scale = (
-		Vector3(0.88, 0.88, 0.92)
+	imported_root.rotation_degrees = (
+		Vector3(2.0, 90.0, -3.0)
 		if is_pistol
-		else Vector3(0.80, 0.82, 0.86)
+		else Vector3(1.5, 90.0, -4.0)
 	)
+	imported_root.scale = Vector3.ONE
 	weapon_view.add_child(imported_root)
 	RealAssetAdapterScript.adapt_weapon(
 		imported_root,
-		0.38 if is_pistol else 0.82
+		0.32 if is_pistol else 0.76
 	)
 	_apply_first_person_materials(imported_root)
 
@@ -4500,7 +4505,10 @@ func _rebuild_first_person_weapon() -> void:
 	weapon_view.rotation = weapon_base_rotation
 
 	if _build_imported_first_person_weapon(is_pistol):
-		_build_first_person_arms(is_pistol)
+		# Do not mix the old capsule/primitive arms with the realistic imported
+		# weapon. They were useful for the prototype but visibly intersect and
+		# float around the CGTrader model. Proper rigged FPS arms can be added in
+		# a later dedicated animation pass.
 		_finalize_first_person_viewmodel()
 		return
 
