@@ -1,6 +1,18 @@
 # Frontline: Objective
 
-## Version 8.19.1 — External Asset Report Hotfix
+## Version 8.22.0 — First-Person Mechanical Animation Fidelity
+
+First-person weapons now visibly operate instead of moving only as one rigid object. Pistol slides, rifle bolts, charging handles, magazines, drum magazines, and the support arm respond to firing and reload state. Magazine removal, hand travel, reinsertion, and the final bolt action are timed as presentation layers over the existing authoritative reload duration.
+
+Movement presentation also gains restrained landing inertia and reduced weapon bob while aiming. Sprint lowering, recoil, muzzle effects, shell ejection, reload audio, and the v8.21 textured arms remain intact.
+
+The player's first-person body now matches the upgraded third-person soldier. Sleeves use the high-resolution Allied olive-drab or opposing field-gray wool textures; hands use team-appropriate rough leather gloves with four articulated-looking fingers, a separate thumb, and a dimensional cuff instead of the earlier three-finger skin-colored capsules.
+
+Each class also carries a small first-person identifier on the support wrist: Soldier watch, Medic sleeve band, Engineer reinforced cuff, Field Ops push-to-talk control, or Scout compass. Both imported and bundled first-person weapons now receive the same arm treatment, so installing a better rifle model no longer makes the player's arms disappear.
+
+The articulated fallback soldiers now use the v8.19 high-resolution wool textures directly, with neutral albedo response and heavier cloth roughness. Their class identity is also visible in the model itself: Soldiers carry bandoliers, grenades, and bayonet scabbards; Medics carry layered canvas medical packs, dressing pouches, and a dimensional armband; Engineers carry tool rolls, a wrench, wire spool, and cap tins; Field Ops carry a detailed radio, control panel, dials, antenna, and handset; Scouts carry binoculars, a map case, helmet scrim, and a scoped weapon.
+
+All equipment is attached to the existing articulated joints, so locomotion, aiming, crouching, reloading, incapacitation, and team skin changes continue to move as one coherent character. The pass remains visual-only and does not alter hitboxes, collision, weapon balance, class abilities, or networking.
 
 This hotfix makes external-asset reporting type-aware. Boolean availability entries continue to display `READY` or `fallback`, while the new selected-path entries display the actual imported resource path or `fallback`. This removes the invalid attempt to convert character path strings with Godot's Boolean constructor.
 
@@ -22,5 +34,5 @@ Friendly world nameplates now include a diamond identifier and remain visible at
 
 All additions are client-side presentation. Team assignment, uniforms, objectives, spotting, server authority, networking, and protocol 341 remain unchanged.
 
-Build: v8.19.1
+Build: v8.22.0
 Protocol: 341

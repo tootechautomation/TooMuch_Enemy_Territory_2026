@@ -182,6 +182,11 @@ var hit_marker: Label
 var hit_marker_until_ms := 0
 var muzzle_flash: MeshInstance3D
 var muzzle_flash_until_ms := 0
+var visual_reload_progress := 0.0
+var visual_was_reloading := false
+var visual_was_on_floor := true
+var visual_previous_vertical_velocity := 0.0
+var visual_landing_impulse := 0.0
 var active_muzzle_light: OmniLight3D
 var damage_indicator: Label
 var damage_indicator_until_ms := 0
@@ -3990,12 +3995,25 @@ func _first_person_skin_material() -> StandardMaterial3D:
 
 func _first_person_sleeve_material() -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
-	material.albedo_color = (
-		Color(0.24, 0.31, 0.20)
+	material.albedo_texture = (
+		tex_uniform_attackers
 		if team == 0
-		else Color(0.31, 0.27, 0.20)
+		else tex_uniform_defenders
 	)
+	material.albedo_color = Color(0.92, 0.92, 0.92, 1.0)
 	material.roughness = 0.94
+	material.metallic = 0.0
+	return material
+
+func _first_person_glove_material() -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = (
+		Color(0.20, 0.16, 0.095)
+		if team == 0
+		else Color(0.13, 0.12, 0.105)
+	)
+	material.roughness = 0.86
+	material.metallic = 0.0
 	return material
 
 func _add_first_person_arm(
@@ -4023,6 +4041,19 @@ func _add_first_person_arm(
 	sleeve.material_override = _first_person_sleeve_material()
 	arm_root.add_child(sleeve)
 
+	var cuff := MeshInstance3D.new()
+	cuff.name = "LeatherSleeveCuff"
+	var cuff_mesh := CylinderMesh.new()
+	cuff_mesh.top_radius = 0.105
+	cuff_mesh.bottom_radius = 0.105
+	cuff_mesh.height = 0.10
+	cuff_mesh.radial_segments = 18
+	cuff.mesh = cuff_mesh
+	cuff.rotation_degrees.x = 90.0
+	cuff.position.z = length * 0.78
+	cuff.material_override = _first_person_glove_material()
+	arm_root.add_child(cuff)
+
 	var hand := MeshInstance3D.new()
 	var hand_mesh := CapsuleMesh.new()
 	hand_mesh.radius = 0.085
@@ -4036,10 +4067,10 @@ func _add_first_person_arm(
 		0.0,
 		length * 0.88
 	)
-	hand.material_override = _first_person_skin_material()
+	hand.material_override = _first_person_glove_material()
 	arm_root.add_child(hand)
 
-	for finger_index in range(3):
+	for finger_index in range(4):
 		var finger := MeshInstance3D.new()
 		var finger_mesh := CapsuleMesh.new()
 		finger_mesh.radius = 0.018
@@ -4049,12 +4080,128 @@ func _add_first_person_arm(
 		finger.mesh = finger_mesh
 		finger.rotation_degrees.x = 90.0
 		finger.position = Vector3(
-			(float(finger_index) - 1.0) * 0.035,
+			(float(finger_index) - 1.5) * 0.030,
 			-0.02,
 			length * 0.98
 		)
-		finger.material_override = _first_person_skin_material()
+		finger.material_override = _first_person_glove_material()
 		arm_root.add_child(finger)
+
+	var thumb := MeshInstance3D.new()
+	thumb.name = "GlovedThumb"
+	var thumb_mesh := CapsuleMesh.new()
+	thumb_mesh.radius = 0.024
+	thumb_mesh.height = 0.14
+	thumb_mesh.radial_segments = 10
+	thumb_mesh.rings = 4
+	thumb.mesh = thumb_mesh
+	thumb.rotation_degrees = Vector3(
+		78.0,
+		0.0,
+		24.0 if right_hand else -24.0
+	)
+	thumb.position = Vector3(
+		0.075 if right_hand else -0.075,
+		0.0,
+		length * 0.93
+	)
+	thumb.material_override = _first_person_glove_material()
+	arm_root.add_child(thumb)
+
+	_add_first_person_wrist_detail(arm_root, length, right_hand)
+
+func _add_first_person_wrist_detail(
+	arm_root: Node3D,
+	length: float,
+	right_hand: bool
+) -> void:
+	if right_hand:
+		return
+	var material := StandardMaterial3D.new()
+	material.roughness = 0.74
+	material.metallic = 0.06
+	var detail := MeshInstance3D.new()
+	detail.position = Vector3(0.0, -0.10, length * 0.70)
+	match player_class:
+		PlayerClass.SOLDIER:
+			detail.name = "SoldierWristWatch"
+			material.albedo_color = Color(0.11, 0.10, 0.075)
+			var watch_mesh := CylinderMesh.new()
+			watch_mesh.top_radius = 0.052
+			watch_mesh.bottom_radius = 0.052
+			watch_mesh.height = 0.025
+			watch_mesh.radial_segments = 16
+			detail.mesh = watch_mesh
+			detail.rotation_degrees.x = 90.0
+		PlayerClass.MEDIC:
+			detail.name = "MedicSleeveBand"
+			material.albedo_color = Color(0.76, 0.72, 0.60)
+			var medic_band := CylinderMesh.new()
+			medic_band.top_radius = 0.108
+			medic_band.bottom_radius = 0.108
+			medic_band.height = 0.14
+			medic_band.radial_segments = 18
+			detail.mesh = medic_band
+			detail.rotation_degrees.x = 90.0
+		PlayerClass.ENGINEER:
+			detail.name = "EngineerReinforcedCuff"
+			material.albedo_color = Color(0.28, 0.18, 0.075)
+			var engineer_cuff := BoxMesh.new()
+			engineer_cuff.size = Vector3(0.20, 0.055, 0.18)
+			detail.mesh = engineer_cuff
+		PlayerClass.FIELD_OPS:
+			detail.name = "FieldOpsPushToTalk"
+			material.albedo_color = Color(0.075, 0.085, 0.065)
+			var ptt_mesh := BoxMesh.new()
+			ptt_mesh.size = Vector3(0.13, 0.055, 0.18)
+			detail.mesh = ptt_mesh
+		PlayerClass.SCOUT:
+			detail.name = "ScoutWristCompass"
+			material.albedo_color = Color(0.12, 0.13, 0.105)
+			material.metallic = 0.35
+			var compass_mesh := CylinderMesh.new()
+			compass_mesh.top_radius = 0.060
+			compass_mesh.bottom_radius = 0.060
+			compass_mesh.height = 0.028
+			compass_mesh.radial_segments = 18
+			detail.mesh = compass_mesh
+			detail.rotation_degrees.x = 90.0
+		_:
+			return
+	detail.material_override = material
+	arm_root.add_child(detail)
+
+func _build_first_person_arms(is_pistol: bool) -> void:
+	if is_pistol:
+		_add_first_person_arm(
+			"RightArm",
+			Vector3(0.18, 0.18, 0.30),
+			Vector3(-12.0, -4.0, -8.0),
+			0.58,
+			true
+		)
+		_add_first_person_arm(
+			"LeftSupportArm",
+			Vector3(-0.16, 0.22, 0.18),
+			Vector3(-18.0, 10.0, 8.0),
+			0.48,
+			false
+		)
+	else:
+		_add_first_person_arm(
+			"RightArm",
+			Vector3(0.24, 0.22, 0.36),
+			Vector3(-15.0, -9.0, -12.0),
+			0.70,
+			true
+		)
+		_add_first_person_arm(
+			"LeftArm",
+			Vector3(-0.24, 0.18, -0.02),
+			Vector3(-24.0, 12.0, 10.0),
+			0.82,
+			false
+		)
 
 func _rebuild_first_person_weapon() -> void:
 	if weapon_view == null:
@@ -4070,6 +4217,7 @@ func _rebuild_first_person_weapon() -> void:
 	weapon_view.position = _base_weapon_position()
 
 	if _build_imported_first_person_weapon(is_pistol):
+		_build_first_person_arms(is_pistol)
 		return
 
 	var receiver_height: float = 0.16
@@ -4167,36 +4315,7 @@ func _rebuild_first_person_weapon() -> void:
 	grip.material_override = wood
 	weapon_view.add_child(grip)
 
-	if is_pistol:
-		_add_first_person_arm(
-			"RightArm",
-			Vector3(0.18, 0.18, 0.30),
-			Vector3(-12.0, -4.0, -8.0),
-			0.58,
-			true
-		)
-		_add_first_person_arm(
-			"LeftSupportArm",
-			Vector3(-0.16, 0.22, 0.18),
-			Vector3(-18.0, 10.0, 8.0),
-			0.48,
-			false
-		)
-	else:
-		_add_first_person_arm(
-			"RightArm",
-			Vector3(0.24, 0.22, 0.36),
-			Vector3(-15.0, -9.0, -12.0),
-			0.70,
-			true
-		)
-		_add_first_person_arm(
-			"LeftArm",
-			Vector3(-0.24, 0.18, -0.02),
-			Vector3(-24.0, 12.0, 10.0),
-			0.82,
-			false
-		)
+	_build_first_person_arms(is_pistol)
 
 	if not is_pistol:
 		var buttstock := MeshInstance3D.new()
@@ -5393,6 +5512,121 @@ func _update_radar() -> void:
 		radar_panel.add_child(grenade_marker)
 		radar_grenade_markers.append(grenade_marker)
 
+func _first_person_part(node_name: String) -> Node3D:
+	if weapon_view == null:
+		return null
+	return weapon_view.find_child(node_name, true, false) as Node3D
+
+func _set_first_person_part_offset(
+	node_name: String,
+	position_offset: Vector3,
+	rotation_offset: Vector3 = Vector3.ZERO
+) -> void:
+	var part := _first_person_part(node_name)
+	if part == null:
+		return
+	if not part.has_meta("v822_base_position"):
+		part.set_meta("v822_base_position", part.position)
+		part.set_meta("v822_base_rotation", part.rotation)
+	var base_position := part.position
+	var stored_position: Variant = part.get_meta(
+		"v822_base_position",
+		part.position
+	)
+	if stored_position is Vector3:
+		base_position = stored_position
+	var base_rotation := part.rotation
+	var stored_rotation: Variant = part.get_meta(
+		"v822_base_rotation",
+		part.rotation
+	)
+	if stored_rotation is Vector3:
+		base_rotation = stored_rotation
+	part.position = base_position + position_offset
+	part.rotation = base_rotation + rotation_offset
+
+func _update_first_person_mechanics(delta: float) -> void:
+	if is_reloading:
+		if not visual_was_reloading:
+			visual_reload_progress = 0.0
+		visual_reload_progress = minf(
+			1.0,
+			visual_reload_progress
+			+ delta / maxf(_weapon_reload_seconds(), 0.10)
+		)
+	else:
+		visual_reload_progress = 0.0
+	visual_was_reloading = is_reloading
+
+	var reload_arc := sin(visual_reload_progress * PI)
+	var magazine_drop := 0.0
+	if is_reloading:
+		if visual_reload_progress < 0.42:
+			magazine_drop = smoothstep(
+				0.08,
+				0.42,
+				visual_reload_progress
+			)
+		elif visual_reload_progress < 0.72:
+			magazine_drop = 1.0
+		else:
+			magazine_drop = 1.0 - smoothstep(
+				0.72,
+				0.96,
+				visual_reload_progress
+			)
+
+	var now := Time.get_ticks_msec()
+	var shot_cycle := 0.0
+	if now < muzzle_flash_until_ms:
+		var shot_progress := 1.0 - clampf(
+			float(muzzle_flash_until_ms - now) / 55.0,
+			0.0,
+			1.0
+		)
+		shot_cycle = sin(shot_progress * PI)
+	var reload_bolt := smoothstep(
+		0.82,
+		0.94,
+		visual_reload_progress
+	) * (1.0 - smoothstep(0.94, 1.0, visual_reload_progress))
+	var bolt_travel := maxf(shot_cycle, reload_bolt)
+
+	_set_first_person_part_offset(
+		"PistolSlide",
+		Vector3(0.0, 0.0, 0.105 * bolt_travel)
+	)
+	_set_first_person_part_offset(
+		"BoltCarrier",
+		Vector3(0.0, 0.0, 0.12 * bolt_travel)
+	)
+	_set_first_person_part_offset(
+		"ChargingHandle",
+		Vector3(0.0, 0.0, 0.12 * bolt_travel)
+	)
+	for magazine_name in [
+		"Magazine",
+		"PistolMagazine",
+		"SMGMagazine",
+		"CarbineMagazine",
+		"LMGDrumMagazine"
+	]:
+		_set_first_person_part_offset(
+			magazine_name,
+			Vector3(0.08 * magazine_drop, 0.32 * magazine_drop, 0.0),
+			Vector3(0.0, 0.0, 0.22 * magazine_drop)
+		)
+	_set_first_person_part_offset(
+		"LeftArm",
+		Vector3(0.11 * reload_arc, 0.10 * reload_arc, 0.12 * reload_arc),
+		Vector3(0.0, -0.18 * reload_arc, 0.22 * reload_arc)
+	)
+	_set_first_person_part_offset(
+		"LeftSupportArm",
+		Vector3(0.08 * reload_arc, 0.08 * reload_arc, 0.10 * reload_arc),
+		Vector3(0.0, -0.14 * reload_arc, 0.18 * reload_arc)
+	)
+
 func _update_first_person_animation(delta: float) -> void:
 	if weapon_view == null or not _is_local_player():
 		return
@@ -5404,13 +5638,31 @@ func _update_first_person_animation(delta: float) -> void:
 	var speed: float = Vector2(velocity.x, velocity.z).length()
 	var moving: bool = speed > 0.8 and is_on_floor()
 	var sprinting: bool = moving and sprint_requested and replicated_stamina > 1.0 and not aim_requested
+	var grounded := is_on_floor()
+	if grounded and not visual_was_on_floor:
+		visual_landing_impulse = clampf(
+			absf(visual_previous_vertical_velocity) * 0.012,
+			0.0,
+			0.13
+		)
+	visual_was_on_floor = grounded
+	visual_previous_vertical_velocity = velocity.y
+	visual_landing_impulse = move_toward(
+		visual_landing_impulse,
+		0.0,
+		delta * 0.72
+	)
 	var target_position: Vector3 = weapon_base_position + recoil_position_impulse
 	var target_rotation: Vector3 = weapon_base_rotation + recoil_rotation_impulse
+	target_position.y -= visual_landing_impulse
+	target_rotation.x += visual_landing_impulse * 0.65
 	recoil_position_impulse = recoil_position_impulse.lerp(Vector3.ZERO,1.0-exp(-18.0*delta))
 	recoil_rotation_impulse = recoil_rotation_impulse.lerp(Vector3.ZERO,1.0-exp(-15.0*delta))
 	if moving:
 		var frequency: float = 11.0 if sprinting else 7.5
 		var amount: float = 0.035 if sprinting else 0.020
+		if aim_requested:
+			amount *= 0.28
 		target_position.x += sin(visual_animation_time * frequency) * amount
 		target_position.y += absf(cos(visual_animation_time * frequency)) * amount * 0.65
 		target_rotation.z += sin(visual_animation_time * frequency) * 0.018
@@ -5440,6 +5692,7 @@ func _update_first_person_animation(delta: float) -> void:
 	target_position.y -= absf(camera_inertia.y) * 0.002
 	weapon_view.position = weapon_view.position.lerp(target_position, clampf(delta * 10.0,0.0,1.0))
 	weapon_view.rotation = weapon_view.rotation.lerp(target_rotation, clampf(delta * 9.0,0.0,1.0))
+	_update_first_person_mechanics(delta)
 
 func _visual_part(node_name: String) -> Node3D:
 	var character_visual: Node3D = (

@@ -85,9 +85,9 @@ func _rebuild_character() -> void:
 	]
 
 	var uniform_path := (
-		"res://assets/pbr/generated/uniform_allied_albedo.png"
+		"res://assets/textures/uniform_allied_wool_v819.png"
 		if last_team == 0
-		else "res://assets/pbr/generated/uniform_axis_albedo.png"
+		else "res://assets/textures/uniform_axis_fieldgray_v819.png"
 	)
 	uniform_texture = (
 		load(uniform_path) as Texture2D
@@ -501,56 +501,39 @@ func _build_weapon(skin: Resource) -> void:
 func _build_class_gear(skin: Resource) -> void:
 	var actor = get_parent()
 	match int(actor.player_class):
+		0:
+			_add_box(torso_root, "SoldierBandolier", Vector3(-0.04, 0.08, -0.305), Vector3(0.12, 0.72, 0.055), Color(0.31, 0.24, 0.12), Vector3(0.0, 0.0, -26.0))
+			for grenade_x in [-0.25, 0.25]:
+				_add_cylinder(torso_root, "SoldierGrenade", Vector3(grenade_x, -0.20, -0.34), 0.065, 0.17, Color(0.17, 0.21, 0.12), Vector3.ZERO)
+			_add_box(torso_root, "SoldierBayonetScabbard", Vector3(0.40, -0.23, 0.10), Vector3(0.075, 0.48, 0.07), Color(0.12, 0.10, 0.07), Vector3(0.0, 0.0, -8.0))
 		1:
-			_add_box(
-				torso_root,
-				"MedicSatchel",
-				Vector3(0.0, 0.02, 0.40),
-				Vector3(0.58, 0.46, 0.18),
-				Color(0.58, 0.60, 0.54)
-			)
-			_add_box(
-				torso_root,
-				"MedicPatch",
-				Vector3(0.0, 0.03, -0.285),
-				Vector3(0.16, 0.16, 0.025),
-				Color(0.75, 0.12, 0.10)
-			)
+			_add_box(torso_root, "MedicCanvasPack", Vector3(0.0, 0.05, 0.42), Vector3(0.62, 0.56, 0.20), Color(0.39, 0.39, 0.31))
+			_add_box(torso_root, "MedicPackFlap", Vector3(0.0, 0.17, 0.535), Vector3(0.54, 0.27, 0.045), Color(0.47, 0.46, 0.36))
+			_add_box(torso_root, "MedicArmband", Vector3(-0.405, 0.27, -0.02), Vector3(0.035, 0.19, 0.24), Color(0.80, 0.78, 0.66))
+			_add_box(torso_root, "MedicCrossVertical", Vector3(-0.428, 0.27, -0.11), Vector3(0.018, 0.125, 0.038), Color(0.62, 0.08, 0.065))
+			_add_box(torso_root, "MedicCrossHorizontal", Vector3(-0.428, 0.27, -0.11), Vector3(0.018, 0.042, 0.125), Color(0.62, 0.08, 0.065))
+			for pouch_x in [-0.23, 0.23]:
+				_add_box(torso_root, "MedicFieldDressingPouch", Vector3(pouch_x, -0.30, -0.335), Vector3(0.18, 0.18, 0.10), Color(0.42, 0.40, 0.31))
 		2:
-			_add_box(
-				torso_root,
-				"EngineerToolbox",
-				Vector3(0.0, -0.16, 0.40),
-				Vector3(0.56, 0.31, 0.20),
-				Color(0.34, 0.22, 0.10)
-			)
+			_add_box(torso_root, "EngineerToolRoll", Vector3(0.0, -0.10, 0.43), Vector3(0.60, 0.34, 0.20), Color(0.31, 0.21, 0.10))
+			_add_box(torso_root, "EngineerToolRollFlap", Vector3(0.0, 0.02, 0.545), Vector3(0.53, 0.16, 0.045), Color(0.38, 0.26, 0.12))
+			_add_box(torso_root, "EngineerWrench", Vector3(0.35, -0.02, -0.33), Vector3(0.055, 0.45, 0.035), Color(0.17, 0.18, 0.17), Vector3(0.0, 0.0, 12.0))
+			_add_cylinder(torso_root, "EngineerWireSpool", Vector3(-0.34, -0.21, 0.22), 0.12, 0.16, Color(0.18, 0.17, 0.13), Vector3(0.0, 0.0, 90.0))
+			for cap_x in [-0.09, 0.09]:
+				_add_cylinder(torso_root, "EngineerDynamiteCapTin", Vector3(cap_x, -0.30, -0.34), 0.045, 0.15, Color(0.25, 0.22, 0.14), Vector3.ZERO)
 		3:
-			_add_box(
-				torso_root,
-				"RadioPack",
-				Vector3(0.0, 0.08, 0.43),
-				Vector3(0.48, 0.58, 0.25),
-				Color(0.16, 0.18, 0.12)
-			)
-			_add_cylinder(
-				torso_root,
-				"RadioAntenna",
-				Vector3(0.23, 0.60, 0.46),
-				0.018,
-				1.00,
-				Color(0.07, 0.07, 0.06),
-				Vector3.ZERO
-			)
+			_add_box(torso_root, "RadioPack", Vector3(0.0, 0.08, 0.43), Vector3(0.52, 0.62, 0.26), Color(0.16, 0.18, 0.12))
+			_add_box(torso_root, "RadioControlPanel", Vector3(0.0, 0.21, 0.575), Vector3(0.36, 0.23, 0.045), Color(0.095, 0.105, 0.085))
+			for dial_x in [-0.10, 0.0, 0.10]:
+				_add_cylinder(torso_root, "RadioControlDial", Vector3(dial_x, 0.23, 0.605), 0.025, 0.025, Color(0.27, 0.25, 0.18), Vector3(90.0, 0.0, 0.0))
+			_add_cylinder(torso_root, "RadioAntenna", Vector3(0.23, 0.60, 0.46), 0.018, 1.00, Color(0.07, 0.07, 0.06), Vector3.ZERO)
+			_add_box(torso_root, "RadioHandset", Vector3(-0.39, 0.12, -0.28), Vector3(0.10, 0.29, 0.08), Color(0.075, 0.08, 0.065), Vector3(0.0, 0.0, -8.0))
 		4:
-			_add_cylinder(
-				weapon_root,
-				"Scope",
-				Vector3(0.0, -0.12, -0.12),
-				0.05,
-				0.30,
-				Color(0.07, 0.075, 0.075),
-				Vector3(0.0, 0.0, 90.0)
-			)
+			_add_cylinder(weapon_root, "Scope", Vector3(0.0, -0.12, -0.12), 0.05, 0.30, Color(0.07, 0.075, 0.075), Vector3(0.0, 0.0, 90.0))
+			for binocular_x in [-0.07, 0.07]:
+				_add_cylinder(torso_root, "ScoutBinocularTube", Vector3(binocular_x, -0.04, -0.36), 0.055, 0.18, Color(0.075, 0.08, 0.07), Vector3(90.0, 0.0, 0.0))
+			_add_box(torso_root, "ScoutMapCase", Vector3(0.36, -0.17, 0.19), Vector3(0.25, 0.34, 0.11), Color(0.30, 0.20, 0.09), Vector3(0.0, 0.0, -7.0))
+			_add_box(head_root, "ScoutHelmetScrim", Vector3(0.0, 0.28, -0.23), Vector3(0.46, 0.045, 0.14), skin.accent_color.darkened(0.18), Vector3(-8.0, 0.0, 0.0))
 		_:
 			pass
 
@@ -638,6 +621,7 @@ func _material_for_part(
 	)
 	if uniform_texture != null and is_uniform:
 		material.albedo_texture = uniform_texture
+		material.albedo_color = Color(0.92, 0.92, 0.92, 1.0)
 		material.uv1_scale = Vector3(3.0, 3.0, 3.0)
 	if (
 		"helmet" in lower_name
@@ -651,7 +635,7 @@ func _material_for_part(
 		material.roughness = 0.48
 		material.metallic = 0.68
 	else:
-		material.roughness = 0.88
+		material.roughness = 0.94 if is_uniform else 0.88
 		material.metallic = 0.02
 	return material
 

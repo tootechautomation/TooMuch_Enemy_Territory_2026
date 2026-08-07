@@ -1,5 +1,31 @@
 # Changelog
 
+## 8.22.0
+- Added visible pistol-slide, rifle-bolt, and charging-handle cycling during fire and reload
+- Added staged magazine removal, handling, and reinsertion for pistol, box, SMG, carbine, and drum magazines
+- Added synchronized support-arm motion and final reload bolt manipulation
+- Added restrained landing inertia based on the player's previous vertical velocity
+- Reduced movement bob while aiming for a steadier sight picture
+- Preserved authoritative reload duration, fire rate, recoil values, movement, damage, networking, and protocol 341
+
+## 8.21.0
+- Applied the v8.19 high-resolution wool skins to visible first-person sleeves
+- Replaced skin-colored three-finger hands with rough leather gloves, four fingers, separate thumbs, and cuffs
+- Added first-person Soldier watch, Medic sleeve band, Engineer reinforced cuff, Field Ops push-to-talk control, and Scout wrist compass
+- Ensured imported first-person weapon scenes retain the complete arm and hand presentation
+- Centralized pistol and long-gun arm construction for consistent future asset replacement
+- Preserved weapon timing, recoil, aiming, reload behavior, class balance, networking, and protocol 341
+
+## 8.20.0
+- Connected the articulated fallback soldiers directly to the v8.19 high-resolution wool uniform skins
+- Added Soldier bandolier, grenades, and bayonet-scabbard silhouette details
+- Added layered Medic canvas pack, flap, dimensional armband, cross, and dressing pouches
+- Added Engineer tool roll, flap, wrench, wire spool, and demolition cap tins
+- Added Field Ops radio control panel, dials, antenna, and handset
+- Added Scout binoculars, map case, helmet scrim, and scoped-rifle detail
+- Improved uniform albedo neutrality and cloth roughness on articulated character parts
+- Preserved imported-character priority, fallback animation, hitboxes, gameplay, networking, and protocol 341
+
 ## 8.19.1
 - Made the external asset report formatter type-aware for Boolean availability and String path entries
 - Fixed the `Nonexistent 'bool' constructor` runtime failure when character source paths are empty or populated
