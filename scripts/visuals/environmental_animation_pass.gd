@@ -141,10 +141,15 @@ func _process(delta: float) -> void:
 	return script
 
 
-static func _mat(color: Color, roughness: float) -> StandardMaterial3D:
+static func _mat(
+	color: Color,
+	roughness: float,
+	metallic: float = 0.0
+) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
 	mat.roughness = roughness
+	mat.metallic = metallic
 	return mat
 
 
