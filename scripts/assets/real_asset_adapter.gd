@@ -86,6 +86,18 @@ static func adapt_weapon(
 		var multiplier := clampf(target_length / longest, 0.001, 1000.0)
 		model.scale *= Vector3.ONE * multiplier
 		report["scale_multiplier"] = multiplier
+	# Imported weapon FBX files frequently use authoring-space pivots that are
+	# far away from the visible mesh. Scaling alone preserves that offset and
+	# makes the gun appear to float away from the first-person camera/socket.
+	# Recenter direct scene children around the visual AABB after scaling.
+	var scaled_bounds := _bounds(model)
+	var center_offset := scaled_bounds.position + scaled_bounds.size * 0.5
+	if center_offset.length() > 0.0001:
+		for child_value in model.get_children():
+			if child_value is Node3D:
+				var child_node := child_value as Node3D
+				child_node.position -= center_offset
+
 	var after := _bounds(model)
 	report["size_after"] = after.size
 	report["materials_adjusted"] = _clean_materials(model, false)
