@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.27.0
+- Replaced stale fixed muzzle-effect coordinates with class-specific fallback barrel endpoints
+- Added imported-model muzzle socket discovery for MuzzleSocket, Muzzle, BarrelEnd, and common lowercase variants
+- Added weapon-specific flash sizes with randomized spatial flash scale and rotation per shot
+- Added visible weapon heat accumulation and cooling that controls muzzle-smoke density, size, opacity, rise, and lifetime
+- Added pistol, standard long-gun, and Support LMG casing sizes with randomized ejection arcs and spin
+- Anchored muzzle lighting to the resolved barrel endpoint and scaled its energy and range by weapon profile and heat
+- Retired the screen-centered 2D muzzle flash in favor of the spatial first-person effect
+- Preserved firing mechanics, recoil values, damage, hit detection, imported asset priority, networking, and protocol 341
+
 ## 8.26.0
 - Made first-person animation the single owner of weapon placement, removing the frame-by-frame conflict with the older aim-view position writer
 - Added class-specific hip positions and centered ADS positions for the Support LMG, SMG, carbine, service rifle, scoped rifle, and pistol

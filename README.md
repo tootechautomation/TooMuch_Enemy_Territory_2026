@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.26.0 — Class-Specific Aim-Down-Sights Composition
+## Version 8.27.0 — Spatial Firing Effects and Weapon Heat
+
+First-person firing effects now originate at the actual weapon muzzle instead of a stale shared coordinate. Each fallback weapon class uses a barrel endpoint matched to its current geometry, while imported models can provide `MuzzleSocket`, `Muzzle`, `BarrelEnd`, or common lowercase socket names for automatic alignment.
+
+Flash size varies by pistol, SMG, carbine, rifle, scoped rifle, and Support LMG profile, with restrained random scale and rotation on each shot. Muzzle lighting follows the same resolved endpoint. The old screen-centered 2D flash is disabled so firing reads as part of the weapon rather than a HUD overlay.
+
+Repeated fire now builds presentation-only weapon heat. Higher heat produces denser, larger, longer-lived smoke layers that rise and drift independently before cooling naturally. Casings use pistol, standard long-gun, or heavier LMG proportions with randomized ejection paths and spin. Fire rate, recoil values, spread, damage, hit detection, ammo, server authority, networking, and protocol 341 are unchanged.
+
+## Previous Phase — 8.26.0 Class-Specific Aim-Down-Sights Composition
 
 Right-click aiming now shoulders each weapon into a deliberate class-specific sight position instead of applying one generic forward nudge. The Support LMG, SMG, carbine, service rifle, scoped rifle, and pistol use separate hip distances and centered aim positions matched to their receiver and sight geometry.
 
@@ -66,5 +74,5 @@ Friendly world nameplates now include a diamond identifier and remain visible at
 
 All additions are client-side presentation. Team assignment, uniforms, objectives, spotting, server authority, networking, and protocol 341 remain unchanged.
 
-Build: v8.26.0
+Build: v8.27.0
 Protocol: 341

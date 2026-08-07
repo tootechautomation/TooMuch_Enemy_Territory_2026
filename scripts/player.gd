@@ -318,6 +318,8 @@ var weapon_kick_offset := 0.0
 var recoil_rotation_impulse := Vector3.ZERO
 var recoil_position_impulse := Vector3.ZERO
 var muzzle_smoke_texture: Texture2D
+var visual_weapon_heat := 0.0
+var visual_last_shot_ms := 0
 var camera_inertia := Vector2.ZERO
 var previous_look_input := Vector2.ZERO
 var profile_mouse_sensitivity := 0.0025
@@ -361,6 +363,73 @@ func _apply_first_person_materials(root: Node) -> void:
 				mesh_child.material_override = gun_material
 		_apply_first_person_materials(child)
 
+func _first_person_muzzle_position() -> Vector3:
+	if weapon_view != null:
+		var imported_root := weapon_view.get_node_or_null(
+			"ImportedFirstPersonRig"
+		) as Node3D
+		if imported_root != null:
+			for socket_name in [
+				"MuzzleSocket",
+				"Muzzle",
+				"BarrelEnd",
+				"muzzle",
+				"barrel_end"
+			]:
+				var socket := imported_root.find_child(
+					socket_name,
+					true,
+					false
+				) as Node3D
+				if socket != null:
+					return weapon_view.to_local(socket.global_position)
+	if current_weapon_index == 1:
+		return Vector3(0.0, 0.0, -0.45)
+	match player_class:
+		PlayerClass.SOLDIER:
+			return Vector3(0.0, 0.0, -1.06)
+		PlayerClass.MEDIC:
+			return Vector3(0.0, 0.0, -0.65)
+		PlayerClass.ENGINEER:
+			return Vector3(0.0, 0.0, -0.73)
+		PlayerClass.FIELD_OPS:
+			return Vector3(0.0, 0.0, -0.91)
+		PlayerClass.SCOUT:
+			return Vector3(0.0, 0.0, -1.21)
+	return Vector3(0.0, 0.0, -0.88)
+
+func _first_person_flash_radius() -> float:
+	if current_weapon_index == 1:
+		return 0.042
+	match player_class:
+		PlayerClass.SOLDIER:
+			return 0.070
+		PlayerClass.MEDIC:
+			return 0.050
+		PlayerClass.ENGINEER:
+			return 0.052
+		PlayerClass.FIELD_OPS:
+			return 0.058
+		PlayerClass.SCOUT:
+			return 0.055
+	return 0.055
+
+func _first_person_heat_gain() -> float:
+	if current_weapon_index == 1:
+		return 0.12
+	match player_class:
+		PlayerClass.SOLDIER:
+			return 0.19
+		PlayerClass.MEDIC:
+			return 0.15
+		PlayerClass.ENGINEER:
+			return 0.14
+		PlayerClass.FIELD_OPS:
+			return 0.13
+		PlayerClass.SCOUT:
+			return 0.24
+	return 0.15
+
 func _build_imported_first_person_weapon(
 	is_pistol: bool
 ) -> bool:
@@ -392,14 +461,10 @@ func _build_imported_first_person_weapon(
 
 	muzzle_flash = MeshInstance3D.new()
 	var flash_mesh := SphereMesh.new()
-	flash_mesh.radius = 0.045 if is_pistol else 0.065
-	flash_mesh.height = 0.10 if is_pistol else 0.14
+	flash_mesh.radius = _first_person_flash_radius()
+	flash_mesh.height = flash_mesh.radius * 2.15
 	muzzle_flash.mesh = flash_mesh
-	muzzle_flash.position = (
-		Vector3(0.02, 0.01, -0.65)
-		if is_pistol
-		else Vector3(0.04, 0.02, -2.02)
-	)
+	muzzle_flash.position = _first_person_muzzle_position()
 	var flash_material := StandardMaterial3D.new()
 	flash_material.albedo_color = Color(1.0, 0.70, 0.14)
 	flash_material.emission_enabled = true
@@ -3718,13 +3783,21 @@ func _local_fire_feedback() -> void:
 	recoil_position_impulse += Vector3(randf_range(-0.018,0.018),randf_range(-0.010,0.015),0.09)
 	recoil_rotation_impulse += Vector3(deg_to_rad(randf_range(1.0,2.5)),deg_to_rad(randf_range(-0.9,0.9)),deg_to_rad(randf_range(-0.7,0.7)))
 	_apply_weapon_kick()
+	visual_weapon_heat = clampf(
+		visual_weapon_heat + _first_person_heat_gain(),
+		0.0,
+		1.0
+	)
+	visual_last_shot_ms = Time.get_ticks_msec()
 
 	muzzle_flash_until_ms = Time.get_ticks_msec() + 55
 	if muzzle_flash != null:
+		var flash_scale: float = randf_range(0.82, 1.18)
+		muzzle_flash.scale = Vector3.ONE * flash_scale
+		muzzle_flash.rotation_degrees.z = randf_range(0.0, 360.0)
 		muzzle_flash.visible = true
 	if muzzle_flash_sprite != null:
-		muzzle_flash_sprite.texture = tex_muzzle_flash_ui
-		muzzle_flash_sprite.visible = muzzle_flash_sprite.texture != null
+		muzzle_flash_sprite.visible = false
 
 	_spawn_local_shell_effect()
 	_spawn_muzzle_smoke()
@@ -3741,14 +3814,14 @@ func _spawn_muzzle_light() -> void:
 
 	active_muzzle_light = OmniLight3D.new()
 	active_muzzle_light.name = "MuzzleLight"
-	active_muzzle_light.position = (
-		Vector3(0.02, 0.02, -0.68)
-		if current_weapon_index == 1
-		else Vector3(0.04, 0.02, -2.04)
-	)
+	active_muzzle_light.position = _first_person_muzzle_position()
 	active_muzzle_light.light_color = Color(1.0, 0.42, 0.08)
-	active_muzzle_light.light_energy = 3.0
-	active_muzzle_light.omni_range = 4.0
+	active_muzzle_light.light_energy = lerpf(
+		2.4,
+		4.2,
+		_first_person_flash_radius() / 0.070
+	)
+	active_muzzle_light.omni_range = lerpf(3.0, 5.0, visual_weapon_heat)
 	active_muzzle_light.shadow_enabled = false
 	weapon_view.add_child(active_muzzle_light)
 
@@ -3764,19 +3837,44 @@ func _spawn_muzzle_light() -> void:
 func _spawn_muzzle_smoke() -> void:
 	if weapon_view == null or muzzle_smoke_texture == null or not _is_local_player():
 		return
-	var smoke := Sprite3D.new()
-	smoke.texture = muzzle_smoke_texture
-	smoke.pixel_size = 0.0022
-	smoke.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	smoke.position = Vector3(0.02,0.01,-0.66) if current_weapon_index == 1 else Vector3(0.04,0.02,-2.04)
-	smoke.modulate = Color(0.82,0.82,0.78,0.62)
-	weapon_view.add_child(smoke)
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(smoke,"position",smoke.position+Vector3(randf_range(-0.06,0.06),0.18,-0.12),0.34)
-	tween.tween_property(smoke,"scale",Vector3.ONE*2.4,0.34)
-	tween.tween_property(smoke,"modulate",Color(0.82,0.82,0.78,0.0),0.34)
-	tween.chain().tween_callback(smoke.queue_free)
+	var smoke_layers: int = 2 if visual_weapon_heat >= 0.58 else 1
+	for layer_index in range(smoke_layers):
+		var smoke := Sprite3D.new()
+		smoke.name = "MuzzleSmoke%d" % layer_index
+		smoke.texture = muzzle_smoke_texture
+		smoke.pixel_size = lerpf(0.0016, 0.0028, visual_weapon_heat)
+		smoke.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		smoke.position = _first_person_muzzle_position() + Vector3(
+			randf_range(-0.018, 0.018),
+			randf_range(-0.008, 0.018),
+			-float(layer_index) * 0.035
+		)
+		var smoke_alpha: float = lerpf(0.36, 0.68, visual_weapon_heat)
+		smoke.modulate = Color(0.78, 0.79, 0.76, smoke_alpha)
+		smoke.rotation_degrees.z = randf_range(0.0, 360.0)
+		weapon_view.add_child(smoke)
+		var duration: float = lerpf(0.30, 0.58, visual_weapon_heat)
+		var drift := Vector3(
+			randf_range(-0.08, 0.08),
+			lerpf(0.14, 0.26, visual_weapon_heat),
+			randf_range(-0.16, -0.08)
+		)
+		var tween := create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(smoke, "position", smoke.position + drift, duration)
+		tween.tween_property(
+			smoke,
+			"scale",
+			Vector3.ONE * lerpf(1.8, 3.2, visual_weapon_heat),
+			duration
+		)
+		tween.tween_property(
+			smoke,
+			"modulate",
+			Color(0.78, 0.79, 0.76, 0.0),
+			duration
+		)
+		tween.chain().tween_callback(smoke.queue_free)
 
 func _spawn_local_shell_effect() -> void:
 	if weapon_view == null or not _is_local_player():
@@ -3785,11 +3883,18 @@ func _spawn_local_shell_effect() -> void:
 	var shell := MeshInstance3D.new()
 	shell.name = "ShellEffect"
 	var shell_mesh := CylinderMesh.new()
-	shell_mesh.top_radius = 0.012
-	shell_mesh.bottom_radius = 0.012
-	shell_mesh.height = 0.055
+	var shell_radius: float = 0.009 if current_weapon_index == 1 else 0.011
+	if current_weapon_index == 0 and player_class == PlayerClass.SOLDIER:
+		shell_radius = 0.013
+	shell_mesh.top_radius = shell_radius
+	shell_mesh.bottom_radius = shell_radius
+	shell_mesh.height = shell_radius * 4.4
 	shell.mesh = shell_mesh
-	shell.position = Vector3(0.14, -0.02, -0.10)
+	shell.position = (
+		Vector3(0.10, -0.025, -0.04)
+		if current_weapon_index == 1
+		else Vector3(0.13, -0.025, -0.08)
+	)
 	shell.rotation_degrees = Vector3(0.0, 0.0, 90.0)
 
 	var shell_material := StandardMaterial3D.new()
@@ -3800,17 +3905,26 @@ func _spawn_local_shell_effect() -> void:
 
 	var tween: Tween = create_tween()
 	tween.set_parallel(true)
+	var shell_target: Vector3 = shell.position + Vector3(
+		randf_range(0.24, 0.38),
+		randf_range(0.14, 0.24),
+		randf_range(0.12, 0.24)
+	)
 	tween.tween_property(
 		shell,
 		"position",
-		Vector3(0.42, 0.18, 0.16),
-		0.22
+		shell_target,
+		0.26
 	)
 	tween.tween_property(
 		shell,
 		"rotation_degrees",
-		Vector3(220.0, 160.0, 320.0),
-		0.22
+		Vector3(
+			randf_range(180.0, 300.0),
+			randf_range(120.0, 240.0),
+			randf_range(260.0, 420.0)
+		),
+		0.26
 	)
 	tween.chain().tween_callback(shell.queue_free)
 
@@ -4465,14 +4579,10 @@ func _rebuild_first_person_weapon() -> void:
 	)
 	muzzle_flash = MeshInstance3D.new()
 	var flash_mesh := SphereMesh.new()
-	flash_mesh.radius = 0.045 if is_pistol else 0.06
-	flash_mesh.height = 0.09 if is_pistol else 0.12
+	flash_mesh.radius = _first_person_flash_radius()
+	flash_mesh.height = flash_mesh.radius * 2.15
 	muzzle_flash.mesh = flash_mesh
-	muzzle_flash.position = Vector3(
-		0.0,
-		0.0,
-		-0.45 if is_pistol else -0.88
-	)
+	muzzle_flash.position = _first_person_muzzle_position()
 
 	var flash_material := StandardMaterial3D.new()
 	flash_material.albedo_color = Color(1.0, 0.65, 0.12)
@@ -5750,6 +5860,16 @@ func _update_first_person_animation(delta: float) -> void:
 	if weapon_view == null or not _is_local_player():
 		return
 	visual_animation_time += delta
+	var heat_decay: float = (
+		0.10
+		if Time.get_ticks_msec() - visual_last_shot_ms < 240
+		else 0.28
+	)
+	visual_weapon_heat = move_toward(
+		visual_weapon_heat,
+		0.0,
+		delta * heat_decay
+	)
 	camera_inertia = camera_inertia.lerp(
 		Vector2.ZERO,
 		1.0 - exp(-8.0 * delta)
