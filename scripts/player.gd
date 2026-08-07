@@ -508,6 +508,10 @@ func _build_imported_first_person_weapon(
 	# corrections explicit so one CGTrader model cannot break all the others.
 	var asset_forward_yaw := 0.0
 	var selected_path := selected_scene.resource_path.to_lower()
+
+	# These are the ONLY imported assets that need an explicit muzzle-end flip.
+	# Axis Walther P38 intentionally receives NO extra yaw. That restores the
+	# pre-Allied-pistol-fix behavior where the P38 rendered correctly.
 	if (
 		"m1a1_thompson" in selected_path
 		or "tt_pistol" in selected_path
@@ -525,15 +529,6 @@ func _build_imported_first_person_weapon(
 	# generic FBX adaptation/holder rotation. The previous filename/yaw approach
 	# could be cancelled by the P38 FBX's authored axis correction. Applying the
 	# flip to ImportedWeaponModel guarantees that only the P38 mesh reverses.
-	# v8.64.1: force the finished Axis pistol to reverse in weapon_view space.
-	# Do NOT add 180 degrees to the holder's Euler Y component: the P38 may
-	# already have an X-axis adaptation, and Euler composition can make that
-	# rotate around the wrong effective axis. Pre-multiplying the completed
-	# basis applies a true 180-degree yaw in the holder PARENT coordinate space
-	# (weapon_view/camera space), regardless of the FBX's authored axes.
-	if is_pistol and team == 1:
-		var axis_pistol_flip: Basis = Basis(Vector3.UP, PI)
-		holder.basis = axis_pistol_flip * holder.basis
 
 	_apply_first_person_materials(imported_model)
 
