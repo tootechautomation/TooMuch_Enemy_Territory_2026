@@ -3828,19 +3828,19 @@ func _apply_server_crouch(crouching: bool) -> void:
 	_apply_crouch_visual(crouching)
 
 func _base_weapon_position() -> Vector3:
-	var base_position := Vector3(0.30, -0.29, -0.82)
+	var base_position := Vector3(0.24, -0.30, -0.86)
 	if current_weapon_index != 1:
 		match player_class:
 			PlayerClass.SOLDIER:
-				base_position = Vector3(0.38, -0.33, -1.12)
+				base_position = Vector3(0.31, -0.34, -1.15)
 			PlayerClass.MEDIC:
-				base_position = Vector3(0.30, -0.29, -0.96)
+				base_position = Vector3(0.27, -0.30, -1.00)
 			PlayerClass.ENGINEER:
-				base_position = Vector3(0.32, -0.30, -1.00)
+				base_position = Vector3(0.28, -0.31, -1.03)
 			PlayerClass.FIELD_OPS:
-				base_position = Vector3(0.34, -0.31, -1.05)
+				base_position = Vector3(0.29, -0.32, -1.08)
 			PlayerClass.SCOUT:
-				base_position = Vector3(0.30, -0.28, -1.12)
+				base_position = Vector3(0.27, -0.29, -1.14)
 	var fov_clearance: float = clampf(
 		(profile_field_of_view - 75.0) / 35.0,
 		-1.0,
@@ -4305,12 +4305,24 @@ func _first_person_sleeve_material() -> StandardMaterial3D:
 func _first_person_glove_material() -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = (
-		Color(0.20, 0.16, 0.095)
+		Color(0.18, 0.145, 0.082)
 		if team == 0
-		else Color(0.13, 0.12, 0.105)
+		else Color(0.115, 0.108, 0.092)
 	)
-	material.roughness = 0.86
+	material.roughness = 0.91
 	material.metallic = 0.0
+	# Procedural micro-grain keeps the gloves from reading as smooth plastic.
+	var noise := FastNoiseLite.new()
+	noise.seed = 8432 + team
+	noise.frequency = 0.085
+	noise.fractal_octaves = 3
+	var texture := NoiseTexture2D.new()
+	texture.width = 128
+	texture.height = 128
+	texture.seamless = true
+	texture.noise = noise
+	material.albedo_texture = texture
+	material.uv1_scale = Vector3(5.0, 5.0, 5.0)
 	return material
 
 func _add_first_person_arm(
@@ -4357,9 +4369,14 @@ func _add_first_person_arm(
 	# Palm block + rounded fingers gives a much tighter glove silhouette.
 	var palm := MeshInstance3D.new()
 	palm.name = "GlovedPalm"
-	var palm_mesh := BoxMesh.new()
-	palm_mesh.size = Vector3(0.095, 0.050, 0.125)
+	var palm_mesh := SphereMesh.new()
+	palm_mesh.radius = 0.050
+	palm_mesh.height = 0.105
+	palm_mesh.radial_segments = 16
+	palm_mesh.rings = 8
 	palm.mesh = palm_mesh
+	palm.scale = Vector3(1.08, 0.62, 1.38)
+	palm.rotation_degrees.x = 12.0
 	palm.position = Vector3(
 		0.012 if right_hand else -0.012,
 		-0.006,
@@ -4476,16 +4493,16 @@ func _build_first_person_arms(is_pistol: bool) -> void:
 		# corners and meet around the pistol grip, below the sight line.
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.22, -0.31, 0.02),
-			Vector3(-10.0, -19.0, -8.0),
-			0.47,
+			Vector3(0.19, -0.30, 0.04),
+			Vector3(-8.0, -17.0, -7.0),
+			0.51,
 			true
 		)
 		_add_first_person_arm(
 			"LeftSupportArm",
-			Vector3(-0.19, -0.33, 0.00),
-			Vector3(-9.0, 21.0, 8.0),
-			0.46,
+			Vector3(-0.17, -0.32, 0.01),
+			Vector3(-8.0, 19.0, 7.0),
+			0.50,
 			false
 		)
 	else:
@@ -4493,16 +4510,16 @@ func _build_first_person_arms(is_pistol: bool) -> void:
 		# support hand reaches farther forward under the fore-end.
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.25, -0.32, 0.12),
-			Vector3(-8.0, -22.0, -10.0),
-			0.48,
+			Vector3(0.22, -0.32, 0.13),
+			Vector3(-7.0, -20.0, -9.0),
+			0.52,
 			true
 		)
 		_add_first_person_arm(
 			"LeftArm",
-			Vector3(-0.28, -0.35, -0.28),
-			Vector3(-4.0, 24.0, 9.0),
-			0.58,
+			Vector3(-0.24, -0.34, -0.24),
+			Vector3(-4.0, 22.0, 8.0),
+			0.61,
 			false
 		)
 

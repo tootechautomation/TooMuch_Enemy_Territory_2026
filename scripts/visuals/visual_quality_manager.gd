@@ -120,8 +120,8 @@ func _apply_environment_quality() -> void:
 		environment.volumetric_fog_enabled = active_tier <= QualityMode.HIGH
 		match active_tier:
 			QualityMode.CINEMATIC:
-				environment.ssao_radius = 2.6
-				environment.ssao_intensity = 2.0
+				environment.ssao_radius = 2.3
+				environment.ssao_intensity = 2.35
 			QualityMode.HIGH:
 				environment.ssao_radius = 2.2
 				environment.ssao_intensity = 1.65
@@ -139,7 +139,7 @@ func _apply_shadow_quality() -> void:
 		light.shadow_enabled = active_tier != QualityMode.PERFORMANCE
 		match active_tier:
 			QualityMode.CINEMATIC:
-				light.directional_shadow_max_distance = 120.0
+				light.directional_shadow_max_distance = 145.0
 			QualityMode.HIGH:
 				light.directional_shadow_max_distance = 95.0
 			QualityMode.BALANCED:
