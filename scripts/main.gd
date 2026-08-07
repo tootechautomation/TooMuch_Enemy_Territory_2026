@@ -87,6 +87,9 @@ const WeatheringMicrodetailPassScript = preload(
 const EnvironmentMaterialUpgradePassScript = preload(
 	"res://scripts/visuals/environment_material_upgrade_pass.gd"
 )
+const SceneCompositionUpgradePassScript = preload(
+	"res://scripts/visuals/scene_composition_upgrade_pass.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -120,7 +123,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.57.0"
+const BUILD_VERSION := "8.58.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -534,6 +537,7 @@ func _ready() -> void:
 	_build_combat_feedback_pass()
 	_build_weathering_microdetail_pass()
 	_build_environment_material_upgrade_pass()
+	_build_scene_composition_upgrade_pass()
 	_initialize_visual_quality_manager()
 	_build_round_results_ui()
 	_initialize_period_interface_fidelity()
@@ -615,6 +619,12 @@ func _build_environment_material_upgrade_pass() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	EnvironmentMaterialUpgradePassScript.apply(self)
+
+
+func _build_scene_composition_upgrade_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	SceneCompositionUpgradePassScript.apply(self)
 
 
 func _initialize_visual_quality_manager() -> void:

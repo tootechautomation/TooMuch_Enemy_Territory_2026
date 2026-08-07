@@ -4439,64 +4439,98 @@ func _add_fps_limb(
 	)
 
 
+func _weapon_holder_point(local_point: Vector3) -> Vector3:
+	# Imported weapons are nested under ImportedFirstPersonRig, which carries
+	# the model-specific pivot/orientation correction. Grip targets therefore
+	# need to be authored in holder-local space and converted into weapon_view
+	# space before building the arms.
+	if weapon_view == null:
+		return local_point
+
+	var holder: Node3D = weapon_view.get_node_or_null(
+		"ImportedFirstPersonRig"
+	) as Node3D
+	if holder == null:
+		return local_point
+
+	return holder.transform * local_point
+
+
+func _fps_pose_point(raw_point: Vector3) -> Vector3:
+	return _weapon_holder_point(raw_point)
+
+
 func _build_first_person_arms(is_pistol: bool) -> void:
 	var sleeve_material: StandardMaterial3D = _first_person_sleeve_material()
 	var glove_material: StandardMaterial3D = _first_person_glove_material()
 
 	if is_pistol:
-		# Stable two-hand pistol silhouette. The visible portions deliberately
-		# remain low and converge directly under the pistol grip.
+		# Author points in imported-weapon-holder space, then transform them
+		# into weapon_view space. This keeps hands attached after FBX rotation.
 		_add_fps_limb(
 			"FPS_RightSleeve",
 			Vector3(0.31, -0.66, 0.50),
-			Vector3(0.135, -0.255, 0.225),
-			0.060, 0.047, sleeve_material
+			_fps_pose_point(Vector3(0.16, -0.16, 0.20)),
+			0.058, 0.046, sleeve_material
 		)
 		_add_fps_limb(
 			"FPS_RightGlove",
-			Vector3(0.135, -0.255, 0.225),
-			Vector3(0.080, -0.080, 0.135),
-			0.046, 0.037, glove_material
+			_fps_pose_point(Vector3(0.16, -0.16, 0.20)),
+			_fps_pose_point(Vector3(0.08, -0.04, 0.02)),
+			0.045, 0.035, glove_material
 		)
 		_add_fps_limb(
 			"FPS_LeftSleeve",
 			Vector3(-0.30, -0.67, 0.49),
-			Vector3(-0.075, -0.270, 0.220),
-			0.058, 0.045, sleeve_material
+			_fps_pose_point(Vector3(-0.10, -0.17, 0.18)),
+			0.056, 0.044, sleeve_material
 		)
 		_add_fps_limb(
 			"FPS_LeftGlove",
-			Vector3(-0.075, -0.270, 0.220),
-			Vector3(0.025, -0.090, 0.125),
-			0.044, 0.035, glove_material
+			_fps_pose_point(Vector3(-0.10, -0.17, 0.18)),
+			_fps_pose_point(Vector3(0.00, -0.05, 0.00)),
+			0.043, 0.034, glove_material
 		)
 	else:
-		# Primary weapon stance. The old detached procedural hand pieces are
-		# gone completely. Two sleeve segments and two glove segments are all
-		# that exist, creating a clean concept-art-like silhouette.
+		# Primary weapon: right hand on rear grip, left hand on fore-end.
+		# The grip points are deliberately authored around the imported gun,
+		# not around the camera.
+		var right_wrist: Vector3 = _fps_pose_point(
+			Vector3(0.12, -0.17, 0.14)
+		)
+		var right_grip: Vector3 = _fps_pose_point(
+			Vector3(0.06, -0.04, -0.03)
+		)
+		var left_wrist: Vector3 = _fps_pose_point(
+			Vector3(-0.10, -0.18, -0.18)
+		)
+		var left_grip: Vector3 = _fps_pose_point(
+			Vector3(-0.03, -0.05, -0.39)
+		)
+
 		_add_fps_limb(
 			"FPS_RightSleeve",
-			Vector3(0.40, -0.76, 0.58),
-			Vector3(0.205, -0.315, 0.285),
-			0.064, 0.048, sleeve_material
-		)
-		_add_fps_limb(
-			"FPS_RightGlove",
-			Vector3(0.205, -0.315, 0.285),
-			Vector3(0.128, -0.100, 0.168),
-			0.047, 0.037, glove_material
-		)
-		_add_fps_limb(
-			"FPS_LeftSleeve",
-			Vector3(-0.40, -0.76, 0.46),
-			Vector3(-0.165, -0.325, 0.040),
+			Vector3(0.38, -0.72, 0.54),
+			right_wrist,
 			0.061, 0.046, sleeve_material
 		)
 		_add_fps_limb(
+			"FPS_RightGlove",
+			right_wrist,
+			right_grip,
+			0.045, 0.034, glove_material
+		)
+		_add_fps_limb(
+			"FPS_LeftSleeve",
+			Vector3(-0.38, -0.72, 0.46),
+			left_wrist,
+			0.059, 0.045, sleeve_material
+		)
+		_add_fps_limb(
 			"FPS_LeftGlove",
-			Vector3(-0.165, -0.325, 0.040),
-			Vector3(-0.055, -0.105, -0.142),
-			0.045, 0.035, glove_material
+			left_wrist,
+			left_grip,
+			0.044, 0.033, glove_material
 		)
 
 
