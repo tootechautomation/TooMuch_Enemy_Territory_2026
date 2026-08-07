@@ -4377,116 +4377,152 @@ func _add_first_person_arm(
 	position_value: Vector3,
 	rotation_value: Vector3,
 	length: float,
-	right_hand: bool
+	right_hand: bool,
+	is_pistol_pose: bool = false
 ) -> void:
-	var arm_root := Node3D.new()
+	var arm_root: Node3D = Node3D.new()
 	arm_root.name = node_name
 	arm_root.position = position_value
 	arm_root.rotation_degrees = rotation_value
 	weapon_view.add_child(arm_root)
 
-	# Narrow tapered sleeve. This reads as a forearm at FPS distance instead of
-	# the large rounded capsule used by the old prototype viewmodel.
-	var sleeve := MeshInstance3D.new()
+	var sleeve_material: StandardMaterial3D = _first_person_sleeve_material()
+	var glove_material: StandardMaterial3D = _first_person_glove_material()
+
+	# IMPORTANT: the elbow starts camera-side and the arm extends FORWARD toward
+	# the weapon along local -Z. Earlier versions extended toward +Z, leaving the
+	# hands behind the weapon and producing the disconnected stick-arm look.
+	var sleeve: MeshInstance3D = MeshInstance3D.new()
 	sleeve.name = "UniformSleeve"
-	var sleeve_mesh := CylinderMesh.new()
-	sleeve_mesh.top_radius = 0.048
-	sleeve_mesh.bottom_radius = 0.067
-	sleeve_mesh.height = length
+	var sleeve_mesh: CylinderMesh = CylinderMesh.new()
+	sleeve_mesh.top_radius = 0.050
+	sleeve_mesh.bottom_radius = 0.082
+	sleeve_mesh.height = length * 0.72
 	sleeve_mesh.radial_segments = 24
 	sleeve.mesh = sleeve_mesh
 	sleeve.rotation_degrees.x = 90.0
-	sleeve.position.z = length * 0.43
-	sleeve.material_override = _first_person_sleeve_material()
+	sleeve.position.z = -length * 0.31
+	sleeve.material_override = sleeve_material
+	sleeve.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	arm_root.add_child(sleeve)
 
-	var cuff := MeshInstance3D.new()
+	# Slightly larger cuff bridges the sleeve and glove so the wrist no longer
+	# looks like two disconnected primitives.
+	var cuff: MeshInstance3D = MeshInstance3D.new()
 	cuff.name = "GloveCuff"
-	var cuff_mesh := CylinderMesh.new()
-	cuff_mesh.top_radius = 0.052
-	cuff_mesh.bottom_radius = 0.057
-	cuff_mesh.height = 0.060
-	cuff_mesh.radial_segments = 18
+	var cuff_mesh: CylinderMesh = CylinderMesh.new()
+	cuff_mesh.top_radius = 0.058
+	cuff_mesh.bottom_radius = 0.064
+	cuff_mesh.height = 0.085
+	cuff_mesh.radial_segments = 20
 	cuff.mesh = cuff_mesh
 	cuff.rotation_degrees.x = 90.0
-	cuff.position.z = length * 0.73
-	cuff.material_override = _first_person_glove_material()
+	cuff.position.z = -length * 0.69
+	cuff.material_override = glove_material
 	arm_root.add_child(cuff)
 
-	# Palm block + rounded fingers gives a much tighter glove silhouette.
-	var palm := MeshInstance3D.new()
+	# Flattened rounded palm. It sits at the FORWARD end of the arm at the weapon
+	# grip/support point rather than near the camera.
+	var palm: MeshInstance3D = MeshInstance3D.new()
 	palm.name = "GlovedPalm"
-	var palm_mesh := SphereMesh.new()
-	palm_mesh.radius = 0.050
-	palm_mesh.height = 0.105
-	palm_mesh.radial_segments = 20
-	palm_mesh.rings = 10
+	var palm_mesh: SphereMesh = SphereMesh.new()
+	palm_mesh.radius = 0.054
+	palm_mesh.height = 0.108
+	palm_mesh.radial_segments = 24
+	palm_mesh.rings = 12
 	palm.mesh = palm_mesh
-	palm.scale = Vector3(1.08, 0.62, 1.38)
-	palm.rotation_degrees.x = 12.0
-	palm.position = Vector3(
-		0.012 if right_hand else -0.012,
-		-0.006,
-		length * 0.88
+	palm.scale = Vector3(1.15, 0.66, 1.42)
+	palm.rotation_degrees = Vector3(
+		7.0 if is_pistol_pose else 13.0,
+		-8.0 if right_hand else 8.0,
+		-10.0 if right_hand else 10.0
 	)
-	palm.material_override = _first_person_glove_material()
+	palm.position = Vector3(
+		0.008 if right_hand else -0.008,
+		-0.004,
+		-length * 0.84
+	)
+	palm.material_override = glove_material
 	arm_root.add_child(palm)
 
-	for knuckle_index in range(4):
-		var knuckle := MeshInstance3D.new()
+	# Fingers curl around the grip/fore-end. Each finger uses two short capsule
+	# segments so the silhouette reads as a hand rather than four straight rods.
+	for finger_index: int in range(4):
+		var lateral: float = (float(finger_index) - 1.5) * 0.020
+		var finger_root: Node3D = Node3D.new()
+		finger_root.name = "FingerRoot%d" % finger_index
+		finger_root.position = Vector3(
+			lateral,
+			-0.034,
+			-length * 0.885
+		)
+		finger_root.rotation_degrees = Vector3(
+			68.0 if is_pistol_pose else 58.0,
+			0.0,
+			2.5 * (float(finger_index) - 1.5)
+		)
+		arm_root.add_child(finger_root)
+
+		for segment_index: int in range(2):
+			var finger: MeshInstance3D = MeshInstance3D.new()
+			finger.name = "Finger%d_Segment%d" % [finger_index, segment_index]
+			var finger_mesh: CapsuleMesh = CapsuleMesh.new()
+			finger_mesh.radius = 0.0105
+			finger_mesh.height = 0.050
+			finger_mesh.radial_segments = 10
+			finger_mesh.rings = 4
+			finger.mesh = finger_mesh
+			finger.position = Vector3(0.0, 0.0, -0.022 - float(segment_index) * 0.032)
+			finger.rotation_degrees.x = 90.0 + float(segment_index) * 25.0
+			finger.material_override = glove_material
+			finger_root.add_child(finger)
+
+	# Thumb crosses toward the weapon body/grip.
+	var thumb_root: Node3D = Node3D.new()
+	thumb_root.name = "ThumbRoot"
+	thumb_root.position = Vector3(
+		0.050 if right_hand else -0.050,
+		-0.006,
+		-length * 0.84
+	)
+	thumb_root.rotation_degrees = Vector3(
+		70.0,
+		-18.0 if right_hand else 18.0,
+		34.0 if right_hand else -34.0
+	)
+	arm_root.add_child(thumb_root)
+
+	for thumb_segment: int in range(2):
+		var thumb: MeshInstance3D = MeshInstance3D.new()
+		thumb.name = "ThumbSegment%d" % thumb_segment
+		var thumb_mesh: CapsuleMesh = CapsuleMesh.new()
+		thumb_mesh.radius = 0.013
+		thumb_mesh.height = 0.057
+		thumb_mesh.radial_segments = 10
+		thumb_mesh.rings = 4
+		thumb.mesh = thumb_mesh
+		thumb.position.z = -0.022 - float(thumb_segment) * 0.035
+		thumb.rotation_degrees.x = 90.0 + float(thumb_segment) * 20.0
+		thumb.material_override = glove_material
+		thumb_root.add_child(thumb)
+
+	# Small knuckle caps add highlights/normal-map breakup at close FPS distance.
+	for knuckle_index: int in range(4):
+		var knuckle: MeshInstance3D = MeshInstance3D.new()
 		knuckle.name = "GloveKnuckle%d" % knuckle_index
-		var knuckle_mesh := SphereMesh.new()
-		knuckle_mesh.radius = 0.012
-		knuckle_mesh.height = 0.024
+		var knuckle_mesh: SphereMesh = SphereMesh.new()
+		knuckle_mesh.radius = 0.011
+		knuckle_mesh.height = 0.021
 		knuckle_mesh.radial_segments = 10
 		knuckle_mesh.rings = 5
 		knuckle.mesh = knuckle_mesh
 		knuckle.position = Vector3(
 			(float(knuckle_index) - 1.5) * 0.020,
-			-0.043,
-			length * 0.905
+			-0.046,
+			-length * 0.845
 		)
-		knuckle.material_override = _first_person_glove_material()
+		knuckle.material_override = glove_material
 		arm_root.add_child(knuckle)
-
-	for finger_index in range(4):
-		var finger := MeshInstance3D.new()
-		finger.name = "GlovedFinger%d" % finger_index
-		var finger_mesh := CapsuleMesh.new()
-		finger_mesh.radius = 0.010
-		finger_mesh.height = 0.070
-		finger_mesh.radial_segments = 10
-		finger_mesh.rings = 3
-		finger.mesh = finger_mesh
-		finger.rotation_degrees.x = 90.0
-		finger.position = Vector3(
-			(float(finger_index) - 1.5) * 0.019,
-			-0.018,
-			length * 0.96
-		)
-		finger.material_override = _first_person_glove_material()
-		arm_root.add_child(finger)
-
-	var thumb := MeshInstance3D.new()
-	thumb.name = "GlovedThumb"
-	var thumb_mesh := CapsuleMesh.new()
-	thumb_mesh.radius = 0.013
-	thumb_mesh.height = 0.076
-	thumb_mesh.radial_segments = 8
-	thumb_mesh.rings = 3
-	thumb.mesh = thumb_mesh
-	thumb.rotation_degrees = Vector3(
-		82.0,
-		0.0,
-		28.0 if right_hand else -28.0
-	)
-	thumb.position = Vector3(
-		0.050 if right_hand else -0.050,
-		-0.006,
-		length * 0.91
-	)
-	thumb.material_override = _first_person_glove_material()
-	arm_root.add_child(thumb)
 
 	_add_first_person_wrist_detail(arm_root, length, right_hand)
 
@@ -4501,7 +4537,7 @@ func _add_first_person_wrist_detail(
 	material.roughness = 0.74
 	material.metallic = 0.06
 	var detail := MeshInstance3D.new()
-	detail.position = Vector3(0.0, 0.0, length * 0.64)
+	detail.position = Vector3(0.0, 0.0, -length * 0.66)
 	match player_class:
 		PlayerClass.SOLDIER:
 			detail.name = "SoldierWristWatch"
@@ -4553,37 +4589,40 @@ func _add_first_person_wrist_detail(
 
 func _build_first_person_arms(is_pistol: bool) -> void:
 	if is_pistol:
-		# Two-handed service-pistol stance: both forearms rise from the lower
-		# corners and meet around the pistol grip, below the sight line.
+		# Pistol: elbows begin low/camera-side, both hands converge at the grip.
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.19, -0.30, 0.04),
-			Vector3(-8.0, -17.0, -7.0),
-			0.51,
+			Vector3(0.31, -0.42, 0.68),
+			Vector3(-4.0, -13.0, -10.0),
+			0.58,
+			true,
 			true
 		)
 		_add_first_person_arm(
 			"LeftSupportArm",
-			Vector3(-0.17, -0.32, 0.01),
-			Vector3(-8.0, 19.0, 7.0),
-			0.50,
-			false
+			Vector3(-0.30, -0.43, 0.66),
+			Vector3(-5.0, 15.0, 10.0),
+			0.58,
+			false,
+			true
 		)
 	else:
-		# Rifle/SMG stance: firing hand is close to the pistol grip while the
-		# support hand reaches farther forward under the fore-end.
+		# SMG: firing hand stays near the rear grip; support hand reaches farther
+		# forward under the fore-end. These roots are deliberately camera-side.
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.22, -0.32, 0.13),
-			Vector3(-7.0, -20.0, -9.0),
-			0.52,
-			true
+			Vector3(0.34, -0.43, 0.72),
+			Vector3(-2.0, -15.0, -11.0),
+			0.60,
+			true,
+			false
 		)
 		_add_first_person_arm(
 			"LeftArm",
-			Vector3(-0.24, -0.34, -0.24),
-			Vector3(-4.0, 22.0, 8.0),
-			0.61,
+			Vector3(-0.34, -0.45, 0.58),
+			Vector3(-2.0, 20.0, 12.0),
+			0.68,
+			false,
 			false
 		)
 
