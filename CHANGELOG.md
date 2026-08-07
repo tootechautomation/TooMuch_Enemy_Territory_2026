@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.37.0
+- Increased imported-character normalization from 1.82 m to a stronger 1.88 m battlefield silhouette
+- Recognized the bundled neutral humanoid surface as uniform material instead of leaving its original alien-like suit response untouched
+- Added Allied olive-drab and opposing field-gray surface treatment while preserving the embedded texture
+- Removed metallic and emissive response from recognized imported uniform surfaces
+- Raised uniform roughness and restrained normal intensity for a more matte cloth-like appearance
+- Evaluated a CC0 Godot male base but retained the animated model because the alternative contains no locomotion animations
+- Preserved custom Allied/Axis model priority, fallback safety, gameplay, networking, and protocol 341
+
 ## 8.36.2
 - Fixed snapshot and first-person visibility refreshes re-enabling the barrel-shaped procedural body over a validated imported humanoid
 - Made imported-character success the authoritative switch for the complete fallback `Body` and `CharacterVisual` hierarchy

@@ -1,6 +1,12 @@
 # Frontline: Objective
 
-## Version 8.36.2 — Duplicate Fallback Body Visibility Hotfix
+## Version 8.37.0 — Imported Character Military Presentation
+
+The working animated humanoid placeholder now reads more clearly at gameplay distance. Imported characters normalize to a slightly stronger 1.88 m soldier height, while the bundled neutral suit receives distinct Allied olive-drab or opposing field-gray treatment. Metallic response and source emission are removed from recognized uniform surfaces, roughness is raised to cloth-like levels, and normal response is restrained for a less plastic or alien appearance.
+
+User-supplied Allied and Axis models remain higher-priority and continue through the same normalization and material-safety pipeline. A Godot-tested CC0 male base was evaluated but not bundled as the active replacement because it has no embedded animations and would leave combatants frozen in a T-pose.
+
+## Previous Phase — 8.36.2 Duplicate Fallback Body Visibility Hotfix
 
 Validated imported characters now exclusively own the remote third-person body. The recurring snapshot visibility update no longer turns the procedural barrel-shaped soldier back on over the imported rig. The old body is displayed only when no imported character passed validation.
 

@@ -25,7 +25,7 @@ static func adapt_character(
 	report["height_before"] = height
 
 	if height > 0.01:
-		var target_height := 1.82
+		var target_height := 1.88
 		var multiplier := clampf(target_height / height, 0.01, 100.0)
 		model.scale *= Vector3.ONE * multiplier
 		report["scale_multiplier"] = multiplier
@@ -169,9 +169,9 @@ static func _apply_team_surface_policy(
 		return 0
 	var adjusted := 0
 	var team_tint := (
-		Color(0.86, 0.90, 0.76, 1.0)
+		Color(0.66, 0.72, 0.42, 1.0)
 		if team_id == 0
-		else Color(0.76, 0.81, 0.75, 1.0)
+		else Color(0.58, 0.62, 0.55, 1.0)
 	)
 	for value in root.find_children(
 		"*", "MeshInstance3D", true, false
@@ -193,9 +193,11 @@ static func _apply_team_surface_policy(
 				continue
 			var material := standard.duplicate() as StandardMaterial3D
 			material.albedo_color *= team_tint
-			material.roughness = maxf(material.roughness, 0.72)
+			material.metallic = 0.0
+			material.roughness = maxf(material.roughness, 0.84)
+			material.emission_enabled = false
 			if material.normal_enabled:
-				material.normal_scale = minf(material.normal_scale, 0.92)
+				material.normal_scale = minf(material.normal_scale, 0.82)
 			mesh_instance.set_surface_override_material(
 				surface_index,
 				material
@@ -213,7 +215,9 @@ static func _is_uniform_surface(identity: String) -> bool:
 		"sleeve",
 		"fabric",
 		"cloth",
-		"body"
+		"body",
+		"cesium_man",
+		"cesium man"
 	]:
 		if token in identity:
 			return true
