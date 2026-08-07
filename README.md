@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.23.0 — Viewmodel Camera Clearance and Obstruction
+## Version 8.24.0 — Proportional Viewmodel Grip Composition
+
+First-person weapons now use a deliberately lower, smaller, weapon-focused composition. Both forearms begin outside the central sight picture and angle inward toward the pistol or long-gun grip area. Sleeves, cuffs, gloves, fingers, thumbs, and class wrist equipment have been resized as one coherent set instead of appearing as camera-adjacent primitive shapes.
+
+The full viewmodel sits farther from the camera, while fallback grips and buttstocks use slimmer silhouettes. Watches, the Medic sleeve band, Engineer cuff, Field Ops push-to-talk control, and Scout compass are seated directly against the support sleeve, eliminating the floating circular accessory that previously blocked the crosshair.
+
+The v8.23 camera-origin initialization fix, near-plane clamp, wall-aware lowering, and FOV spacing remain active. The v8.22 mechanical weapon animations also remain intact, with weapon timing, ammo, recoil values, damage, collision, movement, server authority, networking, and protocol 341 unchanged.
+
+## Previous Phase — 8.23.0 Viewmodel Camera Clearance and Obstruction
 
 The first-person viewmodel now maintains a safe, readable composition at all times. The animation base position is initialized when each weapon is rebuilt, preventing the entire weapon-and-arm hierarchy from being pulled to the camera origin. Pistol and long-gun sleeves have also been shortened and repositioned so cuffs, hands, fingers, thumbs, and class wrist details remain beyond the near plane instead of appearing as an oversized peg across the screen.
 
@@ -42,5 +50,5 @@ Friendly world nameplates now include a diamond identifier and remain visible at
 
 All additions are client-side presentation. Team assignment, uniforms, objectives, spotting, server authority, networking, and protocol 341 remain unchanged.
 
-Build: v8.23.0
+Build: v8.24.0
 Protocol: 341

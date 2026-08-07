@@ -1,5 +1,13 @@
 # Changelog
 
+## 8.24.0
+- Rebuilt first-person arm composition around proportional lower-screen silhouettes instead of camera-adjacent capsules
+- Reduced sleeve, cuff, glove, finger, thumb, and class wrist-equipment dimensions while increasing mesh roundness
+- Angled both forearms inward from lower outer origins so the hands converge naturally on pistol and long-gun grip areas
+- Seated watches, Medic bands, reinforced cuffs, push-to-talk controls, and compasses directly on the support sleeve
+- Moved complete pistol and long-gun rigs farther from the camera and reduced fallback grip and buttstock bulk
+- Preserved the v8.23 camera-origin correction, near-plane protection, wall response, v8.22 mechanics, gameplay, networking, and protocol 341
+
 ## 8.23.0
 - Fixed the first-person weapon animation target initializing at the camera origin, which pulled the sleeve and weapon into the player's face
 - Re-composed pistol and long-gun arms with shorter camera-safe sleeves, hands, cuffs, fingers, thumbs, and class wrist details

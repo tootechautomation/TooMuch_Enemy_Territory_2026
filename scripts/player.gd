@@ -3635,9 +3635,9 @@ func _apply_server_crouch(crouching: bool) -> void:
 
 func _base_weapon_position() -> Vector3:
 	var base_position: Vector3 = (
-		Vector3(0.30, -0.27, -0.62)
+		Vector3(0.30, -0.29, -0.82)
 		if current_weapon_index == 1
-		else Vector3(0.34, -0.28, -0.72)
+		else Vector3(0.34, -0.31, -0.92)
 	)
 	var fov_clearance: float = clampf(
 		(profile_field_of_view - 75.0) / 35.0,
@@ -4038,10 +4038,11 @@ func _add_first_person_arm(
 	weapon_view.add_child(arm_root)
 
 	var sleeve := MeshInstance3D.new()
+	sleeve.name = "UniformSleeve"
 	var sleeve_mesh := CapsuleMesh.new()
-	sleeve_mesh.radius = 0.095
+	sleeve_mesh.radius = 0.062
 	sleeve_mesh.height = length
-	sleeve_mesh.radial_segments = 16
+	sleeve_mesh.radial_segments = 20
 	sleeve_mesh.rings = 8
 	sleeve.mesh = sleeve_mesh
 	sleeve.rotation_degrees.x = 90.0
@@ -4052,10 +4053,10 @@ func _add_first_person_arm(
 	var cuff := MeshInstance3D.new()
 	cuff.name = "LeatherSleeveCuff"
 	var cuff_mesh := CylinderMesh.new()
-	cuff_mesh.top_radius = 0.105
-	cuff_mesh.bottom_radius = 0.105
-	cuff_mesh.height = 0.10
-	cuff_mesh.radial_segments = 18
+	cuff_mesh.top_radius = 0.068
+	cuff_mesh.bottom_radius = 0.071
+	cuff_mesh.height = 0.065
+	cuff_mesh.radial_segments = 20
 	cuff.mesh = cuff_mesh
 	cuff.rotation_degrees.x = 90.0
 	cuff.position.z = length * 0.70
@@ -4063,34 +4064,36 @@ func _add_first_person_arm(
 	arm_root.add_child(cuff)
 
 	var hand := MeshInstance3D.new()
+	hand.name = "GlovedHand"
 	var hand_mesh := CapsuleMesh.new()
-	hand_mesh.radius = 0.085
-	hand_mesh.height = 0.24
-	hand_mesh.radial_segments = 16
+	hand_mesh.radius = 0.058
+	hand_mesh.height = 0.17
+	hand_mesh.radial_segments = 20
 	hand_mesh.rings = 8
 	hand.mesh = hand_mesh
 	hand.rotation_degrees.x = 90.0
 	hand.position = Vector3(
-		0.025 if right_hand else -0.025,
+		0.018 if right_hand else -0.018,
 		0.0,
-		length * 0.80
+		length * 0.86
 	)
 	hand.material_override = _first_person_glove_material()
 	arm_root.add_child(hand)
 
 	for finger_index in range(4):
 		var finger := MeshInstance3D.new()
+		finger.name = "GlovedFinger%d" % finger_index
 		var finger_mesh := CapsuleMesh.new()
-		finger_mesh.radius = 0.018
-		finger_mesh.height = 0.13
+		finger_mesh.radius = 0.012
+		finger_mesh.height = 0.085
 		finger_mesh.radial_segments = 10
 		finger_mesh.rings = 4
 		finger.mesh = finger_mesh
 		finger.rotation_degrees.x = 90.0
 		finger.position = Vector3(
-			(float(finger_index) - 1.5) * 0.030,
-			-0.02,
-			length * 0.89
+			(float(finger_index) - 1.5) * 0.020,
+			-0.014,
+			length * 0.94
 		)
 		finger.material_override = _first_person_glove_material()
 		arm_root.add_child(finger)
@@ -4098,8 +4101,8 @@ func _add_first_person_arm(
 	var thumb := MeshInstance3D.new()
 	thumb.name = "GlovedThumb"
 	var thumb_mesh := CapsuleMesh.new()
-	thumb_mesh.radius = 0.024
-	thumb_mesh.height = 0.14
+	thumb_mesh.radius = 0.016
+	thumb_mesh.height = 0.095
 	thumb_mesh.radial_segments = 10
 	thumb_mesh.rings = 4
 	thumb.mesh = thumb_mesh
@@ -4109,9 +4112,9 @@ func _add_first_person_arm(
 		24.0 if right_hand else -24.0
 	)
 	thumb.position = Vector3(
-		0.075 if right_hand else -0.075,
+		0.050 if right_hand else -0.050,
 		0.0,
-		length * 0.85
+		length * 0.90
 	)
 	thumb.material_override = _first_person_glove_material()
 	arm_root.add_child(thumb)
@@ -4129,15 +4132,15 @@ func _add_first_person_wrist_detail(
 	material.roughness = 0.74
 	material.metallic = 0.06
 	var detail := MeshInstance3D.new()
-	detail.position = Vector3(0.0, -0.10, length * 0.64)
+	detail.position = Vector3(0.0, 0.0, length * 0.64)
 	match player_class:
 		PlayerClass.SOLDIER:
 			detail.name = "SoldierWristWatch"
 			material.albedo_color = Color(0.11, 0.10, 0.075)
 			var watch_mesh := CylinderMesh.new()
-			watch_mesh.top_radius = 0.052
-			watch_mesh.bottom_radius = 0.052
-			watch_mesh.height = 0.025
+			watch_mesh.top_radius = 0.041
+			watch_mesh.bottom_radius = 0.041
+			watch_mesh.height = 0.018
 			watch_mesh.radial_segments = 16
 			detail.mesh = watch_mesh
 			detail.rotation_degrees.x = 90.0
@@ -4145,32 +4148,32 @@ func _add_first_person_wrist_detail(
 			detail.name = "MedicSleeveBand"
 			material.albedo_color = Color(0.76, 0.72, 0.60)
 			var medic_band := CylinderMesh.new()
-			medic_band.top_radius = 0.108
-			medic_band.bottom_radius = 0.108
-			medic_band.height = 0.14
-			medic_band.radial_segments = 18
+			medic_band.top_radius = 0.067
+			medic_band.bottom_radius = 0.067
+			medic_band.height = 0.052
+			medic_band.radial_segments = 20
 			detail.mesh = medic_band
 			detail.rotation_degrees.x = 90.0
 		PlayerClass.ENGINEER:
 			detail.name = "EngineerReinforcedCuff"
 			material.albedo_color = Color(0.28, 0.18, 0.075)
 			var engineer_cuff := BoxMesh.new()
-			engineer_cuff.size = Vector3(0.20, 0.055, 0.18)
+			engineer_cuff.size = Vector3(0.105, 0.035, 0.075)
 			detail.mesh = engineer_cuff
 		PlayerClass.FIELD_OPS:
 			detail.name = "FieldOpsPushToTalk"
 			material.albedo_color = Color(0.075, 0.085, 0.065)
 			var ptt_mesh := BoxMesh.new()
-			ptt_mesh.size = Vector3(0.13, 0.055, 0.18)
+			ptt_mesh.size = Vector3(0.075, 0.035, 0.080)
 			detail.mesh = ptt_mesh
 		PlayerClass.SCOUT:
 			detail.name = "ScoutWristCompass"
 			material.albedo_color = Color(0.12, 0.13, 0.105)
 			material.metallic = 0.35
 			var compass_mesh := CylinderMesh.new()
-			compass_mesh.top_radius = 0.060
-			compass_mesh.bottom_radius = 0.060
-			compass_mesh.height = 0.028
+			compass_mesh.top_radius = 0.043
+			compass_mesh.bottom_radius = 0.043
+			compass_mesh.height = 0.020
 			compass_mesh.radial_segments = 18
 			detail.mesh = compass_mesh
 			detail.rotation_degrees.x = 90.0
@@ -4183,31 +4186,31 @@ func _build_first_person_arms(is_pistol: bool) -> void:
 	if is_pistol:
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.18, 0.18, 0.08),
-			Vector3(-12.0, -4.0, -8.0),
-			0.40,
+			Vector3(0.30, -0.08, -0.31),
+			Vector3(12.0, -36.0, -12.0),
+			0.36,
 			true
 		)
 		_add_first_person_arm(
 			"LeftSupportArm",
-			Vector3(-0.16, 0.22, -0.02),
-			Vector3(-18.0, 10.0, 8.0),
+			Vector3(-0.28, -0.09, -0.36),
+			Vector3(14.0, 40.0, 12.0),
 			0.34,
 			false
 		)
 	else:
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.24, 0.22, 0.10),
-			Vector3(-15.0, -9.0, -12.0),
-			0.46,
+			Vector3(0.40, -0.09, -0.39),
+			Vector3(12.0, -34.0, -15.0),
+			0.42,
 			true
 		)
 		_add_first_person_arm(
 			"LeftArm",
-			Vector3(-0.24, 0.18, -0.18),
-			Vector3(-24.0, 12.0, 10.0),
-			0.60,
+			Vector3(-0.34, -0.10, -0.48),
+			Vector3(15.0, 29.0, 13.0),
+			0.50,
 			false
 		)
 
@@ -4330,9 +4333,9 @@ func _rebuild_first_person_weapon() -> void:
 
 	var grip := MeshInstance3D.new()
 	var grip_mesh := BoxMesh.new()
-	grip_mesh.size = Vector3(0.12, 0.25, 0.12) if is_pistol else Vector3(0.18, 0.22, 0.34)
+	grip_mesh.size = Vector3(0.105, 0.21, 0.105) if is_pistol else Vector3(0.14, 0.18, 0.22)
 	grip.mesh = grip_mesh
-	grip.position = Vector3(0.0, 0.15, 0.10) if is_pistol else Vector3(0.0, 0.0, 0.42)
+	grip.position = Vector3(0.0, 0.13, 0.08) if is_pistol else Vector3(0.0, -0.015, 0.28)
 	grip.rotation_degrees.x = -15.0 if is_pistol else 0.0
 	grip.material_override = wood
 	weapon_view.add_child(grip)
@@ -4342,12 +4345,12 @@ func _rebuild_first_person_weapon() -> void:
 	if not is_pistol:
 		var buttstock := MeshInstance3D.new()
 		var buttstock_mesh := BoxMesh.new()
-		buttstock_mesh.size = Vector3(0.22, 0.27, 0.48)
+		buttstock_mesh.size = Vector3(0.17, 0.20, 0.34)
 		buttstock.mesh = buttstock_mesh
 		buttstock.position = Vector3(
 			0.0,
 			0.015,
-			receiver_length * 0.5 + 0.22
+			receiver_length * 0.5 + 0.15
 		)
 		buttstock.rotation_degrees.x = -4.0
 		buttstock.material_override = wood
