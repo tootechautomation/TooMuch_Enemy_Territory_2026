@@ -1,5 +1,15 @@
 # Changelog
 
+## 8.25.0
+- Removed the generic long-gun box magazine and floor plate that were stacked beneath every class-specific weapon
+- Rebuilt the Soldier Support LMG as one drum-fed silhouette with a barrel jacket, rear sight, carry handle, and compact folded bipod
+- Added distinct SMG, carbine, service-rifle, and scoped-rifle magazine and fore-end treatments for the remaining classes
+- Moved the long-gun support hand onto the fore-end and the firing hand onto the rear grip instead of leaving either hand detached or buried
+- Replaced the oversized single-box stock with a smaller layered wood body, comb, and metal butt plate
+- Bound pistol, SMG, carbine, and rifle magazine base plates to the existing staged reload movement
+- Increased long-gun camera distance while preserving the v8.24 proportional limbs and all camera-clearance safeguards
+- Preserved imported weapon priority, mechanical animation, weapon balance, gameplay, networking, and protocol 341
+
 ## 8.24.0
 - Rebuilt first-person arm composition around proportional lower-screen silhouettes instead of camera-adjacent capsules
 - Reduced sleeve, cuff, glove, finger, thumb, and class wrist-equipment dimensions while increasing mesh roundness

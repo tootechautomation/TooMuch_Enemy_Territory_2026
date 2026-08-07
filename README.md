@@ -1,6 +1,14 @@
 # Frontline: Objective
 
-## Version 8.24.0 — Proportional Viewmodel Grip Composition
+## Version 8.25.0 — Class-Specific First-Person Weapon Rigs
+
+The bundled first-person fallback weapons now read as five distinct class weapons rather than one generic receiver with multiple magazines stacked underneath it. The Soldier carries a single drum-fed Support LMG silhouette with a jacketed barrel, rear sight, carry handle, and compact folded bipod. Medic, Engineer, Field Ops, and Scout weapons receive their own magazine proportions and fore-end or sight details.
+
+Long-gun hand placement is now driven by the actual grip zones: the firing hand terminates at the rear grip while the support hand reaches the fore-end. The oversized rectangular stock has been replaced by a smaller layered wood body, raised comb, and metal butt plate, and the full long-gun rig sits farther from the camera for a clearer ET-style lower-right presentation.
+
+Imported GLB/FBX first-person weapons still take priority whenever installed. The v8.24 proportional arms, v8.23 camera protections, v8.22 mechanical animations, weapon timing, recoil, ammo, damage, movement, server authority, networking, and protocol 341 remain unchanged.
+
+## Previous Phase — 8.24.0 Proportional Viewmodel Grip Composition
 
 First-person weapons now use a deliberately lower, smaller, weapon-focused composition. Both forearms begin outside the central sight picture and angle inward toward the pistol or long-gun grip area. Sleeves, cuffs, gloves, fingers, thumbs, and class wrist equipment have been resized as one coherent set instead of appearing as camera-adjacent primitive shapes.
 
@@ -50,5 +58,5 @@ Friendly world nameplates now include a diamond identifier and remain visible at
 
 All additions are client-side presentation. Team assignment, uniforms, objectives, spotting, server authority, networking, and protocol 341 remain unchanged.
 
-Build: v8.24.0
+Build: v8.25.0
 Protocol: 341

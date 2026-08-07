@@ -3637,7 +3637,7 @@ func _base_weapon_position() -> Vector3:
 	var base_position: Vector3 = (
 		Vector3(0.30, -0.29, -0.82)
 		if current_weapon_index == 1
-		else Vector3(0.34, -0.31, -0.92)
+		else Vector3(0.34, -0.31, -1.08)
 	)
 	var fov_clearance: float = clampf(
 		(profile_field_of_view - 75.0) / 35.0,
@@ -4186,31 +4186,31 @@ func _build_first_person_arms(is_pistol: bool) -> void:
 	if is_pistol:
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.30, -0.08, -0.31),
-			Vector3(12.0, -36.0, -12.0),
+			Vector3(0.28, -0.08, -0.18),
+			Vector3(12.0, -30.0, -10.0),
 			0.36,
 			true
 		)
 		_add_first_person_arm(
 			"LeftSupportArm",
-			Vector3(-0.28, -0.09, -0.36),
-			Vector3(14.0, 40.0, 12.0),
+			Vector3(-0.25, -0.09, -0.20),
+			Vector3(14.0, 34.0, 10.0),
 			0.34,
 			false
 		)
 	else:
 		_add_first_person_arm(
 			"RightArm",
-			Vector3(0.40, -0.09, -0.39),
+			Vector3(0.31, -0.09, -0.18),
 			Vector3(12.0, -34.0, -15.0),
 			0.42,
 			true
 		)
 		_add_first_person_arm(
 			"LeftArm",
-			Vector3(-0.34, -0.10, -0.48),
-			Vector3(15.0, 29.0, 13.0),
-			0.50,
+			Vector3(-0.30, -0.10, -0.82),
+			Vector3(15.0, 34.0, 11.0),
+			0.52,
 			false
 		)
 
@@ -4344,17 +4344,46 @@ func _rebuild_first_person_weapon() -> void:
 
 	if not is_pistol:
 		var buttstock := MeshInstance3D.new()
+		buttstock.name = "WoodStockBody"
 		var buttstock_mesh := BoxMesh.new()
-		buttstock_mesh.size = Vector3(0.17, 0.20, 0.34)
+		buttstock_mesh.size = Vector3(0.14, 0.16, 0.24)
 		buttstock.mesh = buttstock_mesh
 		buttstock.position = Vector3(
 			0.0,
-			0.015,
-			receiver_length * 0.5 + 0.15
+			0.02,
+			receiver_length * 0.5 + 0.11
 		)
-		buttstock.rotation_degrees.x = -4.0
+		buttstock.rotation_degrees.x = -7.0
 		buttstock.material_override = wood
 		weapon_view.add_child(buttstock)
+
+		var stock_comb := MeshInstance3D.new()
+		stock_comb.name = "WoodStockComb"
+		var stock_comb_mesh := BoxMesh.new()
+		stock_comb_mesh.size = Vector3(0.13, 0.07, 0.20)
+		stock_comb.mesh = stock_comb_mesh
+		stock_comb.position = Vector3(
+			0.0,
+			-0.075,
+			receiver_length * 0.5 + 0.10
+		)
+		stock_comb.rotation_degrees.x = -7.0
+		stock_comb.material_override = wood
+		weapon_view.add_child(stock_comb)
+
+		var butt_plate := MeshInstance3D.new()
+		butt_plate.name = "ButtPlate"
+		var butt_plate_mesh := BoxMesh.new()
+		butt_plate_mesh.size = Vector3(0.145, 0.17, 0.025)
+		butt_plate.mesh = butt_plate_mesh
+		butt_plate.position = Vector3(
+			0.0,
+			0.035,
+			receiver_length * 0.5 + 0.235
+		)
+		butt_plate.rotation_degrees.x = -7.0
+		butt_plate.material_override = metal
+		weapon_view.add_child(butt_plate)
 
 		var handguard := MeshInstance3D.new()
 		var handguard_mesh := CylinderMesh.new()
@@ -5632,9 +5661,13 @@ func _update_first_person_mechanics(delta: float) -> void:
 	)
 	for magazine_name in [
 		"Magazine",
+		"MagazineBase",
+		"MagazineFloorPlate",
 		"PistolMagazine",
 		"SMGMagazine",
+		"SMGMagazineBase",
 		"CarbineMagazine",
+		"CarbineMagazineBase",
 		"LMGDrumMagazine"
 	]:
 		_set_first_person_part_offset(

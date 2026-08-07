@@ -128,8 +128,6 @@ static func _decorate_long_gun(
 	_ring(root, "TriggerGuard", Vector3(0.0, 0.125, 0.12), 0.05, 0.065, metal, Vector3(90.0, 0.0, 0.0))
 	_box(root, "Trigger", Vector3(0.0, 0.12, 0.11), Vector3(0.018, 0.095, 0.018), dark_metal, Vector3(0.0, 0.0, -14.0))
 	_box(root, "SafetyLever", Vector3(-0.101, 0.005, 0.08), Vector3(0.018, 0.028, 0.11), dark_metal, Vector3(18.0, 0.0, 0.0))
-	_box(root, "Magazine", Vector3(0.0, 0.18, -0.07), Vector3(0.13, 0.29, 0.18), dark_metal, Vector3(-8.0, 0.0, 0.0))
-	_box(root, "MagazineFloorPlate", Vector3(0.0, 0.325, -0.035), Vector3(0.15, 0.025, 0.19), metal, Vector3(-8.0, 0.0, 0.0))
 	_cylinder(root, "BarrelBand", Vector3(0.0, 0.005, -0.66), 0.075, 0.055, metal, Vector3(90.0, 0.0, 0.0), 16)
 	_cylinder(root, "MuzzleCollar", Vector3(0.0, 0.0, -1.05), 0.038, 0.11, dark_metal, Vector3(90.0, 0.0, 0.0), 14)
 	_ring(root, "FrontSlingSwivel", Vector3(-0.095, 0.05, -0.57), 0.025, 0.034, metal, Vector3(0.0, 90.0, 0.0))
@@ -138,16 +136,26 @@ static func _decorate_long_gun(
 
 	match weapon_profile:
 		0:
-			_cylinder(root, "LMGDrumMagazine", Vector3(-0.12, 0.12, -0.03), 0.16, 0.11, dark_metal, Vector3(0.0, 0.0, 90.0), 24)
-			_box(root, "BipodLeft", Vector3(-0.11, 0.13, -0.70), Vector3(0.025, 0.34, 0.025), metal, Vector3(0.0, 0.0, -15.0))
-			_box(root, "BipodRight", Vector3(0.11, 0.13, -0.70), Vector3(0.025, 0.34, 0.025), metal, Vector3(0.0, 0.0, 15.0))
+			_cylinder(root, "LMGDrumMagazine", Vector3(-0.105, 0.105, -0.02), 0.135, 0.095, dark_metal, Vector3(0.0, 0.0, 90.0), 28)
+			_cylinder(root, "LMGBarrelJacket", Vector3(0.0, 0.005, -0.66), 0.052, 0.62, blued_metal, Vector3(90.0, 0.0, 0.0), 24)
+			_box(root, "LMGRearSight", Vector3(0.0, -0.17, 0.05), Vector3(0.105, 0.055, 0.06), dark_metal)
+			_box(root, "LMGCarryHandle", Vector3(-0.12, -0.12, -0.33), Vector3(0.025, 0.15, 0.24), dark_metal, Vector3(0.0, 0.0, -18.0))
+			_box(root, "BipodLeft", Vector3(-0.07, 0.08, -0.82), Vector3(0.018, 0.25, 0.018), metal, Vector3(0.0, 0.0, -12.0))
+			_box(root, "BipodRight", Vector3(0.07, 0.08, -0.82), Vector3(0.018, 0.25, 0.018), metal, Vector3(0.0, 0.0, 12.0))
 		1:
-			_box(root, "SMGMagazine", Vector3(0.0, 0.22, -0.18), Vector3(0.12, 0.40, 0.13), dark_metal, Vector3(-5.0, 0.0, 0.0))
+			_box(root, "SMGMagazine", Vector3(0.0, 0.18, -0.14), Vector3(0.10, 0.31, 0.105), dark_metal, Vector3(-5.0, 0.0, 0.0))
+			_box(root, "SMGMagazineBase", Vector3(0.0, 0.34, -0.125), Vector3(0.125, 0.022, 0.12), metal, Vector3(-5.0, 0.0, 0.0))
+			_cylinder(root, "SMGBarrelShroud", Vector3(0.0, 0.0, -0.52), 0.046, 0.42, blued_metal, Vector3(90.0, 0.0, 0.0), 22)
 		2:
-			_box(root, "CarbineMagazine", Vector3(0.0, 0.18, -0.16), Vector3(0.12, 0.30, 0.15), dark_metal, Vector3(-12.0, 0.0, 0.0))
+			_box(root, "CarbineMagazine", Vector3(0.0, 0.16, -0.15), Vector3(0.105, 0.25, 0.13), dark_metal, Vector3(-12.0, 0.0, 0.0))
+			_box(root, "CarbineMagazineBase", Vector3(0.0, 0.29, -0.12), Vector3(0.125, 0.022, 0.145), metal, Vector3(-12.0, 0.0, 0.0))
+			_box(root, "CarbineForeEnd", Vector3(0.0, 0.015, -0.43), Vector3(0.145, 0.14, 0.38), wood)
 		3:
+			_box(root, "Magazine", Vector3(0.0, 0.16, -0.08), Vector3(0.105, 0.25, 0.145), dark_metal, Vector3(-8.0, 0.0, 0.0))
+			_box(root, "MagazineFloorPlate", Vector3(0.0, 0.29, -0.05), Vector3(0.125, 0.022, 0.16), metal, Vector3(-8.0, 0.0, 0.0))
 			_box(root, "RifleGrenadeSight", Vector3(-0.10, -0.08, -0.47), Vector3(0.025, 0.16, 0.035), metal, Vector3(0.0, 0.0, -18.0))
 		4:
+			_box(root, "Magazine", Vector3(0.0, 0.14, -0.04), Vector3(0.10, 0.20, 0.13), dark_metal, Vector3(-5.0, 0.0, 0.0))
+			_box(root, "MagazineFloorPlate", Vector3(0.0, 0.245, -0.025), Vector3(0.12, 0.022, 0.145), metal, Vector3(-5.0, 0.0, 0.0))
 			_box(root, "ScopeAdjustmentBlock", Vector3(0.0, -0.19, -0.08), Vector3(0.09, 0.07, 0.09), dark_metal)
 			_cylinder(root, "ScopeAdjustmentDial", Vector3(0.075, -0.19, -0.08), 0.035, 0.045, metal, Vector3(0.0, 0.0, 90.0), 12)
-
