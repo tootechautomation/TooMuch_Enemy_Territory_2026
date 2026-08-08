@@ -1922,6 +1922,19 @@ func server_absorb_matching_dropped_weapon(
 	)
 
 
+func _battlefield_slot_name(slot_index: int) -> String:
+	return "PRIMARY" if slot_index == 0 else "SECONDARY"
+
+
+func _battlefield_weapon_name(
+	source_team: int,
+	slot_index: int
+) -> String:
+	if slot_index == 1:
+		return "TT PISTOL" if source_team == 0 else "P38"
+	return "THOMPSON" if source_team == 0 else "MP40"
+
+
 @rpc("authority", "call_remote", "reliable")
 func confirm_battlefield_weapon_pickup(
 	slot_index: int,
@@ -1956,12 +1969,15 @@ func confirm_battlefield_weapon_pickup(
 	_refresh_external_weapon_model()
 
 	if selection_status != null:
-		var weapon_name := (
-			"TT PISTOL" if source_team == 0 else "P38"
-			if slot_index == 1
-			else "THOMPSON" if source_team == 0 else "MP40"
+		selection_status.text = (
+			"%s EQUIPPED · %s · %d/%d"
+			% [
+				_battlefield_slot_name(slot_index),
+				_battlefield_weapon_name(source_team, slot_index),
+				picked_magazine,
+				picked_reserve
+			]
 		)
-		selection_status.text = "PICKED UP %s" % weapon_name
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -1978,7 +1994,14 @@ func confirm_battlefield_ammo_pickup(
 		reserve_ammo = new_reserve
 
 	if selection_status != null:
-		selection_status.text = "AMMO +%d" % added_amount
+		selection_status.text = (
+			"%s AMMO +%d · RESERVE %d"
+			% [
+				_battlefield_slot_name(slot_index),
+				added_amount,
+				new_reserve
+			]
+		)
 
 
 func server_weapon_switch_request(desired_index: int) -> void:

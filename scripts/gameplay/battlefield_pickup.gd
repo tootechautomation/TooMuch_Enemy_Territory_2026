@@ -16,6 +16,8 @@ var weapon_resource_path: String = ""
 var magazine_ammo: int = 0
 var reserve_ammo: int = 0
 var ammo_amount: int = 0
+var pickup_label: Label3D
+var prompt_refresh_accumulator: float = 0.0
 
 func configure(
 	new_id: int,
@@ -42,6 +44,81 @@ func configure(
 		_build_visual()
 
 
+func _process(delta: float) -> void:
+	if pickup_label == null:
+		return
+
+	prompt_refresh_accumulator += delta
+	if prompt_refresh_accumulator < 0.18:
+		return
+	prompt_refresh_accumulator = 0.0
+
+	_update_contextual_prompt()
+
+
+func _update_contextual_prompt() -> void:
+	if pickup_label == null:
+		return
+
+	if pickup_kind == "ammo":
+		pickup_label.text = "[INTERACT] TAKE AMMO +%d" % ammo_amount
+		return
+
+	var main_node: Node = get_parent()
+	if main_node == null:
+		pickup_label.text = "[INTERACT] TAKE %s" % display_name()
+		return
+
+	var players_value: Variant = main_node.get("players")
+	if not players_value is Dictionary:
+		pickup_label.text = "[INTERACT] TAKE %s" % display_name()
+		return
+
+	var local_peer_id: int = multiplayer.get_unique_id()
+	var players: Dictionary = players_value
+	if not players.has(local_peer_id):
+		pickup_label.text = "[INTERACT] TAKE %s" % display_name()
+		return
+
+	var local_player: Node = players.get(local_peer_id) as Node
+	if local_player == null:
+		return
+
+	var slots_value: Variant = local_player.get("weapon_slots")
+	if not slots_value is Array:
+		pickup_label.text = "[INTERACT] TAKE %s" % display_name()
+		return
+
+	var slots: Array = slots_value
+	if slot_index < 0 or slot_index >= slots.size():
+		pickup_label.text = "[INTERACT] TAKE %s" % display_name()
+		return
+
+	var current_weapon: Resource = slots[slot_index] as Resource
+	var same_weapon: bool = (
+		current_weapon != null
+		and current_weapon.resource_path == weapon_resource_path
+	)
+
+	if same_weapon:
+		var available_rounds: int = (
+			maxi(0, magazine_ammo)
+			+ maxi(0, reserve_ammo)
+		)
+		pickup_label.text = (
+			"[INTERACT] SCAVENGE %s AMMO +%d"
+			% [display_name(), available_rounds]
+		)
+	else:
+		pickup_label.text = (
+			"[INTERACT] SWAP %s → %s"
+			% [
+				"PRIMARY" if slot_index == 0 else "SECONDARY",
+				display_name()
+			]
+		)
+
+
 func display_name() -> String:
 	if pickup_kind == "ammo":
 		return "AMMO"
@@ -61,25 +138,25 @@ func _build_visual() -> void:
 	else:
 		_build_weapon_visual()
 
-	var label := Label3D.new()
-	label.name = "PickupLabel"
-	label.position = Vector3(0.0, 0.48, 0.0)
-	label.text = (
-		"[INTERACT] TAKE / SCAVENGE %s" % display_name()
+	pickup_label = Label3D.new()
+	pickup_label.name = "PickupLabel"
+	pickup_label.position = Vector3(0.0, 0.48, 0.0)
+	pickup_label.text = (
+		"[INTERACT] %s" % display_name()
 		if pickup_kind == "weapon"
-		else "[INTERACT] TAKE AMMO"
+		else "[INTERACT] AMMO +%d" % ammo_amount
 	)
-	label.font_size = 26
-	label.outline_size = 8
-	label.modulate = Color(0.94, 0.91, 0.78)
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = false
-	label.visibility_range_end = 5.5
-	label.visibility_range_end_margin = 1.5
-	label.visibility_range_fade_mode = (
+	pickup_label.font_size = 26
+	pickup_label.outline_size = 8
+	pickup_label.modulate = Color(0.94, 0.91, 0.78)
+	pickup_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	pickup_label.no_depth_test = false
+	pickup_label.visibility_range_end = 5.5
+	pickup_label.visibility_range_end_margin = 1.5
+	pickup_label.visibility_range_fade_mode = (
 		GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 	)
-	add_child(label)
+	add_child(pickup_label)
 
 	var ring := MeshInstance3D.new()
 	ring.name = "PickupGroundRing"
