@@ -1,52 +1,36 @@
-FRONTLINE: OBJECTIVE v8.87.0
-CONTEXTUAL PICKUP HUD + SCAVENGING FEEDBACK
+FRONTLINE: OBJECTIVE v8.88.0
+WEAPON HANDLING + COMBAT MICRO-FEEDBACK
 
-NEW CONTEXTUAL WORLD PROMPTS
-Dropped weapons now describe exactly what INTERACT will do for the local player.
+NEW
+- local shell-casing ejection on successful fire feedback
+- pistol and primary casings use different sizes/velocities
+- casing movement/spin is cosmetic and lightweight
+- casing count capped at 14
+- casings clean themselves up after roughly 5 seconds
+- subtle weapon lowering while sprinting
+- subtle weapon cant during reload
+- existing recoil/muzzle systems remain authoritative
 
-Examples:
-- Already carrying MP40:
-  [INTERACT] SCAVENGE MP40 AMMO +42
-
-- Allied player carrying Thompson sees dropped MP40:
-  [INTERACT] SWAP PRIMARY → MP40
-
-- Axis player carrying P38 sees dropped TT:
-  [INTERACT] SWAP SECONDARY → TT PISTOL
-
-- Ammo pouch:
-  [INTERACT] TAKE AMMO +30
-
-The prompt updates from the LOCAL player's actual inventory and therefore works
-correctly with cross-faction weapon pickups.
-
-LOCAL FEEDBACK
-After a successful pickup the HUD now reports:
-- which slot changed
-- the equipped weapon
-- current magazine/reserve values
-
-Matching-weapon scavenging reports:
-- PRIMARY/SECONDARY
-- ammo added
-- resulting reserve
-
-PERFORMANCE
-Context prompts refresh at a lightweight ~0.18 second interval rather than
-performing inventory checks every rendered frame.
+IMPORTANT
+The shell casings:
+- are visual only
+- have no collision
+- do not replicate over the network
+- do not alter hit detection or fire rate
 
 PRESERVED
-- only ACTIVE weapon drops
-- matching weapon = ammo scavenging
-- different weapon = primary/secondary swap
-- world weapon presentation from v8.86
-- casualty persistence
+- v8.87 contextual pickup HUD
+- active-weapon-only death drops
+- same-weapon ammo scavenging
+- cross-faction swaps
 - resupply stations
-- working Axis P38 orientation
+- casualty persistence
+- Axis P38 orientation
+- Allied TT / Thompson / MP40
 - Mouse2 shoulder zoom
 - persistent crosshair
 - collision / objectives / networking
 - all environment/performance systems
 
-Build: 8.87.0
+Build: 8.88.0
 Network protocol: 341

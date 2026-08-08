@@ -29,6 +29,9 @@ const CombatCameraFeedbackScript = preload(
 const TeamIdentityHUDScript = preload(
 	"res://scripts/visuals/team_identity_hud.gd"
 )
+const WeaponHandlingFeedbackScript = preload(
+	"res://scripts/visuals/weapon_handling_feedback.gd"
+)
 
 
 enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
@@ -337,6 +340,7 @@ var muzzle_flash_sprite: TextureRect
 var visual_animation_time := 0.0
 var weapon_base_position := Vector3.ZERO
 var weapon_base_rotation := Vector3.ZERO
+var weapon_handling_feedback: Node
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -633,6 +637,12 @@ func apply_local_profile_settings(settings: Dictionary) -> void:
 	_update_selection_status()
 
 func _ready() -> void:
+	if DisplayServer.get_name() != "headless":
+		weapon_handling_feedback = WeaponHandlingFeedbackScript.new()
+		weapon_handling_feedback.name = "WeaponHandlingFeedback"
+		add_child(weapon_handling_feedback)
+		weapon_handling_feedback.call("initialize", self)
+
 	safe_margin = 0.08
 	max_slides = 8
 	floor_snap_length = 0.35
@@ -4259,6 +4269,15 @@ func _apply_weapon_kick() -> void:
 	weapon_view.position = position
 
 func _local_fire_feedback() -> void:
+	if weapon_handling_feedback != null:
+		var feedback_camera: Camera3D = $Head/Camera3D as Camera3D
+		if feedback_camera != null:
+			weapon_handling_feedback.call(
+				"eject_casing",
+				feedback_camera,
+				current_weapon_index == 1
+			)
+
 	if not _is_local_player():
 		return
 
@@ -6472,6 +6491,36 @@ func _update_first_person_animation(delta: float) -> void:
 	weapon_view.position = weapon_view.position.lerp(target_position, clampf(delta * position_speed,0.0,1.0))
 	weapon_view.rotation = weapon_view.rotation.lerp(target_rotation, clampf(delta * rotation_speed,0.0,1.0))
 	_update_first_person_mechanics(delta)
+
+	# v8.88 handling layer: slight sprint lower and reload cant. These offsets
+	# are intentionally small and apply on top of the existing pose system.
+	if weapon_view != null and not is_aiming:
+		var sprint_blend: float = (
+			1.0
+			if sprint_requested and velocity.length() > WALK_SPEED * 0.80
+			else 0.0
+		)
+		var reload_blend: float = 1.0 if is_reloading else 0.0
+
+		var desired_offset := Vector3(
+			0.025 * sprint_blend,
+			-0.055 * sprint_blend - 0.025 * reload_blend,
+			0.055 * sprint_blend
+		)
+		weapon_view.position = weapon_view.position.lerp(
+			weapon_base_position + desired_offset,
+			clampf(get_process_delta_time() * 8.0, 0.0, 1.0)
+		)
+
+		var desired_rotation := weapon_base_rotation + Vector3(
+			4.0 * reload_blend,
+			0.0,
+			-6.0 * sprint_blend - 5.0 * reload_blend
+		)
+		weapon_view.rotation_degrees = weapon_view.rotation_degrees.lerp(
+			desired_rotation,
+			clampf(get_process_delta_time() * 7.0, 0.0, 1.0)
+		)
 
 func _visual_part(node_name: String) -> Node3D:
 	var character_visual: Node3D = (
