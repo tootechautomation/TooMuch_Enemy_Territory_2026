@@ -162,6 +162,9 @@ const BattlefieldPickupScript = preload(
 const ResupplyStationScript = preload(
 	"res://scripts/gameplay/resupply_station.gd"
 )
+const CasualtyMarkerScript = preload(
+	"res://scripts/gameplay/casualty_marker.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -195,7 +198,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.84.0"
+const BUILD_VERSION := "8.85.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -312,6 +315,8 @@ var smoke_clouds: Dictionary = {}
 var battlefield_pickups: Dictionary = {}
 var next_battlefield_pickup_id: int = 1
 var resupply_stations: Array[Node3D] = []
+var casualty_markers: Dictionary = {}
+var next_casualty_id: int = 1
 var next_smoke_id := 1
 var station_accumulator := 0.0
 var command_health_station: MeshInstance3D
@@ -7115,9 +7120,91 @@ func server_try_resupply_station(player: Node3D) -> bool:
 	return bool(player.call("server_receive_resupply"))
 
 
+func _server_create_casualty_marker(
+	team_id: int,
+	position: Vector3,
+	body_yaw: float
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var casualty_id: int = next_casualty_id
+	next_casualty_id += 1
+
+	var safe_position := position
+	safe_position.y = maxf(safe_position.y, 0.03)
+
+	spawn_casualty_marker.rpc(
+		casualty_id,
+		clampi(team_id, 0, 1),
+		safe_position,
+		body_yaw,
+		28.0
+	)
+
+	get_tree().create_timer(28.0).timeout.connect(
+		func() -> void:
+			if multiplayer.is_server():
+				server_remove_casualty_marker(casualty_id)
+	)
+
+
+@rpc("authority", "call_local", "reliable")
+func spawn_casualty_marker(
+	casualty_id: int,
+	team_id: int,
+	position: Vector3,
+	body_yaw: float,
+	duration_seconds: float
+) -> void:
+	if casualty_markers.has(casualty_id):
+		return
+
+	var casualty: Node3D = CasualtyMarkerScript.new()
+	casualty.name = "Casualty_%d" % casualty_id
+	add_child(casualty)
+	casualty.call(
+		"configure",
+		casualty_id,
+		team_id,
+		position,
+		body_yaw,
+		duration_seconds
+	)
+	casualty_markers[casualty_id] = casualty
+
+
+func server_remove_casualty_marker(casualty_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	if not casualty_markers.has(casualty_id):
+		return
+	remove_casualty_marker.rpc(casualty_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func remove_casualty_marker(casualty_id: int) -> void:
+	if not casualty_markers.has(casualty_id):
+		return
+
+	var casualty: Node3D = casualty_markers.get(casualty_id) as Node3D
+	casualty_markers.erase(casualty_id)
+
+	if casualty != null and is_instance_valid(casualty):
+		casualty.queue_free()
+
+
 func server_spawn_player_death_drops(victim: Node3D) -> void:
 	if not multiplayer.is_server() or victim == null:
 		return
+
+	# v8.85: preserve a temporary casualty silhouette at the exact death
+	# location before the live player node is hidden/respawned.
+	_server_create_casualty_marker(
+		int(victim.get("team")),
+		victim.global_position,
+		victim.rotation.y
+	)
 
 	var slots_variant: Variant = victim.get("weapon_slots")
 	var mags_variant: Variant = victim.get("weapon_magazines")
@@ -7173,7 +7260,7 @@ func server_spawn_player_death_drops(victim: Node3D) -> void:
 			mag,
 			reserve,
 			0,
-			death_position + Vector3(0.0, 0.10, 0.10)
+			death_position + Vector3(0.58, 0.10, 0.28)
 		)
 
 	# A small loose-ammo pouch still drops independently. This represents
@@ -7196,7 +7283,7 @@ func server_spawn_player_death_drops(victim: Node3D) -> void:
 		0,
 		0,
 		pouch_amount,
-		death_position + Vector3(0.42, 0.08, 0.48)
+		death_position + Vector3(-0.48, 0.08, 0.40)
 	)
 
 

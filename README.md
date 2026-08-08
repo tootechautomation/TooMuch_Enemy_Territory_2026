@@ -1,49 +1,40 @@
-FRONTLINE: OBJECTIVE v8.84.0
-RESUPPLY STATIONS + PICKUP UX
+FRONTLINE: OBJECTIVE v8.85.0
+CASUALTY PERSISTENCE + BATTLEFIELD AFTERMATH
 
-NEW GAMEPLAY
-Three fixed battlefield resupply points are now available:
-- Bunker Ammo
-- Depot Supplies
-- Command Supply
+NEW
+When a player is fully eliminated:
+- the live player node still hides as before
+- a temporary casualty silhouette remains at the death location
+- the casualty keeps the dead player's team coloration
+- body orientation follows the player's final facing direction
+- a damp/disturbed ground patch appears underneath
+- the active dropped weapon is positioned beside the casualty
+- the loose-ammo pouch is positioned on the opposite side
 
-Use the existing INTERACT action while close to a station.
+CLEANUP
+- casualty visuals persist for 28 seconds
+- dropped weapons/ammo still use their existing 55-second cleanup
+- casualty geometry fades at long range to control visual cost
 
-Each successful station use can provide:
-- approximately two magazines of reserve ammunition for the CURRENT weapon
-- +1 grenade, up to the normal 2-grenade capacity
-- +1 smoke grenade, up to the normal 1-smoke capacity
+IMPORTANT
+The casualty is VISUAL ONLY:
+- no collision
+- no blocking movement
+- no hitbox
+- no revive target
+- no gameplay advantage/disadvantage
 
-A personal 8-second resupply cooldown prevents repeated spam.
-
-INTERACTION PRIORITY
-INTERACT now checks in this order:
-1. nearby dropped weapon/ammo pickup
-2. nearby fixed resupply station
-3. class interactions such as Medic revive / Engineer interaction
-
-This prevents a resupply crate from stealing an intended dropped-weapon pickup.
-
-PICKUP UX
-- dropped-weapon labels now fade out beyond roughly 7m
-- pickup ground rings fade out beyond roughly 10m
-- resupply prompts are also proximity-limited
-- reduces HUD/world clutter across the map
-
-PRESERVED FROM v8.83
-- only the ACTIVE weapon drops on death
-- same weapon on ground is scavenged for ammo
-- different primary/secondary weapons swap into the matching slot
-- cross-faction MP40 / Thompson / P38 / TT pickup rendering
-- separate loose-ammo pouch
-- 55-second dropped-equipment cleanup
-
-ALSO PRESERVED
-- working Axis P38 orientation
+PRESERVED
+- only ACTIVE weapon drops
+- same-weapon ammo scavenging
+- primary/secondary cross-faction swapping
+- resupply stations from v8.84
+- pickup interaction priority
+- Axis P38 orientation
 - Mouse2 shoulder zoom
 - persistent crosshair
 - collision / objectives / networking
-- all performance and visual systems
+- all existing visual/performance systems
 
-Build: 8.84.0
+Build: 8.85.0
 Network protocol: 341

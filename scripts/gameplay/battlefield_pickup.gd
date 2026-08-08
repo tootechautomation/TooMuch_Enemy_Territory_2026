@@ -91,7 +91,7 @@ func _build_visual() -> void:
 	ring.mesh = ring_mesh
 	ring.position = Vector3(0.0, 0.018, 0.0)
 	var ring_mat := StandardMaterial3D.new()
-	ring_mat.albedo_color = Color(0.78, 0.69, 0.38, 0.16)
+	ring_mat.albedo_color = Color(0.78, 0.69, 0.38, 0.12)
 	ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	ring.material_override = ring_mat
