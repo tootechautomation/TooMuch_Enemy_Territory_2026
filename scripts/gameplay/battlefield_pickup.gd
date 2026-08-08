@@ -74,7 +74,7 @@ func _build_visual() -> void:
 	label.modulate = Color(0.94, 0.91, 0.78)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = false
-	label.visibility_range_end = 7.0
+	label.visibility_range_end = 5.5
 	label.visibility_range_end_margin = 1.5
 	label.visibility_range_fade_mode = (
 		GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
@@ -96,12 +96,39 @@ func _build_visual() -> void:
 	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	ring.material_override = ring_mat
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	ring.visibility_range_end = 10.0
+	ring.visibility_range_end = 8.0
 	ring.visibility_range_end_margin = 2.0
 	ring.visibility_range_fade_mode = (
 		GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 	)
 	add_child(ring)
+
+	if pickup_kind == "weapon":
+		var marker := MeshInstance3D.new()
+		marker.name = "WeaponCategoryMarker"
+		var marker_mesh := BoxMesh.new()
+		marker_mesh.size = (
+			Vector3(0.95, 0.025, 0.10)
+			if slot_index == 0
+			else Vector3(0.42, 0.025, 0.10)
+		)
+		marker.mesh = marker_mesh
+		marker.position = Vector3(0.0, 0.025, 0.0)
+		marker.rotation.y = deg_to_rad(
+			float((pickup_id * 29) % 24) - 12.0
+		)
+		var marker_mat := StandardMaterial3D.new()
+		marker_mat.albedo_color = Color(0.76, 0.66, 0.34, 0.10)
+		marker_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		marker_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		marker.material_override = marker_mat
+		marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		marker.visibility_range_end = 8.0
+		marker.visibility_range_end_margin = 1.5
+		marker.visibility_range_fade_mode = (
+			GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		)
+		add_child(marker)
 
 
 func _build_weapon_visual() -> void:
@@ -129,19 +156,35 @@ func _build_weapon_visual() -> void:
 				var selected_path := scene.resource_path.to_lower()
 				var forward_yaw := 0.0
 
-				# Preserve the proven first-person asset direction rules.
 				if (
 					"m1a1_thompson" in selected_path
 					or "tt_pistol" in selected_path
 				):
 					forward_yaw = 180.0
 
+				var presentation_yaw: float = (
+					float((pickup_id * 37) % 26) - 13.0
+				)
+				var presentation_roll: float = (
+					-4.0 if pickup_id % 2 == 0 else 5.0
+				)
+
 				model.rotation_degrees = (
 					auto_rotation
-					+ Vector3(0.0, forward_yaw, 0.0)
-					+ Vector3(0.0, 0.0, 90.0)
+					+ Vector3(
+						0.0,
+						forward_yaw + presentation_yaw,
+						90.0 + presentation_roll
+					)
 				)
-				model.position.y = 0.18
+				model.position.y = (
+					0.12 if slot_index == 1 else 0.16
+				)
+				model.scale *= (
+					Vector3.ONE * 0.90
+					if slot_index == 1
+					else Vector3.ONE
+				)
 				return
 
 			model.queue_free()

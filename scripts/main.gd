@@ -198,7 +198,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.85.0"
+const BUILD_VERSION := "8.86.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -7260,7 +7260,11 @@ func server_spawn_player_death_drops(victim: Node3D) -> void:
 			mag,
 			reserve,
 			0,
-			death_position + Vector3(0.58, 0.10, 0.28)
+			death_position + (
+				Vector3(0.62, 0.10, 0.34)
+				if active_slot == 0
+				else Vector3(0.48, 0.10, 0.22)
+			)
 		)
 
 	# A small loose-ammo pouch still drops independently. This represents
