@@ -5,6 +5,10 @@ var casualty_id: int = 0
 var team_id: int = 0
 var cleanup_seconds: float = 28.0
 
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_DISABLED
+
+
 func configure(
 	new_id: int,
 	new_team: int,

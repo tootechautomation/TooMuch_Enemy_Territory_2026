@@ -4,6 +4,10 @@ class_name ResupplyStation
 var station_id: int = 0
 var station_name: String = "AMMO SUPPLY"
 
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_DISABLED
+
+
 func configure(
 	new_id: int,
 	new_name: String,

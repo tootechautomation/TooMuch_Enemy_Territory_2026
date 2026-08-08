@@ -57,6 +57,9 @@ const VisualQualityManagerScript = preload(
 const ClientPerformanceGovernorScript = preload(
 	"res://scripts/visuals/client_performance_governor.gd"
 )
+const MemoryAssetScalabilityScript = preload(
+	"res://scripts/visuals/memory_asset_scalability.gd"
+)
 const BattlefieldSurfaceFidelityScript = preload(
 	"res://scripts/visuals/battlefield_surface_fidelity.gd"
 )
@@ -201,7 +204,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.90.0"
+const BUILD_VERSION := "8.91.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -437,6 +440,7 @@ var wet_surface_response: Node
 var period_interface_fidelity: Node
 var visual_quality_manager: Node
 var client_performance_governor: Node
+var memory_asset_scalability: Node
 var battlefield_surface_fidelity: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
@@ -871,6 +875,18 @@ func _initialize_visual_quality_manager() -> void:
 
 	visual_quality_manager.quality_changed.connect(
 		client_performance_governor.on_quality_changed
+	)
+
+	memory_asset_scalability = MemoryAssetScalabilityScript.new()
+	memory_asset_scalability.name = "MemoryAssetScalability"
+	add_child(memory_asset_scalability)
+	memory_asset_scalability.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+	visual_quality_manager.quality_changed.connect(
+		memory_asset_scalability.on_quality_changed
 	)
 
 func _initialize_period_interface_fidelity() -> void:
