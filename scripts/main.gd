@@ -198,7 +198,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.88.0"
+const BUILD_VERSION := "8.89.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -607,7 +607,7 @@ func _ready() -> void:
 	_build_external_asset_overlay()
 	_spawn_external_environment_assets()
 	_update_external_asset_overlay()
-	_apply_high_visual_quality()
+	# v8.89: quality manager now owns AA/post-processing/scalability.
 	_build_concept_art_realism_pass()
 	_build_concept_art_realism_pass2()
 	_build_structural_depth_reconstruction()
@@ -879,6 +879,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			if key_event.physical_keycode != 0
 			else key_event.keycode
 		)
+		if key_code == KEY_F8 and visual_quality_manager != null:
+			visual_quality_manager.call("cycle_quality")
+			return
 		if not profile_waiting_for_action.is_empty():
 			if key_code == KEY_ESCAPE:
 				profile_waiting_for_action = ""
