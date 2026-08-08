@@ -74,6 +74,11 @@ func _build_visual() -> void:
 	label.modulate = Color(0.94, 0.91, 0.78)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = false
+	label.visibility_range_end = 7.0
+	label.visibility_range_end_margin = 1.5
+	label.visibility_range_fade_mode = (
+		GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	)
 	add_child(label)
 
 	var ring := MeshInstance3D.new()
@@ -91,6 +96,11 @@ func _build_visual() -> void:
 	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	ring.material_override = ring_mat
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ring.visibility_range_end = 10.0
+	ring.visibility_range_end_margin = 2.0
+	ring.visibility_range_fade_mode = (
+		GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	)
 	add_child(ring)
 
 

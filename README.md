@@ -1,50 +1,49 @@
-FRONTLINE: OBJECTIVE v8.83.0
-ACTIVE-WEAPON DROP + MATCHING-WEAPON AMMO SCAVENGE
+FRONTLINE: OBJECTIVE v8.84.0
+RESUPPLY STATIONS + PICKUP UX
 
-DEATH DROP RULE
-Only the weapon physically active/in the player's hands at the moment of death
-is dropped.
+NEW GAMEPLAY
+Three fixed battlefield resupply points are now available:
+- Bunker Ammo
+- Depot Supplies
+- Command Supply
 
-Examples:
-- Axis dies while holding MP40 -> MP40 drops.
-- Axis dies while holding P38 -> P38 drops.
-- Allied dies while holding Thompson -> Thompson drops.
-- Allied dies while holding TT -> TT drops.
+Use the existing INTERACT action while close to a station.
 
-The inactive weapon does NOT appear on the ground.
+Each successful station use can provide:
+- approximately two magazines of reserve ammunition for the CURRENT weapon
+- +1 grenade, up to the normal 2-grenade capacity
+- +1 smoke grenade, up to the normal 1-smoke capacity
 
-AMMO
-A small separate ammo pouch still drops to represent carried magazines.
+A personal 8-second resupply cooldown prevents repeated spam.
 
-MATCHING WEAPON INTERACTION
-If you interact with a dropped weapon that you already own in that same slot,
-the dropped gun is treated as an ammunition source instead of replacing your
-identical weapon.
+INTERACTION PRIORITY
+INTERACT now checks in this order:
+1. nearby dropped weapon/ammo pickup
+2. nearby fixed resupply station
+3. class interactions such as Medic revive / Engineer interaction
 
-Example:
-- You already carry an MP40.
-- Another MP40 is on the ground.
-- INTERACT transfers that dropped MP40's magazine + reserve ammunition into
-  your MP40 reserve, capped at your normal reserve maximum.
-- The dropped MP40 disappears only if ammunition was actually transferred.
+This prevents a resupply crate from stealing an intended dropped-weapon pickup.
 
-If the dropped weapon is different, the existing swap behavior remains:
-- primary replaces primary
-- pistol replaces pistol
+PICKUP UX
+- dropped-weapon labels now fade out beyond roughly 7m
+- pickup ground rings fade out beyond roughly 10m
+- resupply prompts are also proximity-limited
+- reduces HUD/world clutter across the map
 
-PICKUP POLISH
-- clearer "TAKE / SCAVENGE" prompt
-- subtle ground marker under dropped equipment
-- 55-second cleanup remains
+PRESERVED FROM v8.83
+- only the ACTIVE weapon drops on death
+- same weapon on ground is scavenged for ammo
+- different primary/secondary weapons swap into the matching slot
+- cross-faction MP40 / Thompson / P38 / TT pickup rendering
+- separate loose-ammo pouch
+- 55-second dropped-equipment cleanup
 
-PRESERVED
-- Axis P38 orientation
-- Allied TT / Thompson / MP40 rendering
-- cross-faction weapon rendering
+ALSO PRESERVED
+- working Axis P38 orientation
 - Mouse2 shoulder zoom
 - persistent crosshair
 - collision / objectives / networking
-- v8.81 performance/LOD work
+- all performance and visual systems
 
-Build: 8.83.0
+Build: 8.84.0
 Network protocol: 341

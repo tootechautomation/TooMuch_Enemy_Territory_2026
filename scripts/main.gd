@@ -159,6 +159,9 @@ const PerformanceLODPassScript = preload(
 const BattlefieldPickupScript = preload(
 	"res://scripts/gameplay/battlefield_pickup.gd"
 )
+const ResupplyStationScript = preload(
+	"res://scripts/gameplay/resupply_station.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -192,7 +195,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.83.0"
+const BUILD_VERSION := "8.84.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -308,6 +311,7 @@ var engineer_constructibles: Dictionary = {}
 var smoke_clouds: Dictionary = {}
 var battlefield_pickups: Dictionary = {}
 var next_battlefield_pickup_id: int = 1
+var resupply_stations: Array[Node3D] = []
 var next_smoke_id := 1
 var station_accumulator := 0.0
 var command_health_station: MeshInstance3D
@@ -593,6 +597,7 @@ func _ready() -> void:
 		visual_prop_cluster_scene = _load_optional_scene("res://assets/models/crate_barrel_cluster.glb")
 
 	_build_world()
+	_build_resupply_stations()
 	_initialize_external_lod()
 	_build_external_asset_overlay()
 	_spawn_external_environment_assets()
@@ -7051,6 +7056,64 @@ func damage_objective(amount: int, attacker_team: int) -> void:
 	if not multiplayer.is_server() or match_over or attacker_team != 0: return
 	objective_health = maxi(0, objective_health - amount)
 	if objective_health <= 0: _end_match("ATTACKERS WIN — objective destroyed")
+
+func _build_resupply_stations() -> void:
+	resupply_stations.clear()
+
+	var station_data: Array[Dictionary] = [
+		{
+			"name": "BUNKER AMMO",
+			"position": Vector3(10.6, 0.05, 1.7)
+		},
+		{
+			"name": "DEPOT SUPPLIES",
+			"position": Vector3(-2.1, 0.05, 7.2)
+		},
+		{
+			"name": "COMMAND SUPPLY",
+			"position": Vector3(2.0, 0.05, -7.1)
+		}
+	]
+
+	for index: int in range(station_data.size()):
+		var data: Dictionary = station_data[index]
+		var station: Node3D = ResupplyStationScript.new()
+		station.name = "ResupplyStation_%d" % index
+		add_child(station)
+		station.call(
+			"configure",
+			index,
+			str(data["name"]),
+			Vector3(data["position"])
+		)
+		resupply_stations.append(station)
+
+
+func server_try_resupply_station(player: Node3D) -> bool:
+	if not multiplayer.is_server() or player == null:
+		return false
+	if not bool(player.get("alive")) or bool(player.get("downed")):
+		return false
+
+	var closest_distance: float = 2.45
+	var closest_station: Node3D = null
+
+	for station: Node3D in resupply_stations:
+		if station == null or not is_instance_valid(station):
+			continue
+
+		var distance: float = player.global_position.distance_to(
+			station.global_position
+		)
+		if distance < closest_distance:
+			closest_distance = distance
+			closest_station = station
+
+	if closest_station == null:
+		return false
+
+	return bool(player.call("server_receive_resupply"))
+
 
 func server_spawn_player_death_drops(victim: Node3D) -> void:
 	if not multiplayer.is_server() or victim == null:

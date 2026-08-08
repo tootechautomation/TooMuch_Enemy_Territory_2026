@@ -128,6 +128,7 @@ var last_received_sequence := 0
 var local_sequence := 0
 var next_fire_time := 0
 var next_interact_time := 0
+var next_resupply_time := 0
 var next_ability_time := 0
 var kills := 0
 var deaths := 0
@@ -1752,6 +1753,100 @@ func server_equip_battlefield_weapon(
 	return true
 
 
+func server_receive_resupply() -> bool:
+	if not multiplayer.is_server() or not alive or downed:
+		return false
+
+	var now: int = Time.get_ticks_msec()
+	if now < next_resupply_time:
+		return false
+
+	if current_weapon_index < 0 or current_weapon_index >= weapon_slots.size():
+		return false
+
+	_store_current_weapon_ammo()
+
+	var current_weapon: Resource = weapon_slots[current_weapon_index] as Resource
+	var max_reserve: int = _resource_int(
+		current_weapon,
+		"reserve_ammo",
+		120
+	)
+	var magazine_size: int = _resource_int(
+		current_weapon,
+		"magazine_size",
+		30
+	)
+
+	# Each station use grants roughly two magazines worth of reserve ammunition.
+	var old_reserve: int = weapon_reserves[current_weapon_index]
+	var ammo_grant: int = maxi(12, magazine_size * 2)
+	var new_reserve: int = mini(
+		max_reserve,
+		old_reserve + ammo_grant
+	)
+
+	var changed: bool = new_reserve > old_reserve
+
+	if changed:
+		weapon_reserves[current_weapon_index] = new_reserve
+		reserve_ammo = new_reserve
+
+	var old_grenades: int = grenades_remaining
+	var old_smoke: int = smoke_grenades
+
+	grenades_remaining = mini(2, grenades_remaining + 1)
+	smoke_grenades = mini(1, smoke_grenades + 1)
+
+	if grenades_remaining != old_grenades or smoke_grenades != old_smoke:
+		changed = true
+
+	if not changed:
+		return false
+
+	next_resupply_time = now + 8000
+
+	confirm_station_resupply.rpc_id(
+		peer_id,
+		current_weapon_index,
+		new_reserve,
+		new_reserve - old_reserve,
+		grenades_remaining,
+		smoke_grenades
+	)
+	return true
+
+
+@rpc("authority", "call_remote", "reliable")
+func confirm_station_resupply(
+	slot_index: int,
+	new_reserve: int,
+	ammo_added: int,
+	new_grenades: int,
+	new_smoke: int
+) -> void:
+	if not _is_local_player():
+		return
+
+	if slot_index >= 0 and slot_index < weapon_reserves.size():
+		weapon_reserves[slot_index] = new_reserve
+	if slot_index == current_weapon_index:
+		reserve_ammo = new_reserve
+
+	grenades_remaining = new_grenades
+	smoke_grenades = new_smoke
+
+	if selection_status != null:
+		var parts: Array[String] = []
+		if ammo_added > 0:
+			parts.append("AMMO +%d" % ammo_added)
+		if new_grenades > 0:
+			parts.append("GRENADES %d/2" % new_grenades)
+		if new_smoke > 0:
+			parts.append("SMOKE %d/1" % new_smoke)
+		selection_status.text = "RESUPPLIED · " + " · ".join(parts)
+
+
 func server_add_battlefield_ammo(
 	amount: int,
 	slot_index: int = -1
@@ -2359,6 +2454,15 @@ func server_interact_request() -> void:
 		main_node != null
 		and main_node.has_method("server_try_battlefield_pickup")
 		and bool(main_node.call("server_try_battlefield_pickup", self))
+	):
+		return
+
+	# Fixed ammunition stations use the same INTERACT action, but only after
+	# nearby dropped equipment has been given priority.
+	if (
+		main_node != null
+		and main_node.has_method("server_try_resupply_station")
+		and bool(main_node.call("server_try_resupply_station", self))
 	):
 		return
 
