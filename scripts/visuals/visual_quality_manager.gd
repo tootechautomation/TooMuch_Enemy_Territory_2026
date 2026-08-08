@@ -1,6 +1,8 @@
 extends Node
 class_name VisualQualityManager
 
+signal quality_changed
+
 enum QualityPreset {
 	LOW,
 	BALANCED,
@@ -55,6 +57,8 @@ func apply_quality(
 	if save_preference:
 		_save_quality_preference()
 
+	quality_changed.emit()
+
 
 func quality_name() -> String:
 	match current_preset:
@@ -71,12 +75,16 @@ func _apply_viewport_quality() -> void:
 	if viewport == null:
 		return
 
+	# Occlusion culling is especially valuable in the dense urban map because
+	# buildings can hide a large number of props behind them.
+	_set_if_available(viewport, &"use_occlusion_culling", true)
+
 	match current_preset:
 		QualityPreset.LOW:
 			viewport.msaa_3d = Viewport.MSAA_DISABLED
 			viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
 			viewport.use_taa = false
-			_set_if_available(viewport, &"scaling_3d_scale", 0.72)
+			_set_if_available(viewport, &"scaling_3d_scale", 0.67)
 
 		QualityPreset.BALANCED:
 			viewport.msaa_3d = Viewport.MSAA_2X

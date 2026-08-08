@@ -1,95 +1,74 @@
-FRONTLINE: OBJECTIVE v8.89.0
-LAPTOP / INTEGRATED-GRAPHICS COMPATIBILITY PHASE
+FRONTLINE: OBJECTIVE v8.90.0
+CPU LOAD + FRAME-PACING OPTIMIZATION
 
-PERFORMANCE REVIEW FINDING
-Previous builds still called _apply_high_visual_quality() at startup. That
-forced expensive settings before the quality manager initialized:
-- 4x MSAA
-- TAA
-- SSAO
-- glow
-- full particle/light/shadow budgets
+THIS PHASE COMPLEMENTS v8.89
+v8.89 reduced GPU rendering cost.
+v8.90 targets client CPU load, laptop thermals and unstable frame pacing.
 
-v8.89 removes that forced startup High mode.
+NEW CLIENT PERFORMANCE GOVERNOR
+- LOW caps rendering at 60 FPS
+- BALANCED caps rendering at 90 FPS
+- HIGH caps rendering at 165 FPS
 
-QUALITY PRESETS
-F8 cycles:
-LOW / LAPTOP -> BALANCED -> HIGH
+The frame caps prevent laptops from wasting power/heat trying to render far
+above the display/gameplay requirement.
 
-The setting persists between launches.
+ADAPTIVE PERFORMANCE ASSIST
+If sustained client FPS remains under roughly 38 FPS for about six seconds:
+- HIGH automatically drops to BALANCED
+- BALANCED automatically drops to LOW
 
-LOW / LAPTOP
-Designed for integrated graphics / non-gaming machines:
-- 72% internal 3D render scale
-- FXAA
-- no MSAA
-- no TAA
-- SSAO off
-- SSIL off
-- glow off
-- volumetric fog off
-- particle density ~28%
-- secondary dust/ember/rain-interaction particles disabled
-- only ~2 shadow-casting dynamic lights
-- aggressive microdetail draw distance
-- microdetail shadows disabled
-- environmental cloth/rain interaction pass disabled
-- shell casing budget reduced to 4
+The system NEVER automatically raises quality again, preventing distracting
+quality oscillation during gameplay. Users can still press F8 manually.
 
-BALANCED (NEW DEFAULT)
-Designed for ordinary modern laptops:
+LOW / LAPTOP IMPROVEMENTS
+- internal 3D scale reduced from 72% to 67%
+- viewport occlusion culling enabled where supported
+- environmental motion controller stops processing
+- rain ripple controller stops processing
+- nonessential dust/ember/drip/splash/haze processing is suspended
+- low shell-casing cleanup reduced to ~3 seconds
+- 4-casing visual budget remains
+- 60 FPS cap reduces battery/thermal load
+
+BALANCED
+- 90 FPS cap
 - 88% internal render scale
-- 2x MSAA + FXAA
-- TAA off
-- moderate SSAO
-- SSIL off
-- moderate glow
-- volumetric fog off
-- particle density ~58%
-- about 7 shadow-casting dynamic lights
-- reduced microdetail shadow/distance cost
-- shell casing budget 8
+- moderate particles/shadows/SSAO from v8.89
+- casing cleanup ~4 seconds
 
 HIGH
-Keeps the approved full presentation:
-- 100% render scale
-- 4x MSAA + FXAA + TAA
-- full SSAO / SSIL
-- glow
-- volumetric fog
-- full particle counts
-- original light/shadow state
-- full visual detail ranges
-- shell casing budget 14
+- 165 FPS cap
+- full visual presentation
+- normal casing cleanup ~5 seconds
 
-OTHER COMPATIBILITY WORK
-- major structures and gameplay collision are never removed by Low mode
-- smoke needed for gameplay visibility remains active
-- quality changes do not affect server/network simulation
-- pickups, weapon swaps, resupply and casualties remain gameplay-identical
-- original render state is cached so switching back to High restores it
-- settings are property-checked where Godot versions may differ
+GAMEPLAY SAFETY
+NOT reduced or changed:
+- physics tick behavior
+- movement
+- weapon fire rate
+- hit registration
+- objective logic
+- multiplayer/server authority
+- bot/server gameplay simulation
+- gameplay smoke
+- collision geometry
 
-CONTROL
-F8 = Cycle Video Quality
-Upper-left indicator shows current mode.
-
-RECOMMENDED TARGETS
-LOW: integrated Intel/AMD graphics, older laptops, office-class PCs
-BALANCED: modern laptop iGPU / entry-level discrete graphics
-HIGH: gaming laptop / gaming desktop
+This means a Low-quality laptop client sees fewer cosmetic effects but still
+participates in the exact same authoritative match.
 
 PRESERVED
-- all v8.88 weapon handling feedback
-- contextual pickup HUD
+- v8.89 quality presets/F8 control
+- v8.88 weapon handling feedback
 - active-weapon-only drops
 - ammo scavenging
 - cross-faction weapon swaps
+- contextual pickup HUD
 - resupply stations
 - casualty persistence
 - working Axis P38 orientation
-- Mouse2 zoom and persistent crosshair
-- collision / objectives / networking
+- Mouse2 zoom + persistent crosshair
+- all objective/collision/network systems
 
-Build: 8.89.0
+Build: 8.90.0
 Network protocol: 341

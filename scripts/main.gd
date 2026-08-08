@@ -54,6 +54,9 @@ const PeriodInterfaceFidelityScript = preload(
 const VisualQualityManagerScript = preload(
 	"res://scripts/visuals/visual_quality_manager.gd"
 )
+const ClientPerformanceGovernorScript = preload(
+	"res://scripts/visuals/client_performance_governor.gd"
+)
 const BattlefieldSurfaceFidelityScript = preload(
 	"res://scripts/visuals/battlefield_surface_fidelity.gd"
 )
@@ -198,7 +201,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.89.0"
+const BUILD_VERSION := "8.90.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -433,6 +436,7 @@ var dynamic_weather_system: Node3D
 var wet_surface_response: Node
 var period_interface_fidelity: Node
 var visual_quality_manager: Node
+var client_performance_governor: Node
 var battlefield_surface_fidelity: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
@@ -850,10 +854,24 @@ func _initialize_visual_quality_manager() -> void:
 		return
 	if visual_quality_manager != null:
 		return
+
 	visual_quality_manager = VisualQualityManagerScript.new()
 	visual_quality_manager.name = "VisualQualityManager"
 	add_child(visual_quality_manager)
 	visual_quality_manager.call("initialize", self)
+
+	client_performance_governor = ClientPerformanceGovernorScript.new()
+	client_performance_governor.name = "ClientPerformanceGovernor"
+	add_child(client_performance_governor)
+	client_performance_governor.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+
+	visual_quality_manager.quality_changed.connect(
+		client_performance_governor.on_quality_changed
+	)
 
 func _initialize_period_interface_fidelity() -> void:
 	if DisplayServer.get_name() == "headless":

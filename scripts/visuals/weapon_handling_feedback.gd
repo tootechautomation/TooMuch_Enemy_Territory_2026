@@ -108,6 +108,7 @@ func _process(delta: float) -> void:
 			casing.set_meta("feedback_velocity", velocity)
 			casing.set_meta("feedback_spin", spin * 0.45)
 
-		if age >= 5.0:
+		var cleanup_age: float = 3.0 if max_casings <= 4 else 4.0 if max_casings <= 8 else 5.0
+		if age >= cleanup_age:
 			active_casings.remove_at(index)
 			casing.queue_free()
