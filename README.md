@@ -1,99 +1,75 @@
-FRONTLINE: OBJECTIVE v8.96.0
-HUD ALIGNMENT + F6/TAB INPUT HARDENING + LOW-COST VISUAL CLARITY
+FRONTLINE: OBJECTIVE v8.97.0
+TEAM REINFORCEMENT WAVES + DEAD-PLAYER RESPAWN FLOW
 
-FIX 1 — BOTTOM HUD ALIGNMENT
-The lower HUD was visually crowded against the bottom edge.
+IMPORTANT DISCOVERY
+The game already had real 10-second reinforcement waves. The problem was that
+it used ONE GLOBAL TIMER.
 
-v8.96:
-- health and ammo cards now share a cleaner baseline
-- both side cards are slightly shorter
-- Bunker Damage label/bar moved upward
-- center status row moved upward
-- more breathing room between objective bar / status / screen edge
-- existing resolution-safe 1280x720 scaling remains intact
+The Command Post reinforcement bonus was therefore shortening the wave for BOTH
+teams whenever either side controlled the post.
 
-FIX 2 — TAB SCOREBOARD
-TAB was previously handled only in _unhandled_input().
-Godot Control focus can consume Tab before _unhandled_input receives it.
+v8.97 corrects the existing gameplay instead of adding a duplicate system.
 
-v8.96 now handles TAB in raw _input():
-- focused UI cannot steal it during gameplay
-- press/hold TAB = scoreboard
-- release TAB = close scoreboard
-- scoreboard remains accessible even in cinema HUD mode
+TEAM-SPECIFIC WAVES
+- Allies/Attackers have their own reinforcement timer
+- Axis/Defenders have their own reinforcement timer
+- a team respawns only when ITS timer reaches zero
+- each team uses its own ticket count
+- spawn validation / forward spawns remain unchanged
 
-FIX 3 — F6 CINEMA MODE
-F6 is restored as a dedicated raw-key cinema-HUD toggle:
-- F6 hides normal combat HUD
-- F6 again restores it
-- works even if a Control currently owns keyboard focus
-- match-flow objective panel is suppressed
-- reinforcement panel is suppressed
-- quality/F8 indicator is suppressed
-- kill feed/radar/combat panels are suppressed
-- TAB scoreboard remains available
-- F6 state does NOT alter gameplay or graphics quality
+COMMAND POST BONUS
+SPAWN_WAVE_SECONDS remains 10 seconds.
 
-VISUAL QUALITY — NO EXTRA FPS COST
-The Low/Laptop screenshot was visually washed out because regular fog density
-remained fairly strong even after volumetric fog was disabled.
+The existing FORWARD_SPAWN_WAVE_BONUS is now applied only to the Command Post
+owner:
+- team without CP: normal 10 second reinforcement cycle
+- team controlling CP: 8 second cycle
+- minimum remains protected at 5 seconds
 
-v8.96 adds LowCostVisualClarity:
-LOW:
-- regular fog density reduced substantially
-- slightly stronger contrast
-- slightly richer saturation
-- darker/cooler fog light instead of washed-out white haze
+This makes the Command Post materially useful without accidentally buffing the
+enemy team too.
 
-BALANCED:
-- moderate fog
-- modest contrast/readability improvement
+NETWORK COMPATIBILITY
+A new lightweight unreliable reinforcement-state RPC synchronizes:
+- attacker_spawn_wave_remaining
+- defender_spawn_wave_remaining
 
-HIGH:
-- preserves the cinematic atmosphere while avoiding unnecessary white wash
+The legacy spawn_wave_remaining variable remains for older HUD/status code and
+is populated with the LOCAL player's team timer on clients.
 
-This adds:
-- no meshes
-- no lights
-- no particles
-- no extra shadow casters
-- no new network traffic
+DEAD-PLAYER HUD
+When fully eliminated, the local player now gets a compact center panel:
 
-WHY THE GAME STILL DOES NOT FULLY MATCH CONCEPT ART
-The remaining gap is increasingly ASSET-BOUND rather than code-bound:
-- higher-quality modular WWII buildings
-- cobblestone/road PBR sets
-- better rubble/prop libraries
-- skeletal first-person arm animations
-- more character skins/uniforms
-- authored level geometry instead of procedural block structures
+WAITING FOR REINFORCEMENTS · Xs
+M CLASS / TEAM · TAB SCOREBOARD
 
-The engine/code now has the scalability and asset hooks needed to use those
-without abandoning laptop compatibility.
+It disappears automatically on respawn.
 
-YOU DO NOT NEED A DIFFERENT AI MODEL TO CONTINUE
-The next meaningful visual jump will come from supplying/choosing better game
-assets and then integrating/optimizing them, not changing coding assistants.
+RESPAWN SAFETY
+server_respawn now explicitly:
+- re-enables the player's collision shape
+- restores player visibility
+- retains existing spawn protection
+- restores normal class loadout/ammunition
 
 PRESERVED
+- v8.96 TAB raw-input scoreboard fix
+- v8.96 F6 cinema toggle
+- bottom HUD alignment
+- LowCostVisualClarity
 - structural collision guard
-- first-person arm/hand fallback
-- menu-aware objective HUD
-- reinforcement display
-- objective progress sanity
-- active-weapon-only drops
+- first-person hands/arms fallback
+- menu-aware HUD
+- objective sanity/clamping
+- active-weapon-only death drops
 - same-weapon ammo scavenging
 - cross-faction weapon swaps
 - resupply
 - casualty persistence
-- contextual pickup HUD
-- shell casing feedback
-- F8 Low/Balanced/High
-- remote-player LOD
-- memory/CPU/GPU scalability
-- working Axis P38 orientation
-- Mouse2 zoom + persistent normal-game crosshair
-- server authority / objectives / networking
+- performance scalability stack
+- working Axis P38
+- Mouse2 zoom + crosshair
+- server authority / objective logic
 
-Build: 8.96.0
+Build: 8.97.0
 Network protocol: 341

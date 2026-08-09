@@ -81,6 +81,22 @@ func _refresh() -> void:
 
 
 func _wave_seconds() -> int:
+	var local_team := _local_team_id()
+
+	if (
+		local_team >= 0
+		and world_root.has_method("team_spawn_wave_remaining")
+	):
+		return maxi(
+			0,
+			int(ceil(float(
+				world_root.call(
+					"team_spawn_wave_remaining",
+					local_team
+				)
+			)))
+		)
+
 	for property_name: StringName in [
 		&"spawn_wave_remaining",
 		&"spawn_wave_seconds_remaining",
@@ -103,13 +119,22 @@ func _wave_seconds() -> int:
 	return maxi(0, int(ceil(cadence - fmod(seconds, cadence))))
 
 
-func _local_team_name() -> String:
+func _local_team_id() -> int:
 	var players_value: Variant = world_root.get("players")
 	if players_value is Dictionary:
 		var players: Dictionary = players_value
 		var player: Node = players.get(multiplayer.get_unique_id()) as Node
 		if player != null:
-			return "ALLIES" if int(player.get("team")) == 0 else "AXIS"
+			return clampi(int(player.get("team")), 0, 1)
+	return -1
+
+
+func _local_team_name() -> String:
+	var team_id := _local_team_id()
+	if team_id == 0:
+		return "ALLIES"
+	if team_id == 1:
+		return "AXIS"
 	return "TEAM"
 
 

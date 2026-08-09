@@ -219,7 +219,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.96.0"
+const BUILD_VERSION := "8.97.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -383,6 +383,8 @@ var dynamite_armed := false
 var dynamite_remaining := 0.0
 var match_time_remaining := MATCH_LENGTH_SECONDS
 var spawn_wave_remaining := SPAWN_WAVE_SECONDS
+var attacker_spawn_wave_remaining := SPAWN_WAVE_SECONDS
+var defender_spawn_wave_remaining := SPAWN_WAVE_SECONDS
 var match_over := false
 var status_label: Label
 var connection_panel: PanelContainer
@@ -1111,16 +1113,7 @@ func _process(delta: float) -> void:
 			match_time_remaining - delta
 		)
 
-	spawn_wave_remaining -= delta
-	if spawn_wave_remaining <= 0.0:
-		var wave_interval := SPAWN_WAVE_SECONDS
-		if command_post_control >= 0:
-			wave_interval = maxf(
-				5.0,
-				SPAWN_WAVE_SECONDS - FORWARD_SPAWN_WAVE_BONUS
-			)
-		spawn_wave_remaining += wave_interval
-		_respawn_wave()
+	_update_team_reinforcement_waves(delta)
 
 	if dynamite_armed:
 		dynamite_remaining = maxf(0.0, dynamite_remaining - delta)
@@ -7113,20 +7106,103 @@ func _validate_spawn_candidate(
 		"position": spawn_position
 	}
 
-func _respawn_wave() -> void:
-	for peer_id_value in players:
+func _team_wave_interval(team_id: int) -> float:
+	var interval := SPAWN_WAVE_SECONDS
+
+	# Command Post reinforcement bonus belongs ONLY to the team that controls
+	# it. The opposing team keeps its normal reinforcement cadence.
+	if command_post_control == team_id:
+		interval = maxf(
+			5.0,
+			SPAWN_WAVE_SECONDS - FORWARD_SPAWN_WAVE_BONUS
+		)
+
+	return interval
+
+
+func _update_team_reinforcement_waves(delta: float) -> void:
+	attacker_spawn_wave_remaining -= delta
+	defender_spawn_wave_remaining -= delta
+
+	if attacker_spawn_wave_remaining <= 0.0:
+		attacker_spawn_wave_remaining += _team_wave_interval(0)
+		_respawn_team_wave(0)
+
+	if defender_spawn_wave_remaining <= 0.0:
+		defender_spawn_wave_remaining += _team_wave_interval(1)
+		_respawn_team_wave(1)
+
+	# Compatibility value used by older HUD/status code. On the server this is
+	# the next reinforcement event of either side. Clients overwrite it with
+	# their local team's timer in broadcast_reinforcement_state().
+	spawn_wave_remaining = minf(
+		attacker_spawn_wave_remaining,
+		defender_spawn_wave_remaining
+	)
+
+	broadcast_reinforcement_state.rpc(
+		attacker_spawn_wave_remaining,
+		defender_spawn_wave_remaining
+	)
+
+
+func _respawn_team_wave(team_id: int) -> void:
+	for peer_id_value: Variant in players:
 		var peer_id: int = int(peer_id_value)
 		var player: Node3D = players[peer_id] as Node3D
 		if player == null:
 			continue
-		if not bool(player.get("alive")):
-			var player_team: int = int(player.get("team"))
-			if _ticket_value(player_team) <= 0:
-				continue
-			player.call(
-				"server_respawn",
-				_get_spawn(player_team, peer_id)
-			)
+		if bool(player.get("alive")):
+			continue
+		if int(player.get("team")) != team_id:
+			continue
+		if _ticket_value(team_id) <= 0:
+			continue
+
+		player.call(
+			"server_respawn",
+			_get_spawn(team_id, peer_id)
+		)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func broadcast_reinforcement_state(
+	attacker_remaining: float,
+	defender_remaining: float
+) -> void:
+	attacker_spawn_wave_remaining = maxf(0.0, attacker_remaining)
+	defender_spawn_wave_remaining = maxf(0.0, defender_remaining)
+
+	var local_team := -1
+	var local_id := multiplayer.get_unique_id()
+	if players.has(local_id):
+		var local_player: Node3D = players[local_id] as Node3D
+		if local_player != null:
+			local_team = int(local_player.get("team"))
+
+	if local_team == 0:
+		spawn_wave_remaining = attacker_spawn_wave_remaining
+	elif local_team == 1:
+		spawn_wave_remaining = defender_spawn_wave_remaining
+	else:
+		spawn_wave_remaining = minf(
+			attacker_spawn_wave_remaining,
+			defender_spawn_wave_remaining
+		)
+
+
+func team_spawn_wave_remaining(team_id: int) -> float:
+	return (
+		attacker_spawn_wave_remaining
+		if team_id == 0
+		else defender_spawn_wave_remaining
+	)
+
+
+func _respawn_wave() -> void:
+	# Compatibility helper for older calls/debug tools.
+	_respawn_team_wave(0)
+	_respawn_team_wave(1)
 
 func server_engineer_interact(engineer: Node3D) -> bool:
 	if not multiplayer.is_server() or match_over:
@@ -9339,6 +9415,8 @@ func _reset_round() -> void:
 	match_over = false
 	match_time_remaining = MATCH_LENGTH_SECONDS
 	spawn_wave_remaining = SPAWN_WAVE_SECONDS
+	attacker_spawn_wave_remaining = SPAWN_WAVE_SECONDS
+	defender_spawn_wave_remaining = SPAWN_WAVE_SECONDS
 	objective_health = 100
 	attacker_tickets = INITIAL_TEAM_TICKETS
 	defender_tickets = INITIAL_TEAM_TICKETS

@@ -275,6 +275,8 @@ var replicated_heavy_fire_ms := 0
 var class_mode_label: Label
 var rally_cooldown_until_ms := 0
 var mission_banner: Label
+var reinforcement_death_panel: PanelContainer
+var reinforcement_death_label: Label
 var rank_progress_label: Label
 var tactical_map_panel: PanelContainer
 var tactical_map_label: Label
@@ -878,6 +880,7 @@ func _physics_process(delta: float) -> void:
 		_collect_and_send_input()
 		_update_spectator_camera()
 		_update_hud()
+		_update_reinforcement_death_panel()
 		_apply_cinema_mode_visibility()
 		_update_combat_camera_feedback(delta)
 		_update_team_identity_hud()
@@ -2522,6 +2525,13 @@ func server_respawn(spawn_position: Vector3) -> void:
 	_activate_spawn_protection()
 	alive = true
 	downed = false
+
+	var respawn_collision: CollisionShape3D = (
+		$CollisionShape3D as CollisionShape3D
+	)
+	if respawn_collision != null:
+		respawn_collision.set_deferred("disabled", false)
+	show()
 	visual_damage_reaction = 0.0
 	visual_revive_recovery = 0.0
 	visual_incapacitation_impact = 0.0
@@ -6213,6 +6223,43 @@ func _build_hud() -> void:
 	_build_et_style_hud(layer)
 	_apply_resolution_safe_hud()
 
+	# Dead-player reinforcement queue panel. Hidden while alive.
+	reinforcement_death_panel = PanelContainer.new()
+	reinforcement_death_panel.name = "ReinforcementDeathPanel"
+	reinforcement_death_panel.position = Vector2(430, 300)
+	reinforcement_death_panel.custom_minimum_size = Vector2(420, 86)
+
+	var reinforcement_style := StyleBoxFlat.new()
+	reinforcement_style.bg_color = Color(0.025, 0.028, 0.027, 0.82)
+	reinforcement_style.border_color = Color(0.56, 0.52, 0.36, 0.68)
+	reinforcement_style.set_border_width_all(1)
+	reinforcement_style.corner_radius_top_left = 5
+	reinforcement_style.corner_radius_top_right = 5
+	reinforcement_style.corner_radius_bottom_left = 5
+	reinforcement_style.corner_radius_bottom_right = 5
+	reinforcement_death_panel.add_theme_stylebox_override(
+		"panel",
+		reinforcement_style
+	)
+
+	var reinforcement_margin := MarginContainer.new()
+	reinforcement_margin.add_theme_constant_override("margin_left", 14)
+	reinforcement_margin.add_theme_constant_override("margin_right", 14)
+	reinforcement_margin.add_theme_constant_override("margin_top", 10)
+	reinforcement_margin.add_theme_constant_override("margin_bottom", 10)
+	reinforcement_death_panel.add_child(reinforcement_margin)
+
+	reinforcement_death_label = Label.new()
+	reinforcement_death_label.name = "ReinforcementDeathLabel"
+	reinforcement_death_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reinforcement_death_label.add_theme_font_size_override("font_size", 18)
+	reinforcement_death_label.add_theme_constant_override("outline_size", 6)
+	reinforcement_death_label.modulate = Color(0.94, 0.90, 0.72)
+	reinforcement_margin.add_child(reinforcement_death_label)
+
+	hud_layer.add_child(reinforcement_death_panel)
+	reinforcement_death_panel.visible = false
+
 func _radar_position(world_position: Vector3, radius_meters: float = 42.0) -> Vector2:
 	var relative: Vector3 = world_position - global_position
 	relative.y = 0.0
@@ -6937,6 +6984,44 @@ func _register_visual_revive() -> void:
 	visual_revive_recovery = 1.0
 	visual_damage_reaction = 0.0
 	visual_incapacitation_impact = 0.0
+
+func _update_reinforcement_death_panel() -> void:
+	if reinforcement_death_panel == null:
+		return
+
+	var show_panel := (
+		not alive
+		and not cinema_mode_enabled
+		and not scoreboard.visible
+		and not spawn_menu_open
+		and not tactical_map_open
+	)
+
+	reinforcement_death_panel.visible = show_panel
+	if not show_panel or reinforcement_death_label == null:
+		return
+
+	var main: Node = get_parent()
+	var seconds := 0
+	if (
+		main != null
+		and main.has_method("team_spawn_wave_remaining")
+	):
+		seconds = maxi(
+			0,
+			int(ceil(float(
+				main.call(
+					"team_spawn_wave_remaining",
+					team
+				)
+			)))
+		)
+
+	reinforcement_death_label.text = (
+		"WAITING FOR REINFORCEMENTS · %ds\n"
+		+ "M CLASS / TEAM · TAB SCOREBOARD"
+	) % seconds
+
 
 func _update_hud() -> void:
 	if hud == null:
