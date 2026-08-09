@@ -228,7 +228,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.06.0"
+const BUILD_VERSION := "9.07.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -477,6 +477,7 @@ var vehicle_map_expansion: Node
 var vehicle_snapshot_accumulator := 0.0
 var vehicle_next_fire_ms: Dictionary = {}
 var vehicle_respawn_at_ms: Dictionary = {}
+var vehicle_damage_smoke_nodes: Dictionary = {}
 var low_cost_visual_clarity: Node
 var battlefield_effects_manager: Node3D
 var local_cinema_mode_enabled := false
@@ -1075,6 +1076,7 @@ func _process(delta: float) -> void:
 		_update_vehicle_respawns()
 
 	_update_adaptive_music()
+	_update_vehicle_damage_smoke()
 	atmosphere_elapsed += delta
 	_update_immersive_visuals()
 	_update_objective_visuals()
@@ -9815,6 +9817,30 @@ func show_vehicle_respawn(
 	vehicle.call("reset_for_respawn")
 
 
+func allied_vehicle_objective_support_bonus(
+	objective_position: Vector3,
+	radius: float = 14.0
+) -> float:
+	if not multiplayer.is_server():
+		return 0.0
+
+	var bonus := 0.0
+	for id_value: Variant in vehicles:
+		var vehicle: Node3D = vehicles.get(int(id_value)) as Node3D
+		if vehicle == null:
+			continue
+		if int(vehicle.get("team_id")) != 0:
+			continue
+		if bool(vehicle.get("destroyed")):
+			continue
+		if int(vehicle.get("driver_peer_id")) == 0:
+			continue
+		if vehicle.global_position.distance_to(objective_position) <= radius:
+			bonus += 0.08
+
+	return minf(bonus, 0.24)
+
+
 func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 	if not multiplayer.is_server() or not vehicles.has(vehicle_id):
 		return
@@ -9879,6 +9905,10 @@ func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 		end,
 		float(vehicle.call("impact_scale"))
 	)
+	show_vehicle_muzzle_flash.rpc(
+		origin,
+		float(vehicle.call("impact_scale"))
+	)
 
 
 func _server_handle_vehicle_destroyed(vehicle: Node) -> void:
@@ -9909,6 +9939,21 @@ func _server_handle_vehicle_destroyed(vehicle: Node) -> void:
 			vehicle_state_changed.rpc(gunner_id, -1, gunner_exit, -1)
 
 	vehicle_next_fire_ms.erase(vehicle_id)
+
+
+@rpc("authority", "call_local", "unreliable")
+func show_vehicle_muzzle_flash(
+	position: Vector3,
+	scale_factor: float
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager != null:
+		battlefield_effects_manager.call(
+			"spawn_vehicle_muzzle_flash",
+			position,
+			scale_factor
+		)
 
 
 @rpc("authority", "call_local", "unreliable")
@@ -10175,6 +10220,36 @@ func vehicle_state_changed(
 			position,
 			seat_id
 		)
+
+
+func _update_vehicle_damage_smoke() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager == null:
+		return
+
+	for id_value: Variant in vehicles:
+		var id := int(id_value)
+		var vehicle: Node3D = vehicles.get(id) as Node3D
+		if vehicle == null:
+			continue
+
+		var ratio := float(vehicle.call("damage_ratio"))
+		var existing: Node = vehicle_damage_smoke_nodes.get(id) as Node
+
+		if ratio >= 0.45 and not bool(vehicle.get("destroyed")):
+			if existing == null or not is_instance_valid(existing):
+				var smoke: Node3D = battlefield_effects_manager.call(
+					"spawn_vehicle_damage_smoke",
+					vehicle,
+					ratio
+				)
+				if smoke != null:
+					vehicle_damage_smoke_nodes[id] = smoke
+		else:
+			if existing != null and is_instance_valid(existing):
+				existing.queue_free()
+			vehicle_damage_smoke_nodes.erase(id)
 
 
 func _broadcast_vehicle_snapshots() -> void:

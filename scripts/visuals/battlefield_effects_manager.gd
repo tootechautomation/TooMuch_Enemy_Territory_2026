@@ -133,3 +133,76 @@ func _preset() -> int:
 	if quality_manager == null:
 		return 1
 	return clampi(int(quality_manager.get("current_preset")), 0, 2)
+
+
+func spawn_vehicle_damage_smoke(
+	parent_vehicle: Node3D,
+	severity: float
+) -> Node3D:
+	if DisplayServer.get_name() == "headless":
+		return null
+	if parent_vehicle == null:
+		return null
+
+	var holder := Node3D.new()
+	holder.name = "VehicleDamageSmoke"
+	parent_vehicle.add_child(holder)
+	holder.position = Vector3(0.0, 1.45, 0.35)
+
+	var particles := GPUParticles3D.new()
+	particles.amount = (
+		4
+		if _preset() == 0
+		else 8
+		if _preset() == 1
+		else 14
+	)
+	particles.lifetime = 1.5
+	particles.emitting = true
+
+	var process := ParticleProcessMaterial.new()
+	process.direction = Vector3.UP
+	process.spread = 28.0
+	process.initial_velocity_min = 0.5
+	process.initial_velocity_max = 1.4
+	process.gravity = Vector3(0.0, 0.3, 0.0)
+	process.scale_min = 0.16 + severity * 0.12
+	process.scale_max = 0.34 + severity * 0.26
+	process.color = Color(0.11, 0.105, 0.10, 0.68)
+	particles.process_material = process
+
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.10
+	mesh.height = 0.20
+	particles.draw_pass_1 = mesh
+	holder.add_child(particles)
+
+	return holder
+
+
+func spawn_vehicle_muzzle_flash(
+	position: Vector3,
+	scale_factor: float = 1.0
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var flash := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.10 * scale_factor
+	mesh.height = 0.20 * scale_factor
+	flash.mesh = mesh
+	flash.global_position = position
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(1.0, 0.62, 0.12)
+	material.emission_enabled = true
+	material.emission = Color(1.0, 0.25, 0.03)
+	flash.material_override = material
+	add_child(flash)
+
+	get_tree().create_timer(0.055).timeout.connect(
+		func() -> void:
+			if is_instance_valid(flash):
+				flash.queue_free()
+	)

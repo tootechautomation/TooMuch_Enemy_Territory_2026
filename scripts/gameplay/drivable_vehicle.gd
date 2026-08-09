@@ -12,6 +12,7 @@ var health := 500
 var max_health := 500
 
 var throttle_input := 0.0
+var throttle_setting := 0.0
 var steering_input := 0.0
 var pitch_input := 0.0
 var fire_input := false
@@ -25,6 +26,8 @@ var target_pitch := 0.0
 var aircraft_pitch := 0.0
 var aircraft_pitch_input_smoothed := 0.0
 var aircraft_steer_input_smoothed := 0.0
+var airborne := false
+var landing_gear_down := true
 var aircraft_roll := 0.0
 var turret_yaw := 0.0
 var turret_target_yaw := 0.0
@@ -73,6 +76,28 @@ func configure(
 	_build_collision()
 	if DisplayServer.get_name() != "headless":
 		_build_visual()
+
+func throttle_percent() -> int:
+	if vehicle_type == VehicleType.AIRCRAFT:
+		return int(round(clampf(throttle_setting, 0.0, 1.0) * 100.0))
+	return int(round(clampf(absf(throttle_input), 0.0, 1.0) * 100.0))
+
+
+func damage_ratio() -> float:
+	return 1.0 - (
+		float(health) / float(maxi(1, max_health))
+	)
+
+
+func is_airborne() -> bool:
+	return airborne
+
+
+func set_landing_gear(down: bool) -> void:
+	if vehicle_type != VehicleType.AIRCRAFT:
+		return
+	landing_gear_down = down
+
 
 func current_speed_kph() -> float:
 	return velocity.length() * 3.6
@@ -305,6 +330,13 @@ func server_set_input(
 	pitch_input = clampf(pitch, -1.0, 1.0)
 	fire_input = fire_pressed
 
+	if vehicle_type == VehicleType.AIRCRAFT:
+		throttle_setting = clampf(
+			throttle_setting + throttle_input * 0.018,
+			0.0,
+			1.0
+		)
+
 func server_set_gunner_input(
 	peer_id: int,
 	yaw_delta: float,
@@ -345,6 +377,7 @@ func reset_for_respawn() -> void:
 	driver_peer_id = 0
 	gunner_peer_id = 0
 	throttle_input = 0.0
+	throttle_setting = 0.0
 	steering_input = 0.0
 	pitch_input = 0.0
 	aircraft_pitch_input_smoothed = 0.0
@@ -358,6 +391,8 @@ func reset_for_respawn() -> void:
 	target_pitch = 0.0
 	turret_yaw = 0.0
 	turret_target_yaw = 0.0
+	airborne = false
+	landing_gear_down = true
 
 	if visual_root != null:
 		visual_root.rotation_degrees = Vector3.ZERO
@@ -539,12 +574,22 @@ func _simulate_aircraft(delta: float) -> void:
 		1.0 - exp(-5.5 * delta)
 	)
 
-	var speed := clampf(
-		maxf(velocity.length(), AIR_SPEED_MIN)
-		+ throttle_input * 14.0 * delta,
+	var target_speed := lerpf(
 		AIR_SPEED_MIN,
-		AIR_SPEED_MAX
+		AIR_SPEED_MAX,
+		throttle_setting
 	)
+
+	var speed := move_toward(
+		maxf(velocity.length(), 0.0),
+		target_speed,
+		10.0 * delta
+	)
+
+	# At very low throttle and on the runway, allow the aircraft to settle to a
+	# near-stop instead of being forced to AIR_SPEED_MIN.
+	if landing_gear_down and global_position.y <= 1.65 and throttle_setting < 0.08:
+		speed = move_toward(speed, 0.0, 18.0 * delta)
 
 	aircraft_pitch = clampf(
 		aircraft_pitch
@@ -559,18 +604,44 @@ func _simulate_aircraft(delta: float) -> void:
 		1.0 - exp(-3.5 * delta)
 	)
 
+	# Ground steering is gentler; airborne yaw/roll is stronger.
+	var ground_factor := 0.32 if global_position.y <= 1.65 else 1.0
 	rotation.x = aircraft_pitch
 	rotation.z = aircraft_roll
-	rotation.y -= aircraft_steer_input_smoothed * 0.48 * delta
+	rotation.y -= (
+		aircraft_steer_input_smoothed
+		* 0.48
+		* ground_factor
+		* delta
+	)
 
-	velocity = -global_transform.basis.z * speed
+	var forward := -global_transform.basis.z
+	velocity = forward * speed
 
-	if global_position.y < 1.35:
-		global_position.y = 1.35
+	# Simple lift model. Enough speed + slight nose-up = takeoff.
+	var lift_strength := maxf(0.0, speed - 13.0) * 0.075
+	lift_strength += maxf(0.0, -aircraft_pitch) * 6.0
+	velocity.y += lift_strength
+
+	# Landing gear damps vertical impact close to the ground.
+	if global_position.y <= 1.45 and landing_gear_down:
+		airborne = false
+		global_position.y = 1.45
 		if velocity.y < 0.0:
-			velocity.y = 0.0
+			velocity.y *= 0.18
+		if speed < 11.0:
+			rotation.x = lerp_angle(
+				rotation.x,
+				0.0,
+				1.0 - exp(-5.0 * delta)
+			)
+			aircraft_pitch = rotation.x
+	else:
+		airborne = true
 
 	move_and_slide()
+
+
 
 func _build_collision() -> void:
 	var collision := CollisionShape3D.new()

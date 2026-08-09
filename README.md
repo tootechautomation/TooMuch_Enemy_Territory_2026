@@ -1,37 +1,59 @@
-FRONTLINE: OBJECTIVE v9.06.0
-AIRCRAFT ENTRY / VEHICLE STATE STABILITY
+FRONTLINE: OBJECTIVE v9.07.0
+AIRCRAFT HANDLING + VEHICLE FEEDBACK POLISH
 
-CRASH FIXED
-client_set_vehicle_state() now receives all 3 required arguments:
-- vehicle_id
-- position
-- seat_id
+AIRCRAFT THROTTLE
+W/S now adjusts a persistent aircraft throttle setting instead of acting like
+a spring-loaded forward/back input.
 
-The stale two-argument call in vehicle_state_changed() was causing the
-plane/tank entry crash shown in the screenshot.
+Aircraft HUD shows:
+THR XX% · GROUND/AIRBORNE
 
-AIRCRAFT CONTROL STABILITY
-- pitch and steering input smoothing added
-- one-frame Space/Crouch input spikes are damped
-- safer pitch/roll limits
-- minimum ground-clearance safeguard
-- smoothed controls reset on exit/respawn
+TAKEOFF / LANDING
+- aircraft can settle near zero speed on runway at low throttle
+- simple lift model added
+- nose-up pitch at sufficient speed assists takeoff
+- landing gear mode damps vertical impact near ground
+- low-speed landing automatically levels pitch
+- ground steering is gentler than airborne turning
+- existing input smoothing retained
 
-INPUT ISOLATION
-- Space/Crouch affect pitch only in aircraft
-- Jeep/tank ignore jump/crouch vehicle pitch
+VEHICLE DAMAGE FEEDBACK
+Damaged vehicles begin emitting lightweight smoke at ~45% damage.
+Smoke automatically clears when vehicle is repaired/respawned/destroyed.
+
+VEHICLE WEAPON FEEDBACK
+Tank, Jeep MG and aircraft guns now produce a lightweight muzzle flash at the
+server-authoritative weapon origin.
+
+PERFORMANCE
+LOW:
+- very small particle counts
+- no extra shadow lights
+BALANCED/HIGH:
+- progressively richer smoke/effects
+
+No wheel rigid bodies, shell rigid bodies, or full aerodynamic simulation were
+added.
+
+OBJECTIVE INTEGRATION FOUNDATION
+Added allied_vehicle_objective_support_bonus() for upcoming objective stages.
+It reports a capped bonus when occupied Allied vehicles are positioned near a
+target objective. This is intentionally exposed as a helper rather than
+silently rewriting established objective balance in this phase.
 
 PRESERVED
-- v9.05 mouse gunner aiming
+- v9.06 vehicle-state crash fix
+- aircraft entry stability
+- v9.05 mouse turret aiming
 - Engineer repair
-- vehicle tactical markers
+- tactical vehicle markers
 - ammo/reload HUD
 - multi-seat Jeep/tank
 - independent turret
 - vehicle respawn/combat/destruction
-- real vehicle GLBs
+- real GLB models
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.06.0
+Build: 9.07.0
 Protocol: 341

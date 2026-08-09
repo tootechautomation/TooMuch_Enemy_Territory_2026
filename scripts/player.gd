@@ -2985,11 +2985,17 @@ func _update_vehicle_hud() -> void:
 			else "W/S DRIVE · A/D STEER"
 		)
 	elif type_id == 2:
-		weapon_text = "MOUSE1 MACHINE GUNS"
+		weapon_text = "W/S THROTTLE · A/D STEER · SPACE/CROUCH PITCH · MOUSE1 GUNS"
 
 	var ammo := int(vehicle.get("weapon_ammo"))
 	var ammo_max := int(vehicle.get("weapon_ammo_max"))
 	var reload_ms := int(vehicle.call("reload_remaining_ms"))
+	var aircraft_status := ""
+	if type_id == 2:
+		aircraft_status = " · THR %d%% · %s" % [
+			int(vehicle.call("throttle_percent")),
+			"AIRBORNE" if bool(vehicle.call("is_airborne")) else "GROUND"
+		]
 	var reload_text := (
 		"READY"
 		if reload_ms <= 0
@@ -2997,13 +3003,14 @@ func _update_vehicle_hud() -> void:
 	)
 
 	vehicle_hud_label.text = (
-		"%s · %s · HP %d/%d · %d KM/H\n%s · AMMO %d/%d · %s · E EXIT"
+		"%s · %s · HP %d/%d · %d KM/H%s\n%s · AMMO %d/%d · %s · E EXIT"
 		% [
 			str(vehicle.call("display_name")),
 			seat_name,
 			hp,
 			max_hp,
 			speed,
+			aircraft_status,
 			weapon_text,
 			ammo,
 			ammo_max,
