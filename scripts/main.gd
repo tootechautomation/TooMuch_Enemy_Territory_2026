@@ -60,6 +60,9 @@ const ClientPerformanceGovernorScript = preload(
 const MemoryAssetScalabilityScript = preload(
 	"res://scripts/visuals/memory_asset_scalability.gd"
 )
+const RemotePlayerPresentationLODScript = preload(
+	"res://scripts/visuals/remote_player_presentation_lod.gd"
+)
 const BattlefieldSurfaceFidelityScript = preload(
 	"res://scripts/visuals/battlefield_surface_fidelity.gd"
 )
@@ -204,7 +207,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.91.0"
+const BUILD_VERSION := "8.92.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -441,6 +444,7 @@ var period_interface_fidelity: Node
 var visual_quality_manager: Node
 var client_performance_governor: Node
 var memory_asset_scalability: Node
+var remote_player_presentation_lod: Node
 var battlefield_surface_fidelity: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
@@ -887,6 +891,18 @@ func _initialize_visual_quality_manager() -> void:
 	)
 	visual_quality_manager.quality_changed.connect(
 		memory_asset_scalability.on_quality_changed
+	)
+
+	remote_player_presentation_lod = RemotePlayerPresentationLODScript.new()
+	remote_player_presentation_lod.name = "RemotePlayerPresentationLOD"
+	add_child(remote_player_presentation_lod)
+	remote_player_presentation_lod.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+	visual_quality_manager.quality_changed.connect(
+		remote_player_presentation_lod.on_quality_changed
 	)
 
 func _initialize_period_interface_fidelity() -> void:
