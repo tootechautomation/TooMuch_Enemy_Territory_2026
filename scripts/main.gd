@@ -228,7 +228,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.03.0"
+const BUILD_VERSION := "9.03.2"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -477,6 +477,7 @@ var vehicle_map_expansion: Node
 var vehicle_snapshot_accumulator := 0.0
 var vehicle_next_fire_ms: Dictionary = {}
 var low_cost_visual_clarity: Node
+var battlefield_effects_manager: Node3D
 var local_cinema_mode_enabled := false
 var battlefield_surface_fidelity: Node3D
 var battlefield_sun: DirectionalLight3D
