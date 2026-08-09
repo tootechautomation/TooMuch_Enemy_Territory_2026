@@ -6257,7 +6257,10 @@ func _build_hud() -> void:
 	reinforcement_death_label.modulate = Color(0.94, 0.90, 0.72)
 	reinforcement_margin.add_child(reinforcement_death_label)
 
-	hud_layer.add_child(reinforcement_death_panel)
+	if hud_canvas_layer != null:
+		hud_canvas_layer.add_child(reinforcement_death_panel)
+	else:
+		add_child(reinforcement_death_panel)
 	reinforcement_death_panel.visible = false
 
 func _radar_position(world_position: Vector3, radius_meters: float = 42.0) -> Vector2:
