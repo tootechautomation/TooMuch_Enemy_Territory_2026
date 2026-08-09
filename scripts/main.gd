@@ -228,7 +228,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.03.2"
+const BUILD_VERSION := "9.03.3"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -9777,20 +9777,19 @@ func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 	query.collide_with_bodies = true
 	query.collide_with_areas = false
 
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	var vehicle_world: World3D = vehicle.get_world_3d()
+	if vehicle_world == null:
+		return
+	var hit := vehicle_world.direct_space_state.intersect_ray(query)
 	if not hit.is_empty():
 		end = Vector3(hit.get("position", end))
 		var collider: Object = hit.get("collider")
 
-		if collider != null and collider.has_method("server_take_damage"):
-			var target_team_value: Variant = collider.get("team")
-			var target_team := -1
-			if target_team_value != null:
-				target_team = int(target_team_value)
-			if target_team != int(vehicle.get("team_id")):
-				collider.call("server_take_damage", damage, peer_id)
-
-		elif collider is DrivableVehicle:
+		if (
+			collider != null
+			and collider.has_method("server_apply_damage")
+			and collider.get("vehicle_id") != null
+		):
 			var target_vehicle := collider as Node
 			if int(target_vehicle.get("team_id")) != int(vehicle.get("team_id")):
 				var destroyed_now := bool(
@@ -9798,6 +9797,14 @@ func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 				)
 				if destroyed_now:
 					_server_handle_vehicle_destroyed(target_vehicle)
+
+		elif collider != null and collider.has_method("server_take_damage"):
+			var target_team_value: Variant = collider.get("team")
+			var target_team := -1
+			if target_team_value != null:
+				target_team = int(target_team_value)
+			if target_team != int(vehicle.get("team_id")):
+				collider.call("server_take_damage", damage, peer_id)
 
 	show_vehicle_weapon_effect.rpc(
 		origin,
