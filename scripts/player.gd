@@ -281,6 +281,7 @@ var tactical_map_label: Label
 var tactical_map_open := false
 var tactical_map_toggle_latched := false
 var scoreboard_key_held := false
+var cinema_mode_enabled := false
 var direct_map_key_latched := false
 var et_hud_root: Control
 var et_status_label: Label
@@ -772,6 +773,59 @@ func _ready() -> void:
 		_show_spawn_menu()
 		call_deferred("_initialize_optional_client_systems")
 
+func _input(event: InputEvent) -> void:
+	if not _is_local_player():
+		return
+	if DisplayServer.get_name() == "headless":
+		return
+	if not event is InputEventKey:
+		return
+
+	var key_event := event as InputEventKey
+	var key_code: Key = (
+		key_event.physical_keycode
+		if key_event.physical_keycode != 0
+		else key_event.keycode
+	)
+
+	# TAB is a hold-to-view scoreboard control. Use _input rather than only
+	# _unhandled_input because focused menus/Controls may consume Tab for focus.
+	if key_code == KEY_TAB:
+		scoreboard_key_held = key_event.pressed
+		get_viewport().set_input_as_handled()
+		return
+
+	# F6 restores the dedicated cinema-HUD toggle. It is intentionally raw-key
+	# driven so a GUI focus state cannot trap the player in cinema mode.
+	if (
+		key_code == KEY_F6
+		and key_event.pressed
+		and not key_event.echo
+	):
+		cinema_mode_enabled = not cinema_mode_enabled
+		_apply_cinema_mode_visibility()
+
+		var main_node: Node = get_parent()
+		if (
+			main_node != null
+			and main_node.has_method("set_local_cinema_mode")
+		):
+			main_node.call(
+				"set_local_cinema_mode",
+				cinema_mode_enabled
+			)
+
+		if selection_status != null:
+			selection_status.text = (
+				"CINEMA HUD ON · F6 TO RESTORE HUD"
+				if cinema_mode_enabled
+				else "GAME HUD RESTORED · F6 CINEMA MODE"
+			)
+
+		get_viewport().set_input_as_handled()
+		return
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not _is_local_player():
 		return
@@ -783,10 +837,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			if key_event.physical_keycode != 0
 			else key_event.keycode
 		)
-
-		if key_code == KEY_TAB:
-			scoreboard_key_held = key_event.pressed
-			get_viewport().set_input_as_handled()
 
 		if (
 			key_code == KEY_K
@@ -828,6 +878,7 @@ func _physics_process(delta: float) -> void:
 		_collect_and_send_input()
 		_update_spectator_camera()
 		_update_hud()
+		_apply_cinema_mode_visibility()
 		_update_combat_camera_feedback(delta)
 		_update_team_identity_hud()
 		_apply_first_person_body_visibility()
@@ -5566,8 +5617,8 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 
 	var left_box := _make_et_panel(
 		et_hud_root,
-		Vector2(18, 570),
-		Vector2(300, 132),
+		Vector2(18, 574),
+		Vector2(300, 126),
 		dark_panel,
 		olive_border
 	)
@@ -5578,8 +5629,8 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 
 	var right_box := _make_et_panel(
 		et_hud_root,
-		Vector2(965, 570),
-		Vector2(297, 132),
+		Vector2(965, 574),
+		Vector2(297, 126),
 		dark_panel,
 		olive_border
 	)
@@ -5603,8 +5654,8 @@ func _build_et_style_hud(layer: CanvasLayer) -> void:
 	)
 
 	et_status_label = Label.new()
-	et_status_label.position = Vector2(420, 675)
-	et_status_label.custom_minimum_size = Vector2(440, 28)
+	et_status_label.position = Vector2(420, 661)
+	et_status_label.custom_minimum_size = Vector2(440, 24)
 	et_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	et_status_label.add_theme_font_size_override("font_size", 16)
 	et_status_label.add_theme_color_override(
@@ -5753,7 +5804,7 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 			"COLLISION DEBUG CHANGED · RESTART TO REBUILD PROXIES"
 		)
 	else:
-		et_status_label.text = "%s · %s · Q %s" % [
+		et_status_label.text = "%s · %s · Q %s · F6 CINEMA" % [
 			life_name,
 			str(main.call("sector_status_text")),
 			_ability_name()
@@ -5768,7 +5819,8 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 			round_results_open = results_panel.visible
 
 	var hud_visible: bool = (
-		not scoreboard.visible
+		not cinema_mode_enabled
+		and not scoreboard.visible
 		and not tactical_map_open
 		and not spawn_menu_open
 		and not round_results_open
@@ -5776,6 +5828,47 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 	et_hud_root.visible = hud_visible
 	if radar_panel != null:
 		radar_panel.visible = hud_visible
+
+func _apply_cinema_mode_visibility() -> void:
+	# Scoreboard remains usable in cinema mode. Everything else in the regular
+	# combat presentation can be hidden/restored with F6.
+	var show_game_hud: bool = not cinema_mode_enabled
+
+	if et_hud_root != null:
+		et_hud_root.visible = (
+			show_game_hud
+			and not scoreboard.visible
+			and not tactical_map_open
+			and not spawn_menu_open
+		)
+
+	if radar_panel != null:
+		radar_panel.visible = (
+			show_game_hud
+			and not scoreboard.visible
+			and not tactical_map_open
+			and not spawn_menu_open
+		)
+
+	if feed != null:
+		feed.visible = show_game_hud
+
+	if objective_progress_text != null:
+		objective_progress_text.visible = show_game_hud
+	if objective_progress_bar != null:
+		objective_progress_bar.visible = show_game_hud
+	if mission_banner != null and cinema_mode_enabled:
+		mission_banner.visible = false
+
+	if suppression_overlay != null and cinema_mode_enabled:
+		suppression_overlay.visible = false
+
+	# Keep the actual aiming crosshair available only in normal game mode.
+	if et_crosshair_ring != null:
+		et_crosshair_ring.visible = show_game_hud
+	if crosshair != null:
+		crosshair.visible = false
+
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
@@ -5891,7 +5984,7 @@ func _build_hud() -> void:
 	directional_damage_labels["LEFT"].position = Vector2(115, 345)
 
 	objective_progress_text = Label.new()
-	objective_progress_text.position = Vector2(430, 625)
+	objective_progress_text.position = Vector2(430, 603)
 	objective_progress_text.custom_minimum_size = Vector2(420, 28)
 	objective_progress_text.horizontal_alignment = (
 		HORIZONTAL_ALIGNMENT_CENTER
@@ -5903,7 +5996,7 @@ func _build_hud() -> void:
 	layer.add_child(objective_progress_text)
 
 	objective_progress_bar = ProgressBar.new()
-	objective_progress_bar.position = Vector2(430, 655)
+	objective_progress_bar.position = Vector2(430, 632)
 	objective_progress_bar.size = Vector2(420, 24)
 	objective_progress_bar.min_value = 0.0
 	objective_progress_bar.max_value = 100.0
@@ -7199,5 +7292,5 @@ func _update_hud() -> void:
 	if radar_panel != null and round_results_open:
 		radar_panel.visible = false
 	if feed != null:
-		feed.visible = not round_results_open
+		feed.visible = not round_results_open and not cinema_mode_enabled
 		feed.text = "\n".join(main.kill_feed)

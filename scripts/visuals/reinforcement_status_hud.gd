@@ -7,6 +7,7 @@ var quality_manager: Node
 var panel: PanelContainer
 var label: Label
 var refresh_accumulator := 0.0
+var cinema_suppressed := false
 
 const REFRESH_INTERVAL := 0.20
 
@@ -113,6 +114,9 @@ func _local_team_name() -> String:
 
 
 func _should_show() -> bool:
+	if cinema_suppressed:
+		return false
+
 	var players_value: Variant = world_root.get("players")
 	if not players_value is Dictionary:
 		return false
@@ -135,6 +139,12 @@ func _should_show() -> bool:
 				return false
 
 	return true
+
+
+func set_cinema_suppressed(suppressed: bool) -> void:
+	cinema_suppressed = suppressed
+	if panel != null and suppressed:
+		panel.visible = false
 
 
 func _has_property(

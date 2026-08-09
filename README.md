@@ -1,59 +1,99 @@
-FRONTLINE: OBJECTIVE v8.95.0
-MENU/HUD STATE FIX + OBJECTIVE SANITY + REINFORCEMENT PRESENTATION
+FRONTLINE: OBJECTIVE v8.96.0
+HUD ALIGNMENT + F6/TAB INPUT HARDENING + LOW-COST VISUAL CLARITY
 
-FIX 1 — SERVER BROWSER / MENU OVERLAP
-The v8.93/v8.94 objective HUD was still drawing while the server browser,
-connection form or profile/menu controls were visible.
+FIX 1 — BOTTOM HUD ALIGNMENT
+The lower HUD was visually crowded against the bottom edge.
 
-v8.95 now hides the match HUD whenever:
-- server browser is visible
-- connect/connection UI is visible
-- profile/settings menu is visible
-- main menu is visible
-- team/class selection menu is visible
+v8.96:
+- health and ammo cards now share a cleaner baseline
+- both side cards are slightly shorter
+- Bunker Damage label/bar moved upward
+- center status row moved upward
+- more breathing room between objective bar / status / screen edge
+- existing resolution-safe 1280x720 scaling remains intact
 
-The HUD reappears only when the local player exists in the active match.
+FIX 2 — TAB SCOREBOARD
+TAB was previously handled only in _unhandled_input().
+Godot Control focus can consume Tab before _unhandled_input receives it.
 
-FIX 2 — IMPOSSIBLE CAPTURE PERCENTAGES
-Observed example:
-    Capture progress -2917%
+v8.96 now handles TAB in raw _input():
+- focused UI cannot steal it during gameplay
+- press/hold TAB = scoreboard
+- release TAB = close scoreboard
+- scoreboard remains accessible even in cinema HUD mode
 
-The HUD now normalizes objective internals before display:
-- supports 0..1 values
-- supports 0..100 values
-- handles signed contested accumulation
-- clamps final display to 0..100%
-- rejects non-finite values
+FIX 3 — F6 CINEMA MODE
+F6 is restored as a dedicated raw-key cinema-HUD toggle:
+- F6 hides normal combat HUD
+- F6 again restores it
+- works even if a Control currently owns keyboard focus
+- match-flow objective panel is suppressed
+- reinforcement panel is suppressed
+- quality/F8 indicator is suppressed
+- kill feed/radar/combat panels are suppressed
+- TAB scoreboard remains available
+- F6 state does NOT alter gameplay or graphics quality
 
-The gameplay objective variable itself is NOT modified.
+VISUAL QUALITY — NO EXTRA FPS COST
+The Low/Laptop screenshot was visually washed out because regular fog density
+remained fairly strong even after volumetric fog was disabled.
 
-NEXT PHASE — REINFORCEMENT READABILITY
-Added a lightweight client-only reinforcement status panel:
-- identifies local side (ALLIES / AXIS)
-- shows next spawn-wave countdown
-- uses authoritative remaining time if exposed by the game
-- otherwise mirrors the existing wave cadence for display
-- automatically hides in menus
+v8.96 adds LowCostVisualClarity:
+LOW:
+- regular fog density reduced substantially
+- slightly stronger contrast
+- slightly richer saturation
+- darker/cooler fog light instead of washed-out white haze
 
-This does not alter actual respawn scheduling.
+BALANCED:
+- moderate fog
+- modest contrast/readability improvement
+
+HIGH:
+- preserves the cinematic atmosphere while avoiding unnecessary white wash
+
+This adds:
+- no meshes
+- no lights
+- no particles
+- no extra shadow casters
+- no new network traffic
+
+WHY THE GAME STILL DOES NOT FULLY MATCH CONCEPT ART
+The remaining gap is increasingly ASSET-BOUND rather than code-bound:
+- higher-quality modular WWII buildings
+- cobblestone/road PBR sets
+- better rubble/prop libraries
+- skeletal first-person arm animations
+- more character skins/uniforms
+- authored level geometry instead of procedural block structures
+
+The engine/code now has the scalability and asset hooks needed to use those
+without abandoning laptop compatibility.
+
+YOU DO NOT NEED A DIFFERENT AI MODEL TO CONTINUE
+The next meaningful visual jump will come from supplying/choosing better game
+assets and then integrating/optimizing them, not changing coding assistants.
 
 PRESERVED
-- v8.94 structural collision guard
-- v8.94 first-person procedural arm/hand fallback
-- HUD safe-area positioning
+- structural collision guard
+- first-person arm/hand fallback
+- menu-aware objective HUD
+- reinforcement display
+- objective progress sanity
 - active-weapon-only drops
 - same-weapon ammo scavenging
 - cross-faction weapon swaps
-- resupply stations
+- resupply
 - casualty persistence
 - contextual pickup HUD
-- shell-casing feedback
-- F8 Low/Balanced/High performance stack
+- shell casing feedback
+- F8 Low/Balanced/High
 - remote-player LOD
-- memory / CPU / GPU scalability
+- memory/CPU/GPU scalability
 - working Axis P38 orientation
-- Mouse2 zoom + persistent crosshair
-- collision/objective/server authority/networking
+- Mouse2 zoom + persistent normal-game crosshair
+- server authority / objectives / networking
 
-Build: 8.95.0
+Build: 8.96.0
 Network protocol: 341

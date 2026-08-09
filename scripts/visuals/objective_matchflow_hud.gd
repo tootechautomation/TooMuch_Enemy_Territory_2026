@@ -15,6 +15,7 @@ var refresh_accumulator := 0.0
 var last_summary := ""
 var event_until_ms := 0
 var was_match_hud_visible := false
+var cinema_suppressed := false
 
 const REFRESH_INTERVAL := 0.15
 
@@ -57,6 +58,9 @@ func _process(delta: float) -> void:
 
 
 func _should_show_match_hud() -> bool:
+	if cinema_suppressed:
+		return false
+
 	if world_root == null:
 		return false
 
@@ -106,6 +110,14 @@ func _should_show_match_hud() -> bool:
 		return local_player_value != null
 
 	return false
+
+
+func set_cinema_suppressed(suppressed: bool) -> void:
+	cinema_suppressed = suppressed
+	if panel != null and suppressed:
+		panel.visible = false
+	if event_label != null and suppressed:
+		event_label.visible = false
 
 
 func _update_safe_layout() -> void:

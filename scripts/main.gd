@@ -72,6 +72,9 @@ const StructuralCollisionGuardScript = preload(
 const ReinforcementStatusHUDScript = preload(
 	"res://scripts/visuals/reinforcement_status_hud.gd"
 )
+const LowCostVisualClarityScript = preload(
+	"res://scripts/visuals/low_cost_visual_clarity.gd"
+)
 const BattlefieldSurfaceFidelityScript = preload(
 	"res://scripts/visuals/battlefield_surface_fidelity.gd"
 )
@@ -216,7 +219,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.95.0"
+const BUILD_VERSION := "8.96.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -457,6 +460,8 @@ var remote_player_presentation_lod: Node
 var objective_matchflow_hud: CanvasLayer
 var structural_collision_guard: Node
 var reinforcement_status_hud: CanvasLayer
+var low_cost_visual_clarity: Node
+var local_cinema_mode_enabled := false
 var battlefield_surface_fidelity: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
@@ -939,6 +944,42 @@ func _initialize_visual_quality_manager() -> void:
 		self,
 		visual_quality_manager
 	)
+
+	low_cost_visual_clarity = LowCostVisualClarityScript.new()
+	low_cost_visual_clarity.name = "LowCostVisualClarity"
+	add_child(low_cost_visual_clarity)
+	low_cost_visual_clarity.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+	visual_quality_manager.quality_changed.connect(
+		low_cost_visual_clarity.on_quality_changed
+	)
+
+func set_local_cinema_mode(enabled: bool) -> void:
+	local_cinema_mode_enabled = enabled
+
+	if objective_matchflow_hud != null:
+		objective_matchflow_hud.call(
+			"set_cinema_suppressed",
+			enabled
+		)
+
+	if reinforcement_status_hud != null:
+		reinforcement_status_hud.call(
+			"set_cinema_suppressed",
+			enabled
+		)
+
+	# Hide the quality indicator while capturing cinematic screenshots/video.
+	if visual_quality_manager != null:
+		var overlay := visual_quality_manager.get_node_or_null(
+			"VisualQualityOverlay"
+		) as CanvasLayer
+		if overlay != null:
+			overlay.visible = not enabled
+
 
 func _initialize_period_interface_fidelity() -> void:
 	if DisplayServer.get_name() == "headless":
