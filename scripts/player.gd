@@ -7252,7 +7252,16 @@ func _update_class_role_hud() -> void:
 	if class_role_panel == null:
 		return
 
-	var visible_state := (
+	var round_results_open: bool = false
+	var main_node: Node = get_parent()
+	if main_node != null:
+		var results_panel_value: Variant = main_node.get("round_results_panel")
+		if results_panel_value is PanelContainer:
+			round_results_open = (
+				results_panel_value as PanelContainer
+			).visible
+
+	var visible_state: bool = (
 		alive
 		and not cinema_mode_enabled
 		and not scoreboard.visible
