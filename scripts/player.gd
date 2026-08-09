@@ -277,6 +277,9 @@ var rally_cooldown_until_ms := 0
 var mission_banner: Label
 var reinforcement_death_panel: PanelContainer
 var reinforcement_death_label: Label
+var class_role_panel: PanelContainer
+var class_role_label: Label
+var class_role_prompt: Label
 var rank_progress_label: Label
 var tactical_map_panel: PanelContainer
 var tactical_map_label: Label
@@ -284,6 +287,8 @@ var tactical_map_open := false
 var tactical_map_toggle_latched := false
 var scoreboard_key_held := false
 var cinema_mode_enabled := false
+var current_vehicle_id: int = -1
+var vehicle_camera_active := false
 var direct_map_key_latched := false
 var et_hud_root: Control
 var et_status_label: Label
@@ -879,7 +884,9 @@ func _physics_process(delta: float) -> void:
 		_poll_spawn_menu_toggle()
 		_collect_and_send_input()
 		_update_spectator_camera()
+		_update_vehicle_camera()
 		_update_hud()
+		_update_class_role_hud()
 		_update_reinforcement_death_panel()
 		_apply_cinema_mode_visibility()
 		_update_combat_camera_feedback(delta)
@@ -985,6 +992,50 @@ func _collect_and_send_input() -> void:
 		return
 
 	local_sequence += 1
+
+	if current_vehicle_id >= 0:
+		var vehicle_move := Input.get_vector(
+			"move_left",
+			"move_right",
+			"move_forward",
+			"move_back"
+		)
+		var vehicle_throttle := -vehicle_move.y
+		var vehicle_steering := vehicle_move.x
+		var vehicle_pitch := 0.0
+
+		if Input.is_action_pressed("jump"):
+			vehicle_pitch = -1.0
+		elif Input.is_action_pressed("crouch"):
+			vehicle_pitch = 1.0
+
+		var vehicle_main := get_parent()
+		if vehicle_main != null:
+			vehicle_main.submit_vehicle_input.rpc_id(
+				1,
+				multiplayer.get_unique_id(),
+				current_vehicle_id,
+				vehicle_throttle,
+				vehicle_steering,
+				vehicle_pitch
+			)
+
+		is_aiming = false
+		_update_aim_view()
+
+		if Input.is_action_pressed("interact"):
+			interact_accumulator += get_physics_process_delta_time()
+			if interact_accumulator >= 0.25:
+				interact_accumulator = 0.0
+				if vehicle_main != null:
+					vehicle_main.request_player_interact.rpc_id(
+						1,
+						multiplayer.get_unique_id()
+					)
+		else:
+			interact_accumulator = 0.0
+		return
+
 	var move := Vector2.ZERO if downed else Input.get_vector(
 		"move_left",
 		"move_right",
@@ -2567,6 +2618,81 @@ func server_respawn(spawn_position: Vector3) -> void:
 	velocity = Vector3.ZERO
 	input_vector = Vector2.ZERO
 
+func server_set_vehicle_state(
+	vehicle_id: int,
+	position: Vector3
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	current_vehicle_id = vehicle_id
+	velocity = Vector3.ZERO
+
+	var collision := $CollisionShape3D as CollisionShape3D
+	if collision != null:
+		collision.set_deferred("disabled", vehicle_id >= 0)
+
+	if vehicle_id >= 0:
+		global_position = position + Vector3.UP * 1.0
+		visible = false
+	else:
+		global_position = position
+		visible = true
+
+
+func client_set_vehicle_state(
+	vehicle_id: int,
+	position: Vector3
+) -> void:
+	current_vehicle_id = vehicle_id
+	vehicle_camera_active = vehicle_id >= 0
+
+	if vehicle_id >= 0:
+		if _is_local_player():
+			visible = false
+			_set_first_person_view_visible(false)
+	else:
+		global_position = position
+		visible = true
+		if _is_local_player():
+			_set_first_person_view_visible(true)
+
+
+func _set_first_person_view_visible(show_value: bool) -> void:
+	if weapon_view != null:
+		weapon_view.visible = show_value
+	if first_person_arms_fallback != null:
+		first_person_arms_fallback.visible = show_value
+
+
+func _update_vehicle_camera() -> void:
+	if not _is_local_player() or current_vehicle_id < 0:
+		return
+
+	var main_node := get_parent()
+	if main_node == null:
+		return
+
+	var vehicles_value: Variant = main_node.get("vehicles")
+	if not vehicles_value is Dictionary:
+		return
+
+	var vehicle_dict: Dictionary = vehicles_value
+	if not vehicle_dict.has(current_vehicle_id):
+		return
+
+	var vehicle: Node3D = vehicle_dict.get(current_vehicle_id) as Node3D
+	var camera := $Head/Camera3D as Camera3D
+	if vehicle == null or camera == null:
+		return
+
+	var target: Transform3D = vehicle.call("camera_anchor")
+	camera.global_transform = camera.global_transform.interpolate_with(
+		target,
+		0.22
+	)
+
+
 func server_interact_request() -> void:
 	if not multiplayer.is_server() or not alive:
 		return
@@ -2575,8 +2701,16 @@ func server_interact_request() -> void:
 		return
 	next_interact_time = now + 350
 
-	# Battlefield weapon/ammo pickups use the existing INTERACT action.
 	var main_node: Node = get_parent()
+
+	if (
+		main_node != null
+		and main_node.has_method("server_try_vehicle_interact")
+		and bool(main_node.call("server_try_vehicle_interact", self))
+	):
+		return
+
+	# Battlefield weapon/ammo pickups use the existing INTERACT action.
 	if (
 		main_node != null
 		and main_node.has_method("server_try_battlefield_pickup")
@@ -5862,6 +5996,8 @@ func _apply_cinema_mode_visibility() -> void:
 
 	if feed != null:
 		feed.visible = show_game_hud
+	if class_role_panel != null:
+		class_role_panel.visible = show_game_hud and alive
 
 	if objective_progress_text != null:
 		objective_progress_text.visible = show_game_hud
@@ -6262,6 +6398,52 @@ func _build_hud() -> void:
 	else:
 		add_child(reinforcement_death_panel)
 	reinforcement_death_panel.visible = false
+
+	# v8.98 class-role HUD. Lightweight 2D-only presentation.
+	class_role_panel = PanelContainer.new()
+	class_role_panel.name = "ClassRolePanel"
+	class_role_panel.position = Vector2(22, 505)
+	class_role_panel.custom_minimum_size = Vector2(300, 58)
+
+	var class_style := StyleBoxFlat.new()
+	class_style.bg_color = Color(0.03, 0.035, 0.034, 0.72)
+	class_style.border_color = Color(0.42, 0.46, 0.38, 0.48)
+	class_style.set_border_width_all(1)
+	class_style.corner_radius_top_left = 4
+	class_style.corner_radius_top_right = 4
+	class_style.corner_radius_bottom_left = 4
+	class_style.corner_radius_bottom_right = 4
+	class_role_panel.add_theme_stylebox_override("panel", class_style)
+
+	var class_margin := MarginContainer.new()
+	class_margin.add_theme_constant_override("margin_left", 10)
+	class_margin.add_theme_constant_override("margin_right", 10)
+	class_margin.add_theme_constant_override("margin_top", 7)
+	class_margin.add_theme_constant_override("margin_bottom", 7)
+	class_role_panel.add_child(class_margin)
+
+	var class_stack := VBoxContainer.new()
+	class_stack.add_theme_constant_override("separation", 1)
+	class_margin.add_child(class_stack)
+
+	class_role_label = Label.new()
+	class_role_label.name = "ClassRoleLabel"
+	class_role_label.add_theme_font_size_override("font_size", 14)
+	class_role_label.add_theme_constant_override("outline_size", 4)
+	class_role_label.modulate = Color(0.90, 0.88, 0.76)
+	class_stack.add_child(class_role_label)
+
+	class_role_prompt = Label.new()
+	class_role_prompt.name = "ClassRolePrompt"
+	class_role_prompt.add_theme_font_size_override("font_size", 12)
+	class_role_prompt.add_theme_constant_override("outline_size", 3)
+	class_role_prompt.modulate = Color(0.76, 0.80, 0.72)
+	class_stack.add_child(class_role_prompt)
+
+	if hud_canvas_layer != null:
+		hud_canvas_layer.add_child(class_role_panel)
+	else:
+		add_child(class_role_panel)
 
 func _radar_position(world_position: Vector3, radius_meters: float = 42.0) -> Vector2:
 	var relative: Vector3 = world_position - global_position
@@ -7024,6 +7206,70 @@ func _update_reinforcement_death_panel() -> void:
 		"WAITING FOR REINFORCEMENTS · %ds\n"
 		+ "M CLASS / TEAM · TAB SCOREBOARD"
 	) % seconds
+
+
+func _class_role_name() -> String:
+	match player_class:
+		PlayerClass.SOLDIER:
+			return "SOLDIER · ASSAULT"
+		PlayerClass.MEDIC:
+			return "MEDIC · SUPPORT"
+		PlayerClass.ENGINEER:
+			return "ENGINEER · OBJECTIVE"
+		PlayerClass.FIELD_OPS:
+			return "FIELD OPS · FIRE SUPPORT"
+		PlayerClass.SCOUT:
+			return "SCOUT · RECON"
+		_:
+			return "CLASS"
+
+
+func _class_role_prompt_text() -> String:
+	var ready_text := "READY"
+	var remaining_ms := maxi(
+		0,
+		next_ability_time - Time.get_ticks_msec()
+	)
+	if remaining_ms > 0:
+		ready_text = "%.1fs" % (float(remaining_ms) / 1000.0)
+
+	match player_class:
+		PlayerClass.SOLDIER:
+			return "Q HEAVY FIRE · %s · LEAD THE PUSH" % ready_text
+		PlayerClass.MEDIC:
+			return "Q REVIVE PULSE · %s · E REVIVE" % ready_text
+		PlayerClass.ENGINEER:
+			return "Q FIELD BUILD · %s · E OBJECTIVE" % ready_text
+		PlayerClass.FIELD_OPS:
+			return "Q ARTILLERY · %s · RESUPPLY TEAM" % ready_text
+		PlayerClass.SCOUT:
+			return "Q SENSOR · %s · MOUSE2 ZOOM" % ready_text
+		_:
+			return "Q ABILITY · %s" % ready_text
+
+
+func _update_class_role_hud() -> void:
+	if class_role_panel == null:
+		return
+
+	var visible_state := (
+		alive
+		and not cinema_mode_enabled
+		and not scoreboard.visible
+		and not tactical_map_open
+		and not spawn_menu_open
+		and not round_results_open
+	)
+
+	class_role_panel.visible = visible_state
+	if not visible_state:
+		return
+
+	if class_role_label != null:
+		class_role_label.text = _class_role_name()
+
+	if class_role_prompt != null:
+		class_role_prompt.text = _class_role_prompt_text()
 
 
 func _update_hud() -> void:

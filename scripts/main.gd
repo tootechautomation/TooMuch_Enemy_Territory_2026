@@ -72,6 +72,12 @@ const StructuralCollisionGuardScript = preload(
 const ReinforcementStatusHUDScript = preload(
 	"res://scripts/visuals/reinforcement_status_hud.gd"
 )
+const DrivableVehicleScript = preload(
+	"res://scripts/gameplay/drivable_vehicle.gd"
+)
+const VehicleMapExpansionScript = preload(
+	"res://scripts/gameplay/vehicle_map_expansion.gd"
+)
 const LowCostVisualClarityScript = preload(
 	"res://scripts/visuals/low_cost_visual_clarity.gd"
 )
@@ -219,7 +225,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.97.1"
+const BUILD_VERSION := "8.99.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -462,6 +468,10 @@ var remote_player_presentation_lod: Node
 var objective_matchflow_hud: CanvasLayer
 var structural_collision_guard: Node
 var reinforcement_status_hud: CanvasLayer
+var vehicles: Dictionary = {}
+var next_vehicle_id: int = 1
+var vehicle_map_expansion: Node
+var vehicle_snapshot_accumulator := 0.0
 var low_cost_visual_clarity: Node
 var local_cinema_mode_enabled := false
 var battlefield_surface_fidelity: Node3D
@@ -633,6 +643,7 @@ func _ready() -> void:
 		visual_prop_cluster_scene = _load_optional_scene("res://assets/models/crate_barrel_cluster.glb")
 
 	_build_world()
+	_initialize_vehicle_map_and_spawns()
 	_build_resupply_stations()
 	_initialize_external_lod()
 	_build_external_asset_overlay()
@@ -1041,6 +1052,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
+	if multiplayer.is_server():
+		vehicle_snapshot_accumulator += delta
+		if vehicle_snapshot_accumulator >= 0.10:
+			vehicle_snapshot_accumulator = 0.0
+			_broadcast_vehicle_snapshots()
+
 	_update_adaptive_music()
 	atmosphere_elapsed += delta
 	_update_immersive_visuals()
@@ -9540,6 +9557,194 @@ func structure_collision_status_text() -> String:
 		int(structure_collision_report.get("box_fallbacks", 0)),
 		int(structure_collision_report.get("failed", 0))
 	]
+
+func _initialize_vehicle_map_and_spawns() -> void:
+	vehicle_map_expansion = VehicleMapExpansionScript.new()
+	vehicle_map_expansion.name = "VehicleMapExpansion"
+	add_child(vehicle_map_expansion)
+	vehicle_map_expansion.call("initialize", self)
+
+	if not multiplayer.is_server():
+		return
+
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.JEEP,
+		0, Vector3(-76.0, 1.2, 38.0), 0.0
+	)
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.JEEP,
+		1, Vector3(76.0, 1.2, -38.0), PI
+	)
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.TANK,
+		0, Vector3(-88.0, 1.4, 12.0), 0.0
+	)
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.TANK,
+		1, Vector3(88.0, 1.4, -12.0), PI
+	)
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.AIRCRAFT,
+		0, Vector3(-3.0, 2.0, 64.0), PI
+	)
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.AIRCRAFT,
+		1, Vector3(3.0, 2.0, 76.0), 0.0
+	)
+
+
+func _server_create_vehicle(
+	type_id: int,
+	team_id: int,
+	position: Vector3,
+	yaw: float
+) -> void:
+	if not multiplayer.is_server():
+		return
+	var id := next_vehicle_id
+	next_vehicle_id += 1
+	spawn_vehicle.rpc(id, type_id, team_id, position, yaw)
+
+
+@rpc("authority", "call_local", "reliable")
+func spawn_vehicle(
+	id: int,
+	type_id: int,
+	team_id: int,
+	position: Vector3,
+	yaw: float
+) -> void:
+	if vehicles.has(id):
+		return
+	var vehicle: Node3D = DrivableVehicleScript.new()
+	vehicle.name = "Vehicle_%d" % id
+	add_child(vehicle)
+	vehicle.call("configure", id, type_id, team_id, position, yaw)
+	vehicles[id] = vehicle
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func submit_vehicle_input(
+	peer_id: int,
+	vehicle_id: int,
+	throttle: float,
+	steering: float,
+	pitch_value: float
+) -> void:
+	if not multiplayer.is_server():
+		return
+	if multiplayer.get_remote_sender_id() != peer_id:
+		return
+	if not vehicles.has(vehicle_id):
+		return
+	var vehicle: Node = vehicles.get(vehicle_id) as Node
+	if vehicle == null:
+		return
+	vehicle.call(
+		"server_set_input",
+		peer_id,
+		throttle,
+		steering,
+		pitch_value
+	)
+
+
+func server_try_vehicle_interact(player: Node3D) -> bool:
+	if not multiplayer.is_server() or player == null:
+		return false
+
+	var peer_id := int(player.get("peer_id"))
+	var current_id := int(player.get("current_vehicle_id"))
+
+	if current_id >= 0 and vehicles.has(current_id):
+		var occupied: Node3D = vehicles.get(current_id) as Node3D
+		if occupied != null and bool(occupied.call("server_exit", peer_id)):
+			var exit_position := Vector3(occupied.call("exit_position"))
+			player.call("server_set_vehicle_state", -1, exit_position)
+			vehicle_state_changed.rpc(peer_id, -1, exit_position)
+			return true
+
+	var nearest_id := -1
+	var nearest_distance := 3.4
+	for id_value: Variant in vehicles:
+		var id := int(id_value)
+		var candidate: Node3D = vehicles.get(id) as Node3D
+		if candidate == null:
+			continue
+		var distance := player.global_position.distance_to(candidate.global_position)
+		if distance >= nearest_distance:
+			continue
+		if not bool(candidate.call("can_enter", peer_id, player.global_position)):
+			continue
+		nearest_id = id
+		nearest_distance = distance
+
+	if nearest_id < 0:
+		return false
+
+	var selected: Node3D = vehicles.get(nearest_id) as Node3D
+	if selected == null or not bool(selected.call("server_enter", peer_id)):
+		return false
+
+	player.call("server_set_vehicle_state", nearest_id, selected.global_position)
+	vehicle_state_changed.rpc(peer_id, nearest_id, selected.global_position)
+	return true
+
+
+@rpc("authority", "call_local", "reliable")
+func vehicle_state_changed(
+	peer_id: int,
+	vehicle_id: int,
+	position: Vector3
+) -> void:
+	if not players.has(peer_id):
+		return
+	var player: Node = players.get(peer_id) as Node
+	if player != null:
+		player.call("client_set_vehicle_state", vehicle_id, position)
+
+
+func _broadcast_vehicle_snapshots() -> void:
+	if not multiplayer.is_server():
+		return
+	var payload: Array = []
+	for id_value: Variant in vehicles:
+		var id := int(id_value)
+		var vehicle: Node3D = vehicles.get(id) as Node3D
+		if vehicle == null:
+			continue
+		payload.append({
+			"id": id,
+			"position": vehicle.global_position,
+			"yaw": vehicle.rotation.y,
+			"pitch": vehicle.rotation.x,
+			"health": int(vehicle.get("health")),
+			"driver": int(vehicle.get("driver_peer_id"))
+		})
+	receive_vehicle_snapshots.rpc(payload)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func receive_vehicle_snapshots(payload: Array) -> void:
+	for value: Variant in payload:
+		if not value is Dictionary:
+			continue
+		var item: Dictionary = value
+		var id := int(item.get("id", -1))
+		if id < 0 or not vehicles.has(id):
+			continue
+		var vehicle: Node = vehicles.get(id) as Node
+		if vehicle == null:
+			continue
+		vehicle.call(
+			"apply_network_snapshot",
+			Vector3(item.get("position", Vector3.ZERO)),
+			float(item.get("yaw", 0.0)),
+			float(item.get("pitch", 0.0)),
+			int(item.get("health", 0)),
+			int(item.get("driver", 0))
+		)
+
 
 func _build_world() -> void:
 	var env := WorldEnvironment.new()
