@@ -269,28 +269,33 @@ func _try_external_model() -> bool:
 
 	match vehicle_type:
 		VehicleType.JEEP:
-			candidates = [
-				"res://assets/external/vehicles/willys_jeep.glb",
+			candidates.append(
+				"res://assets/external/vehicles/willys_jeep.glb"
+			)
+			candidates.append(
 				"res://assets/external/vehicles/jeep_willys.glb"
-			]
+			)
 
 		VehicleType.TANK:
-			candidates = [
-				"res://assets/external/vehicles/m4_sherman.glb",
+			candidates.append(
+				"res://assets/external/vehicles/m4_sherman.glb"
+			)
+			candidates.append(
 				"res://assets/external/vehicles/sherman.glb"
-			]
+			)
 
 		VehicleType.AIRCRAFT:
-			# Allied aircraft use the Spitfire; Axis aircraft use the Bf 109.
-			candidates = (
-				[
+			# Keep Array[String] strongly typed. Godot 4 can infer a ternary
+			# expression containing array literals as generic Array, which then
+			# cannot be assigned to Array[String].
+			if team_id == 0:
+				candidates.append(
 					"res://assets/external/vehicles/spitfire.glb"
-				]
-				if team_id == 0
-				else [
+				)
+			else:
+				candidates.append(
 					"res://assets/external/vehicles/bf109.glb"
-				]
-			)
+				)
 
 	for path: String in candidates:
 		if not ResourceLoader.exists(path):
