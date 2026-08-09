@@ -1,69 +1,49 @@
-FRONTLINE: OBJECTIVE v8.92.0
-REMOTE PLAYER LOD + MULTIPLAYER PRESENTATION OPTIMIZATION
+FRONTLINE: OBJECTIVE v8.93.0
+OBJECTIVE AWARENESS + MATCH-FLOW HUD
 
-WHY THIS PHASE
-Remote players could still render third-person weapons, small gear, labels and
-dynamic shadows at near-player detail regardless of distance.
+NEW CLIENT HUD
+A compact upper-left objective panel now provides:
+- current/next objective
+- contested-state emphasis
+- capture progress where available
+- Allied vs Axis ticket status where available
+- spawn-wave countdown
+- short objective/event banner when the visible objective state changes
 
-v8.92 introduces client-only remote-player presentation LOD.
+OBJECTIVE PRIORITY
+The HUD prioritizes contested objectives first, then unresolved Command Post /
+Supply Depot captures, then falls back to holding captured ground and reducing
+enemy tickets.
 
-IMPORTANT
-LIVE PLAYERS THEMSELVES ARE NEVER REMOVED.
-This does not hide enemies or alter gameplay visibility/hit detection.
+SPAWN WAVE
+If the game exposes an authoritative spawn-wave remaining value, the HUD uses
+it. Otherwise the display derives an approximate countdown from the existing
+10-second wave cadence. This is presentation only and does not drive spawning.
 
-LOW / LAPTOP
-- detailed third-person weapon presentation ~38m
-- small gear/attachments ~18m
-- player labels ~18m
-- remote weapon shadows reduced aggressively
-- main character dynamic shadows reduced beyond ~22m
-
-BALANCED
-- detailed weapon presentation ~55m
-- small gear/attachments ~28m
-- labels ~28m
-- main-character shadows reduced beyond ~38m
-
-HIGH
-- detailed weapon presentation retained to ~78m
-- gear/labels remain visible farther out
-- original body shadows retained through normal combat ranges
-
-LOCAL PLAYER SAFETY
-The local player is excluded from remote-player LOD so first-person viewmodel
-quality, weapon orientation and HUD presentation stay intact.
-
-NETWORK/GAMEPLAY SAFETY
-NOT CHANGED:
-- player replication
-- hitboxes/collision
-- movement/aiming
-- weapon fire rate
-- hit registration
-- team identity
-- objective logic
-- server authority
-- bot gameplay simulation
-
-UPDATE COST
-The presentation check runs about every 0.35 seconds rather than every frame.
-
-PERFORMANCE STACK
-v8.89 GPU quality tiers
-v8.90 CPU/frame pacing
-v8.91 memory/world detail scaling
-v8.92 remote-player presentation scaling
-
-F8 still cycles LOW / BALANCED / HIGH.
+PERFORMANCE
+- refresh interval is approximately 0.15 seconds, not every rendered frame
+- no new 3D geometry
+- no new dynamic lights
+- no new network RPC traffic
+- Low/Laptop keeps the HUD but slightly reduces opacity
 
 PRESERVED
-- weapon pickup/scavenging rules
+- v8.92 remote-player presentation LOD
+- v8.91 memory scaling
+- v8.90 CPU/frame pacing
+- v8.89 GPU presets
+- F8 Low/Balanced/High system
+- active-weapon-only death drops
+- same-weapon ammo scavenging
+- cross-faction weapon swaps
+- contextual pickup HUD
 - resupply stations
 - casualty persistence
-- contextual pickup HUD
+- shell casing / weapon handling feedback
 - working Axis P38 orientation
-- Mouse2 zoom + persistent crosshair
-- collision/objective/network systems
+- Mouse2 shoulder zoom
+- persistent crosshair
+- collision / objectives / server authority / networking
 
-Build: 8.92.0
+Build: 8.93.0
 Network protocol: 341
