@@ -290,6 +290,8 @@ var cinema_mode_enabled := false
 var f6_presentation_mode: int = 2
 var current_vehicle_id: int = -1
 var vehicle_camera_active := false
+var vehicle_hud_panel: PanelContainer
+var vehicle_hud_label: Label
 var direct_map_key_latched := false
 var et_hud_root: Control
 var et_status_label: Label
@@ -922,6 +924,8 @@ func _physics_process(delta: float) -> void:
 		_update_spectator_camera()
 		_update_vehicle_camera()
 		_update_hud()
+		_update_vehicle_hud()
+		_enforce_vehicle_first_person_visibility()
 		_update_class_role_hud()
 		_update_reinforcement_death_panel()
 		_apply_cinema_mode_visibility()
@@ -1053,7 +1057,8 @@ func _collect_and_send_input() -> void:
 				current_vehicle_id,
 				vehicle_throttle,
 				vehicle_steering,
-				vehicle_pitch
+				vehicle_pitch,
+				Input.is_action_pressed("fire")
 			)
 
 		is_aiming = false
@@ -2720,6 +2725,8 @@ func client_set_vehicle_state(
 		visible = true
 		if _is_local_player():
 			_set_first_person_view_visible(true)
+			_refresh_first_person_weapon_visual()
+			_refresh_first_person_arms_pose()
 
 
 func _set_first_person_view_visible(show_value: bool) -> void:
@@ -2727,6 +2734,74 @@ func _set_first_person_view_visible(show_value: bool) -> void:
 		weapon_view.visible = show_value
 	if first_person_arms_fallback != null:
 		first_person_arms_fallback.visible = show_value
+
+
+func _enforce_vehicle_first_person_visibility() -> void:
+	if not _is_local_player():
+		return
+
+	var should_show: bool = current_vehicle_id < 0
+
+	if weapon_view != null:
+		weapon_view.visible = should_show
+
+	if first_person_arms_fallback != null:
+		first_person_arms_fallback.visible = should_show
+
+	# Imported weapon child meshes may be toggled separately by weapon-refresh
+	# code. Force them off while seated.
+	if not should_show and weapon_view != null:
+		for child: Node in weapon_view.find_children("*", "", true):
+			if child is GeometryInstance3D:
+				(child as GeometryInstance3D).visible = false
+
+
+
+func _update_vehicle_hud() -> void:
+	if vehicle_hud_panel == null:
+		return
+
+	var show_hud := (
+		current_vehicle_id >= 0
+		and not cinema_mode_enabled
+		and not scoreboard.visible
+	)
+	vehicle_hud_panel.visible = show_hud
+	if not show_hud or vehicle_hud_label == null:
+		return
+
+	var main_node := get_parent()
+	if main_node == null:
+		return
+	var vehicles_value: Variant = main_node.get("vehicles")
+	if not vehicles_value is Dictionary:
+		return
+
+	var vehicle_dict: Dictionary = vehicles_value
+	var vehicle: Node = vehicle_dict.get(current_vehicle_id) as Node
+	if vehicle == null:
+		return
+
+	var hp := int(vehicle.get("health"))
+	var max_hp := maxi(1, int(vehicle.get("max_health")))
+	var speed := int(round(float(vehicle.call("current_speed_kph"))))
+	var weapon_text := "UNARMED"
+	var type_id := int(vehicle.get("vehicle_type"))
+	if type_id == 1:
+		weapon_text = "MOUSE1 · CANNON"
+	elif type_id == 2:
+		weapon_text = "MOUSE1 · MACHINE GUNS"
+
+	vehicle_hud_label.text = (
+		"%s · HP %d/%d · %d KM/H\n%s · E EXIT"
+		% [
+			str(vehicle.call("display_name")),
+			hp,
+			max_hp,
+			speed,
+			weapon_text
+		]
+	)
 
 
 func _update_vehicle_camera() -> void:
@@ -6508,6 +6583,36 @@ func _build_hud() -> void:
 		hud_canvas_layer.add_child(class_role_panel)
 	else:
 		add_child(class_role_panel)
+
+	vehicle_hud_panel = PanelContainer.new()
+	vehicle_hud_panel.name = "VehicleHUDPanel"
+	vehicle_hud_panel.position = Vector2(470, 590)
+	vehicle_hud_panel.custom_minimum_size = Vector2(340, 62)
+
+	var vehicle_style := StyleBoxFlat.new()
+	vehicle_style.bg_color = Color(0.025, 0.03, 0.028, 0.78)
+	vehicle_style.border_color = Color(0.55, 0.52, 0.36, 0.58)
+	vehicle_style.set_border_width_all(1)
+	vehicle_hud_panel.add_theme_stylebox_override("panel", vehicle_style)
+
+	var vehicle_margin := MarginContainer.new()
+	vehicle_margin.add_theme_constant_override("margin_left", 12)
+	vehicle_margin.add_theme_constant_override("margin_right", 12)
+	vehicle_margin.add_theme_constant_override("margin_top", 7)
+	vehicle_margin.add_theme_constant_override("margin_bottom", 7)
+	vehicle_hud_panel.add_child(vehicle_margin)
+
+	vehicle_hud_label = Label.new()
+	vehicle_hud_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vehicle_hud_label.add_theme_font_size_override("font_size", 15)
+	vehicle_hud_label.add_theme_constant_override("outline_size", 4)
+	vehicle_margin.add_child(vehicle_hud_label)
+
+	if hud_canvas_layer != null:
+		hud_canvas_layer.add_child(vehicle_hud_panel)
+	else:
+		add_child(vehicle_hud_panel)
+	vehicle_hud_panel.visible = false
 
 func _radar_position(world_position: Vector3, radius_meters: float = 42.0) -> Vector2:
 	var relative: Vector3 = world_position - global_position

@@ -1,36 +1,52 @@
-FRONTLINE: OBJECTIVE v8.99.2
-VEHICLE LOCATION + ENTRY + GROUNDING FIX
+FRONTLINE: OBJECTIVE v9.03.0
+VEHICLE COMBAT + HUD + DESTRUCTION
 
-VEHICLES MOVED INSIDE NORMAL PLAYABLE AREA
-
-ALLIES
-Jeep:  (-46, -18)
-Tank:  (-43,  -6)
-
-AXIS
-Jeep:  (46, 18)
-Tank:  (43,  6)
+NEW VEHICLE WEAPONS
+TANK
+- Mouse1 fires server-authoritative cannon
+- 185 direct-hit damage
+- ~120m range
+- 1.7 second reload
+- large impact explosion
 
 AIRCRAFT
-Allied: (-8, 43)
-Axis:    (8, 43)
+- Mouse1 fires server-authoritative forward machine guns
+- 22 damage per hit
+- ~150m range
+- ~105ms fire interval
+- lightweight impact effect
 
-GROUNDING FIX
-- vehicle collision shapes now sit above a ground-level vehicle origin
-- tank hull/tracks/turret/cannon lowered
-- Jeep body/wheels lowered
-- unoccupied ground vehicles settle under gravity
+JEEP
+- remains unarmed in this phase; mounted MG/passenger system is next.
 
-ENTRY FIX
-- enter radius increased from 3.4m to 4.75m
-- server search radius matches the vehicle controller
-- normal HUD interaction prompt now shows:
-  E · ENTER JEEP
-  E · ENTER TANK
-  E · ENTER FIGHTER
-  E · EXIT VEHICLE
+VEHICLE HUD
+While driving:
+VEHICLE NAME · HP / MAX HP · SPEED KM/H
+MOUSE1 weapon hint · E EXIT
 
-You no longer need to guess which side of the model contains the interaction point.
+DAMAGE / DESTRUCTION
+- vehicles can damage enemy players
+- armed vehicles can damage enemy vehicles
+- destroyed vehicle movement/fire is disabled
+- destruction spawns explosion + temporary fire
+- driver is ejected safely
+- effects are scaled by Low/Balanced/High through BattlefieldEffectsManager
 
-Build: 8.99.2
-Network protocol: 341
+PERFORMANCE
+- server uses ray-based vehicle weapons rather than projectile rigid bodies
+- no expensive shell physics
+- existing ~10Hz vehicle snapshots retained
+- Low mode keeps impact particle/light cost minimal
+
+PRESERVED
+- real Willys/Sherman/Spitfire/Bf109 GLBs
+- vehicle direction fix
+- weapon/arms hidden while driving
+- vehicle seat lock and safe exit
+- spawn movement fixes
+- F6 and F8 quality controls
+- --bots 0 / --bots=0 / --no-bots
+- existing multiplayer/objective/performance systems
+
+Build 9.03.0
+Protocol 341

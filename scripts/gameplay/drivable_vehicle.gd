@@ -13,6 +13,8 @@ var max_health := 500
 var throttle_input := 0.0
 var steering_input := 0.0
 var pitch_input := 0.0
+var fire_input := false
+var destroyed := false
 var target_position := Vector3.ZERO
 var target_yaw := 0.0
 var target_pitch := 0.0
@@ -51,6 +53,81 @@ func configure(
 	if DisplayServer.get_name() != "headless":
 		_build_visual()
 
+func current_speed_kph() -> float:
+	return velocity.length() * 3.6
+
+
+func weapon_origin() -> Vector3:
+	var height := 1.25
+	var forward_offset := 2.0
+	if vehicle_type == VehicleType.TANK:
+		height = 1.85
+		forward_offset = 3.4
+	elif vehicle_type == VehicleType.AIRCRAFT:
+		height = 0.35
+		forward_offset = 3.8
+	return (
+		global_position
+		+ Vector3.UP * height
+		- global_transform.basis.z * forward_offset
+	)
+
+
+func weapon_direction() -> Vector3:
+	return (-global_transform.basis.z).normalized()
+
+
+func weapon_damage() -> int:
+	if vehicle_type == VehicleType.TANK:
+		return 185
+	if vehicle_type == VehicleType.AIRCRAFT:
+		return 22
+	return 0
+
+
+func weapon_range() -> float:
+	if vehicle_type == VehicleType.TANK:
+		return 120.0
+	if vehicle_type == VehicleType.AIRCRAFT:
+		return 150.0
+	return 0.0
+
+
+func weapon_cooldown_ms() -> int:
+	if vehicle_type == VehicleType.TANK:
+		return 1700
+	if vehicle_type == VehicleType.AIRCRAFT:
+		return 105
+	return 999999
+
+
+func impact_scale() -> float:
+	return 1.8 if vehicle_type == VehicleType.TANK else 0.55
+
+
+func server_apply_damage(amount: int) -> bool:
+	if not multiplayer.is_server() or destroyed:
+		return false
+	health = maxi(0, health - maxi(0, amount))
+	if health <= 0:
+		destroyed = true
+		driver_peer_id = 0
+		throttle_input = 0.0
+		steering_input = 0.0
+		pitch_input = 0.0
+		fire_input = false
+		velocity = Vector3.ZERO
+		return true
+	return false
+
+
+func set_destroyed_visual() -> void:
+	destroyed = true
+	if visual_root != null:
+		visual_root.rotation_degrees.z = 7.0
+		visual_root.scale *= 0.98
+
+
 func display_name() -> String:
 	match vehicle_type:
 		VehicleType.JEEP: return "JEEP"
@@ -59,7 +136,7 @@ func display_name() -> String:
 	return "VEHICLE"
 
 func can_enter(peer_id: int, player_position: Vector3) -> bool:
-	return driver_peer_id == 0 and global_position.distance_to(player_position) <= 5.5
+	return not destroyed and driver_peer_id == 0 and global_position.distance_to(player_position) <= 5.5
 
 func server_enter(peer_id: int) -> bool:
 	if not multiplayer.is_server() or driver_peer_id != 0:
@@ -74,19 +151,24 @@ func server_exit(peer_id: int) -> bool:
 	throttle_input = 0.0
 	steering_input = 0.0
 	pitch_input = 0.0
+	fire_input = false
 	return true
 
 func server_set_input(
 	peer_id: int,
 	throttle: float,
 	steering: float,
-	pitch: float
+	pitch: float,
+	fire_pressed: bool
 ) -> void:
 	if not multiplayer.is_server() or driver_peer_id != peer_id:
+		return
+	if destroyed:
 		return
 	throttle_input = clampf(throttle, -1.0, 1.0)
 	steering_input = clampf(steering, -1.0, 1.0)
 	pitch_input = clampf(pitch, -1.0, 1.0)
+	fire_input = fire_pressed
 
 func seat_position() -> Vector3:
 	var up_offset := 1.05
@@ -156,15 +238,36 @@ func _physics_process(delta: float) -> void:
 				target_pitch,
 				1.0 - exp(-8.0 * delta)
 			)
+	_animate_vehicle_visuals(delta)
+
+func _animate_vehicle_visuals(delta: float) -> void:
+	if visual_root == null:
+		return
+
+	var speed: float = velocity.length()
+
+	if vehicle_type == VehicleType.JEEP:
+		for wheel_node: Node in visual_root.find_children("*wheel*", "", true):
+			if wheel_node is Node3D:
+				(wheel_node as Node3D).rotate_x(speed * delta * 1.8)
+
+	elif vehicle_type == VehicleType.AIRCRAFT:
+		for prop_node: Node in visual_root.find_children("*prop*", "", true):
+			if prop_node is Node3D:
+				(prop_node as Node3D).rotate_z(
+					maxf(12.0, speed * 2.4) * delta
+				)
+
 
 func _server_simulate(delta: float) -> void:
-	if health <= 0:
+	if health <= 0 or destroyed:
 		return
 
 	if driver_peer_id == 0:
 		throttle_input = 0.0
 		steering_input = 0.0
 		pitch_input = 0.0
+		fire_input = false
 
 		if vehicle_type == VehicleType.AIRCRAFT:
 			velocity = Vector3.ZERO
@@ -339,22 +442,22 @@ func _prepare_external_vehicle_model(
 		# Source scene is imported at a very large authoring scale.
 		model.scale = Vector3.ONE * 0.0035
 		model.position = Vector3(-0.03, 2.53, 0.0)
-		model.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+		model.rotation_degrees = Vector3.ZERO
 
 	elif "m4_sherman" in lower_path or "sherman" in lower_path:
 		model.scale = Vector3.ONE * 0.85
 		model.position = Vector3(0.0, 0.03, 0.0)
-		model.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+		model.rotation_degrees = Vector3.ZERO
 
 	elif "spitfire" in lower_path:
 		model.scale = Vector3.ONE * 0.75
 		model.position = Vector3(0.0, 0.72, -0.15)
-		model.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+		model.rotation_degrees = Vector3.ZERO
 
 	elif "bf109" in lower_path:
 		model.scale = Vector3.ONE * 0.82
 		model.position = Vector3(0.0, 0.02, 0.0)
-		model.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+		model.rotation_degrees = Vector3.ZERO
 
 	_apply_external_model_performance_settings(model)
 

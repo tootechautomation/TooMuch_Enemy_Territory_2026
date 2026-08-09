@@ -81,6 +81,9 @@ const VehicleMapExpansionScript = preload(
 const LowCostVisualClarityScript = preload(
 	"res://scripts/visuals/low_cost_visual_clarity.gd"
 )
+const BattlefieldEffectsManagerScript = preload(
+	"res://scripts/visuals/battlefield_effects_manager.gd"
+)
 const BattlefieldSurfaceFidelityScript = preload(
 	"res://scripts/visuals/battlefield_surface_fidelity.gd"
 )
@@ -225,7 +228,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.01.2"
+const BUILD_VERSION := "9.03.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -472,6 +475,7 @@ var vehicles: Dictionary = {}
 var next_vehicle_id: int = 1
 var vehicle_map_expansion: Node
 var vehicle_snapshot_accumulator := 0.0
+var vehicle_next_fire_ms: Dictionary = {}
 var low_cost_visual_clarity: Node
 var local_cinema_mode_enabled := false
 var battlefield_surface_fidelity: Node3D
@@ -968,6 +972,15 @@ func _initialize_visual_quality_manager() -> void:
 	)
 	visual_quality_manager.quality_changed.connect(
 		low_cost_visual_clarity.on_quality_changed
+	)
+
+	battlefield_effects_manager = BattlefieldEffectsManagerScript.new()
+	battlefield_effects_manager.name = "BattlefieldEffectsManager"
+	add_child(battlefield_effects_manager)
+	battlefield_effects_manager.call(
+		"initialize",
+		self,
+		visual_quality_manager
 	)
 
 func set_local_cinema_mode(enabled: bool) -> void:
@@ -9702,7 +9715,8 @@ func submit_vehicle_input(
 	vehicle_id: int,
 	throttle: float,
 	steering: float,
-	pitch_value: float
+	pitch_value: float,
+	fire_pressed: bool
 ) -> void:
 	if not multiplayer.is_server():
 		return
@@ -9718,8 +9732,138 @@ func submit_vehicle_input(
 		peer_id,
 		throttle,
 		steering,
-		pitch_value
+		pitch_value,
+		fire_pressed
 	)
+
+	if fire_pressed:
+		_server_vehicle_fire(vehicle_id, peer_id)
+
+
+func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
+	if not multiplayer.is_server() or not vehicles.has(vehicle_id):
+		return
+
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if vehicle == null:
+		return
+	if bool(vehicle.get("destroyed")):
+		return
+	if int(vehicle.get("driver_peer_id")) != peer_id:
+		return
+
+	var damage := int(vehicle.call("weapon_damage"))
+	var weapon_range := float(vehicle.call("weapon_range"))
+	if damage <= 0 or weapon_range <= 0.0:
+		return
+
+	var now := Time.get_ticks_msec()
+	var next_allowed := int(vehicle_next_fire_ms.get(vehicle_id, 0))
+	if now < next_allowed:
+		return
+
+	vehicle_next_fire_ms[vehicle_id] = (
+		now + int(vehicle.call("weapon_cooldown_ms"))
+	)
+
+	var origin := Vector3(vehicle.call("weapon_origin"))
+	var direction := Vector3(vehicle.call("weapon_direction"))
+	var end := origin + direction * weapon_range
+
+	var query := PhysicsRayQueryParameters3D.create(origin, end)
+	query.exclude = [vehicle]
+	query.collision_mask = 1
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty():
+		end = Vector3(hit.get("position", end))
+		var collider: Object = hit.get("collider")
+
+		if collider != null and collider.has_method("server_take_damage"):
+			var target_team_value: Variant = collider.get("team")
+			var target_team := -1
+			if target_team_value != null:
+				target_team = int(target_team_value)
+			if target_team != int(vehicle.get("team_id")):
+				collider.call("server_take_damage", damage, peer_id)
+
+		elif collider is DrivableVehicle:
+			var target_vehicle := collider as Node
+			if int(target_vehicle.get("team_id")) != int(vehicle.get("team_id")):
+				var destroyed_now := bool(
+					target_vehicle.call("server_apply_damage", damage)
+				)
+				if destroyed_now:
+					_server_handle_vehicle_destroyed(target_vehicle)
+
+	show_vehicle_weapon_effect.rpc(
+		origin,
+		end,
+		float(vehicle.call("impact_scale"))
+	)
+
+
+func _server_handle_vehicle_destroyed(vehicle: Node) -> void:
+	if not multiplayer.is_server() or vehicle == null:
+		return
+
+	var driver_id := int(vehicle.get("driver_peer_id"))
+	var vehicle_id := int(vehicle.get("vehicle_id"))
+	var position := (vehicle as Node3D).global_position
+
+	vehicle.call("set_destroyed_visual")
+	show_vehicle_explosion.rpc(position, 2.1)
+
+	if driver_id > 0 and players.has(driver_id):
+		var player: Node = players.get(driver_id) as Node
+		if player != null:
+			var exit_position := Vector3(vehicle.call("exit_position"))
+			player.call("server_set_vehicle_state", -1, exit_position)
+			vehicle_state_changed.rpc(driver_id, -1, exit_position)
+
+	vehicle_next_fire_ms.erase(vehicle_id)
+
+
+@rpc("authority", "call_local", "unreliable")
+func show_vehicle_weapon_effect(
+	origin: Vector3,
+	end: Vector3,
+	impact_scale: float
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	if has_method("show_shot_effect"):
+		show_shot_effect(origin, end, false, false)
+
+	if battlefield_effects_manager != null:
+		battlefield_effects_manager.call(
+			"spawn_explosion",
+			end,
+			impact_scale
+		)
+
+
+@rpc("authority", "call_local", "reliable")
+func show_vehicle_explosion(
+	position: Vector3,
+	scale_factor: float
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager != null:
+		battlefield_effects_manager.call(
+			"spawn_explosion",
+			position,
+			scale_factor
+		)
+		battlefield_effects_manager.call(
+			"spawn_fire",
+			position,
+			10.0
+		)
 
 
 func nearest_vehicle_prompt(
@@ -9850,7 +9994,9 @@ func _broadcast_vehicle_snapshots() -> void:
 			"yaw": vehicle.rotation.y,
 			"pitch": vehicle.rotation.x,
 			"health": int(vehicle.get("health")),
-			"driver": int(vehicle.get("driver_peer_id"))
+			"max_health": int(vehicle.get("max_health")),
+			"driver": int(vehicle.get("driver_peer_id")),
+			"destroyed": bool(vehicle.get("destroyed"))
 		})
 	receive_vehicle_snapshots.rpc(payload)
 
@@ -9875,6 +10021,8 @@ func receive_vehicle_snapshots(payload: Array) -> void:
 			int(item.get("health", 0)),
 			int(item.get("driver", 0))
 		)
+		if bool(item.get("destroyed", false)):
+			vehicle.call("set_destroyed_visual")
 
 
 func _build_world() -> void:
