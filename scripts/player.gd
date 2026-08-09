@@ -820,64 +820,39 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	# F6 cycles presentation modes:
-	# CINEMA -> LOW/LAPTOP -> BALANCED -> HIGH -> CINEMA.
-	if (
-		key_code == KEY_F6
-		and key_event.pressed
-		and not key_event.echo
-	):
+	# F6: Cinema -> Low/Laptop -> Balanced -> High -> Cinema.
+	if key_code == KEY_F6 and key_event.pressed and not key_event.echo:
 		f6_presentation_mode = (f6_presentation_mode + 1) % 4
-
 		var main_node: Node = get_parent()
 
 		if f6_presentation_mode == 0:
 			cinema_mode_enabled = true
-		_apply_cinema_mode_visibility()
-			if (
-				main_node != null
-				and main_node.has_method("set_local_cinema_mode")
-			):
+			_apply_cinema_mode_visibility()
+			if main_node != null and main_node.has_method("set_local_cinema_mode"):
 				main_node.call("set_local_cinema_mode", true)
-
 			if selection_status != null:
 				selection_status.text = "CINEMA MODE · F6 LOW/LAPTOP"
 		else:
 			cinema_mode_enabled = false
 			_apply_cinema_mode_visibility()
-
-			if (
-				main_node != null
-				and main_node.has_method("set_local_cinema_mode")
-			):
+			if main_node != null and main_node.has_method("set_local_cinema_mode"):
 				main_node.call("set_local_cinema_mode", false)
 
-			var quality_preset := f6_presentation_mode - 1
-			if (
-				main_node != null
-				and main_node.get("visual_quality_manager") != null
-			):
-				var quality_manager: Node = (
-					main_node.get("visual_quality_manager") as Node
-				)
-				if quality_manager != null:
-					quality_manager.call(
-						"set_quality",
-						quality_preset
-					)
+			var quality_preset: int = f6_presentation_mode - 1
+			if main_node != null:
+				var quality_value: Variant = main_node.get("visual_quality_manager")
+				if quality_value != null:
+					var quality_manager: Node = quality_value as Node
+					if quality_manager != null:
+						quality_manager.call("set_quality", quality_preset)
 
 			if selection_status != null:
-				var mode_name := (
-					"LOW / LAPTOP"
-					if quality_preset == 0
-					else "BALANCED"
-					if quality_preset == 1
-					else "HIGH"
-				)
-				selection_status.text = (
-					"VIDEO %s · F6 NEXT MODE"
-					% mode_name
-				)
+				var mode_name: String = "LOW / LAPTOP"
+				if quality_preset == 1:
+					mode_name = "BALANCED"
+				elif quality_preset == 2:
+					mode_name = "HIGH"
+				selection_status.text = "VIDEO %s · F6 NEXT MODE" % mode_name
 
 		get_viewport().set_input_as_handled()
 		return
@@ -929,6 +904,13 @@ func _physics_process(delta: float) -> void:
 	if multiplayer.is_server() and current_vehicle_id >= 0:
 		if _server_lock_to_vehicle():
 			return
+		# Invalid/stale occupancy must not freeze normal infantry movement.
+		current_vehicle_id = -1
+		velocity = Vector3.ZERO
+		var recovery_collision := $CollisionShape3D as CollisionShape3D
+		if recovery_collision != null:
+			recovery_collision.set_deferred("disabled", false)
+		visible = true
 
 	if multiplayer.is_server() and is_bot:
 		_server_bot_tick(delta)
@@ -2591,8 +2573,13 @@ func server_revive(reviver_id: int = 0) -> void:
 func server_respawn(spawn_position: Vector3) -> void:
 	if not multiplayer.is_server():
 		return
-	global_position = spawn_position
-	target_position = spawn_position
+	# Always return to infantry state before applying spawn physics.
+	current_vehicle_id = -1
+	vehicle_camera_active = false
+	velocity = Vector3.ZERO
+	var safe_spawn_position := spawn_position + Vector3.UP * 0.35
+	global_position = safe_spawn_position
+	target_position = safe_spawn_position
 	health = _class_health(player_class)
 	stamina = MAX_STAMINA
 	suppressed_until_ms = 0
@@ -2681,7 +2668,12 @@ func server_set_vehicle_state(
 		global_position = position
 		visible = false
 	else:
-		global_position = position
+		current_vehicle_id = -1
+		global_position = position + Vector3.UP * 0.20
+		velocity = Vector3.ZERO
+		var exit_collision := $CollisionShape3D as CollisionShape3D
+		if exit_collision != null:
+			exit_collision.set_deferred("disabled", false)
 		visible = true
 
 
