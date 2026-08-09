@@ -5250,26 +5250,102 @@ func _update_battlefield_atmosphere() -> void:
 	)
 
 func _parse_command_line() -> void:
-	var args := OS.get_cmdline_user_args()
-	var is_server := "--server" in args or DisplayServer.get_name() == "headless"
-	var port := PORT_DEFAULT
-	var connect_address := ""
-	var bots_argument_seen := false
+	# IMPORTANT:
+	# get_cmdline_user_args() only contains arguments placed after Godot's
+	# "--" separator. Dedicated-server launch commands have historically used
+	# custom flags directly, for example:
+	#
+	#   godot --headless --path /project --server --bots 0
+	#
+	# Read the complete command line so --bots 0 works in BOTH forms:
+	#
+	#   godot --headless --path /project --server --bots 0
+	#   godot --headless --path /project -- --server --bots 0
+	var args: PackedStringArray = OS.get_cmdline_args()
+	var user_args: PackedStringArray = OS.get_cmdline_user_args()
 
-	for i in args.size():
-		if args[i] == "--port" and i + 1 < args.size():
+	# Some launch environments expose custom flags only through user_args.
+	# Append any values not already present so both Godot invocation styles are
+	# supported without requiring a specific command format.
+	for user_arg: String in user_args:
+		if user_arg not in args:
+			args.append(user_arg)
+
+	var is_server: bool = (
+		"--server" in args
+		or DisplayServer.get_name() == "headless"
+	)
+	var port: int = PORT_DEFAULT
+	var connect_address: String = ""
+	var bots_argument_seen: bool = false
+
+	var i: int = 0
+	while i < args.size():
+		var argument: String = args[i]
+
+		if argument == "--port" and i + 1 < args.size():
 			port = int(args[i + 1])
-		elif args[i] == "--connect" and i + 1 < args.size():
+			i += 2
+			continue
+
+		if argument == "--connect" and i + 1 < args.size():
 			connect_address = args[i + 1]
-		elif args[i] == "--bots" and i + 1 < args.size():
-			desired_bot_count = clampi(int(args[i + 1]), 0, 16)
+			i += 2
+			continue
+
+		if argument == "--bots" and i + 1 < args.size():
+			desired_bot_count = clampi(
+				int(args[i + 1]),
+				0,
+				16
+			)
 			bots_argument_seen = true
-		elif args[i] == "--bot-skill" and i + 1 < args.size():
-			bot_skill = clampf(float(args[i + 1]), 0.5, 2.0)
+			i += 2
+			continue
+
+		if argument.begins_with("--bots="):
+			desired_bot_count = clampi(
+				int(argument.trim_prefix("--bots=")),
+				0,
+				16
+			)
+			bots_argument_seen = true
+			i += 1
+			continue
+
+		if argument == "--no-bots":
+			desired_bot_count = 0
+			bots_argument_seen = true
+			i += 1
+			continue
+
+		if argument == "--bot-skill" and i + 1 < args.size():
+			bot_skill = clampf(
+				float(args[i + 1]),
+				0.5,
+				2.0
+			)
+			i += 2
+			continue
+
+		i += 1
+
+	if bots_argument_seen:
+		print(
+			"Bot command-line override detected: %d"
+			% desired_bot_count
+		)
 
 	if is_server:
-		if DisplayServer.get_name() != "headless" and not bots_argument_seen:
+		# GUI-hosted local testing defaults to zero bots unless explicitly
+		# requested. Headless servers retain the existing default of 8 when no
+		# bot argument is supplied.
+		if (
+			DisplayServer.get_name() != "headless"
+			and not bots_argument_seen
+		):
 			desired_bot_count = 0
+
 		start_server(port)
 	elif connect_address != "":
 		join_server(connect_address, port)
@@ -5296,8 +5372,11 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 	print("Requested bot count: %d" % desired_bot_count)
 	print("Bot skill multiplier: %.2f" % bot_skill)
 
-	for index in range(desired_bot_count):
-		_spawn_bot(index)
+	if desired_bot_count <= 0:
+		print("Bots disabled for this server session.")
+	else:
+		for index in range(desired_bot_count):
+			_spawn_bot(index)
 
 	print(
 		"Server roster ready: %d total actors, %d bots" % [
@@ -9054,6 +9133,10 @@ func scoreboard_text() -> String:
 
 func _spawn_bot(index: int) -> void:
 	if not multiplayer.is_server():
+		return
+	if desired_bot_count <= 0:
+		return
+	if index < 0 or index >= desired_bot_count:
 		return
 
 	var bot_id: int = next_bot_peer_id
