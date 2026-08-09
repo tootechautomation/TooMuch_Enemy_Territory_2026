@@ -1,84 +1,59 @@
-FRONTLINE: OBJECTIVE v8.94.0
-HUD OVERLAP + STRUCTURAL COLLISION + FIRST-PERSON ARMS
+FRONTLINE: OBJECTIVE v8.95.0
+MENU/HUD STATE FIX + OBJECTIVE SANITY + REINFORCEMENT PRESENTATION
 
-FIX 1 — OBJECTIVE HUD OVERLAP
-The v8.93 match-flow panel was occupying the same upper-left region as the
-existing team/class HUD.
+FIX 1 — SERVER BROWSER / MENU OVERLAP
+The v8.93/v8.94 objective HUD was still drawing while the server browser,
+connection form or profile/menu controls were visible.
 
-v8.94:
-- moves the objective/match-flow panel beneath the team/class panel
-- slightly reduces its width/font footprint
-- uses viewport-height-aware vertical placement
-- event banner now follows the actual panel height
-- preserves the existing top-center match HUD and compass
+v8.95 now hides the match HUD whenever:
+- server browser is visible
+- connect/connection UI is visible
+- profile/settings menu is visible
+- main menu is visible
+- team/class selection menu is visible
 
-FIX 2 — REMAINING PASS-THROUGH WALLS
-Added StructuralCollisionGuard.
+The HUD reappears only when the local player exists in the active match.
 
-At runtime it audits high-confidence structural MeshInstance3D nodes named as:
-- walls
-- brick walls
-- stone walls
-- concrete walls
-- perimeter/retaining walls
-- fences/barriers
-- bunker walls
+FIX 2 — IMPOSSIBLE CAPTURE PERCENTAGES
+Observed example:
+    Capture progress -2917%
 
-If one has no existing CollisionObject3D, the game adds a world-space static
-BoxShape collision guard based on the mesh bounds.
+The HUD now normalizes objective internals before display:
+- supports 0..1 values
+- supports 0..100 values
+- handles signed contested accumulation
+- clamps final display to 0..100%
+- rejects non-finite values
 
-SAFETY:
-- does not auto-collide generic whole-building meshes
-- skips doors/windows/openings/gaps/gates/arches
-- skips player/weapon/pickup/casualty/viewmodel descendants
-- skips giant whole-map meshes
-- existing colliders remain authoritative and are not duplicated
+The gameplay objective variable itself is NOT modified.
 
-This specifically targets the recurring brick/gray wall walk-through problem
-without sealing intended doors/windows.
+NEXT PHASE — REINFORCEMENT READABILITY
+Added a lightweight client-only reinforcement status panel:
+- identifies local side (ALLIES / AXIS)
+- shows next spawn-wave countdown
+- uses authoritative remaining time if exposed by the game
+- otherwise mirrors the existing wave cadence for display
+- automatically hides in menus
 
-FIX 3 — FIRST-PERSON HANDS / ARMS
-Added a local-only procedural fallback arm rig.
-
-If no proper imported first-person arm rig exists, v8.94 now builds:
-- right forearm/sleeve
-- left support forearm/sleeve
-- cuffs
-- shaped hands
-- four finger segments per hand
-- thumbs
-- team-dependent sleeve colors
-- separate primary/pistol hand poses
-
-The fallback attaches to WeaponView so it follows existing recoil, sprint,
-reload and Mouse2 weapon-lowering behavior.
-
-IMPORTANT:
-This does NOT replace a future high-detail skeletal arm asset. It fixes the
-current "floating weapon / no hands" condition now and gives us a stable
-first-person presentation layer to upgrade later.
-
-NEXT-PHASE FOUNDATION
-v8.94 keeps the objective-awareness HUD from v8.93 and makes it usable without
-overlap. With collision and arms stabilized, the next gameplay phases can
-return to spawn/reinforcement flow, class abilities and deeper objective play.
+This does not alter actual respawn scheduling.
 
 PRESERVED
-- v8.92 remote-player LOD
-- v8.91 memory scaling
-- v8.90 CPU/frame pacing
-- v8.89 GPU quality tiers
-- F8 Low/Balanced/High
-- active-weapon-only death drops
+- v8.94 structural collision guard
+- v8.94 first-person procedural arm/hand fallback
+- HUD safe-area positioning
+- active-weapon-only drops
 - same-weapon ammo scavenging
 - cross-faction weapon swaps
-- contextual pickup prompts
 - resupply stations
 - casualty persistence
+- contextual pickup HUD
 - shell-casing feedback
+- F8 Low/Balanced/High performance stack
+- remote-player LOD
+- memory / CPU / GPU scalability
 - working Axis P38 orientation
-- Mouse2 shoulder zoom + persistent crosshair
-- server authority/network protocol
+- Mouse2 zoom + persistent crosshair
+- collision/objective/server authority/networking
 
-Build: 8.94.0
+Build: 8.95.0
 Network protocol: 341

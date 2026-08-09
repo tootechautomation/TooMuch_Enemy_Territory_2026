@@ -14,6 +14,7 @@ var event_label: Label
 var refresh_accumulator := 0.0
 var last_summary := ""
 var event_until_ms := 0
+var was_match_hud_visible := false
 
 const REFRESH_INTERVAL := 0.15
 
@@ -29,6 +30,20 @@ func _process(delta: float) -> void:
 	if world_root == null:
 		return
 
+	var should_show: bool = _should_show_match_hud()
+	if panel != null:
+		panel.visible = should_show
+	if event_label != null and not should_show:
+		event_label.visible = false
+
+	if not should_show:
+		was_match_hud_visible = false
+		return
+
+	if not was_match_hud_visible:
+		last_summary = ""
+		was_match_hud_visible = true
+
 	_update_safe_layout()
 
 	refresh_accumulator += delta
@@ -39,6 +54,58 @@ func _process(delta: float) -> void:
 	if event_label != null and event_label.visible:
 		if Time.get_ticks_msec() >= event_until_ms:
 			event_label.visible = false
+
+
+func _should_show_match_hud() -> bool:
+	if world_root == null:
+		return false
+
+	# Explicit menu nodes take priority. If a connection/server/profile menu is
+	# visible, the match HUD must not draw over it.
+	var menu_names: Array[String] = [
+		"MainMenu",
+		"ServerBrowser",
+		"ConnectionPanel",
+		"ConnectMenu",
+		"ProfilePanel",
+		"PlayerProfile",
+		"TeamSelect",
+		"ClassMenu"
+	]
+
+	for menu_name: String in menu_names:
+		var menu_node: Node = world_root.find_child(menu_name, true, false)
+		if menu_node is CanvasItem and (menu_node as CanvasItem).visible:
+			return false
+
+	# Generic fallback for this project's menu UI naming. We only inspect
+	# Control/CanvasItem nodes so ordinary world nodes named "menu" are ignored.
+	for candidate: Node in world_root.find_children("*", "Control", true):
+		if not candidate is CanvasItem:
+			continue
+		var key := candidate.name.to_lower()
+		if (
+			("server" in key and ("browser" in key or "connect" in key))
+			or "profile" in key
+			or "mainmenu" in key
+		):
+			if (candidate as CanvasItem).visible:
+				return false
+
+	# The match HUD is meaningful once the local player exists.
+	var players_value: Variant = world_root.get("players")
+	if players_value is Dictionary:
+		var players: Dictionary = players_value
+		if players.has(multiplayer.get_unique_id()):
+			return true
+
+	# Offline/local preview can still show match HUD when there is an active
+	# player object explicitly exposed.
+	if _has_property(world_root, &"local_player"):
+		var local_player_value: Variant = world_root.get("local_player")
+		return local_player_value != null
+
+	return false
 
 
 func _update_safe_layout() -> void:
@@ -167,8 +234,8 @@ func _objective_summary() -> Dictionary:
 	var depot_contested := bool(
 		world_root.get("supply_depot_contested")
 	)
-	var depot_progress := float(
-		world_root.get("supply_depot_progress")
+	var depot_progress := _normalized_progress(
+		float(world_root.get("supply_depot_progress"))
 	)
 	var depot_control := int(
 		world_root.get("supply_depot_control")
@@ -181,7 +248,9 @@ func _objective_summary() -> Dictionary:
 	if _has_property(world_root, &"command_post_contested"):
 		cp_contested = bool(world_root.get("command_post_contested"))
 	if _has_property(world_root, &"command_post_progress"):
-		cp_progress = float(world_root.get("command_post_progress"))
+		cp_progress = _normalized_progress(
+			float(world_root.get("command_post_progress"))
+		)
 	if _has_property(world_root, &"command_post_control"):
 		cp_control = int(world_root.get("command_post_control"))
 
@@ -225,6 +294,24 @@ func _objective_summary() -> Dictionary:
 		"title": "OBJECTIVE · HOLD THE LINE",
 		"detail": "Defend captured positions and reduce enemy tickets"
 	}
+
+
+func _normalized_progress(raw_value: float) -> float:
+	# Objective internals in older phases used several representations:
+	# 0..1, 0..100, and occasionally signed accumulation. The HUD should never
+	# display impossible percentages such as -2917%.
+	if not is_finite(raw_value):
+		return 0.0
+
+	var normalized := raw_value
+
+	if absf(normalized) > 1.5:
+		normalized /= 100.0
+
+	# A negative value can represent opposing capture pressure internally. For
+	# presentation we display the absolute amount of contested progress.
+	normalized = absf(normalized)
+	return clampf(normalized, 0.0, 1.0)
 
 
 func _ticket_text() -> String:
