@@ -59,7 +59,7 @@ func display_name() -> String:
 	return "VEHICLE"
 
 func can_enter(peer_id: int, player_position: Vector3) -> bool:
-	return driver_peer_id == 0 and global_position.distance_to(player_position) <= 3.4
+	return driver_peer_id == 0 and global_position.distance_to(player_position) <= 4.75
 
 func server_enter(peer_id: int) -> bool:
 	if not multiplayer.is_server() or driver_peer_id != 0:
@@ -139,6 +139,22 @@ func _physics_process(delta: float) -> void:
 func _server_simulate(delta: float) -> void:
 	if health <= 0:
 		return
+
+	if driver_peer_id == 0:
+		throttle_input = 0.0
+		steering_input = 0.0
+		pitch_input = 0.0
+
+		if vehicle_type == VehicleType.AIRCRAFT:
+			velocity = Vector3.ZERO
+			return
+
+		velocity.x = move_toward(velocity.x, 0.0, 8.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, 8.0 * delta)
+		velocity.y = -0.5 if is_on_floor() else velocity.y - 18.0 * delta
+		move_and_slide()
+		return
+
 	if vehicle_type == VehicleType.AIRCRAFT:
 		_simulate_aircraft(delta)
 	else:
@@ -201,10 +217,18 @@ func _build_collision() -> void:
 	var collision := CollisionShape3D.new()
 	collision.name = "VehicleCollision"
 	var box := BoxShape3D.new()
+
 	match vehicle_type:
-		VehicleType.JEEP: box.size = Vector3(2.0, 1.4, 3.6)
-		VehicleType.TANK: box.size = Vector3(3.2, 2.2, 5.7)
-		VehicleType.AIRCRAFT: box.size = Vector3(8.2, 1.8, 6.0)
+		VehicleType.JEEP:
+			box.size = Vector3(2.0, 1.4, 3.6)
+			collision.position.y = 0.72
+		VehicleType.TANK:
+			box.size = Vector3(3.2, 2.2, 5.7)
+			collision.position.y = 1.08
+		VehicleType.AIRCRAFT:
+			box.size = Vector3(8.2, 1.8, 6.0)
+			collision.position.y = 0.92
+
 	collision.shape = box
 	add_child(collision)
 
@@ -307,22 +331,22 @@ func _cyl(
 func _fallback_jeep() -> void:
 	var body := _team_material()
 	var dark := _dark_material()
-	_box("JeepBody", Vector3(0,0.75,0), Vector3(1.85,0.55,3.15), body)
-	_box("JeepHood", Vector3(0,1.02,-1.0), Vector3(1.70,0.35,1.20), body)
-	_box("JeepCab", Vector3(0,1.28,0.55), Vector3(1.55,0.50,1.15), body)
+	_box("JeepBody", Vector3(0,0.58,0), Vector3(1.85,0.55,3.15), body)
+	_box("JeepHood", Vector3(0,0.85,-1.0), Vector3(1.70,0.35,1.20), body)
+	_box("JeepCab", Vector3(0,1.10,0.55), Vector3(1.55,0.50,1.15), body)
 	for x: float in [-0.95,0.95]:
 		for z: float in [-1.05,1.05]:
-			_cyl("JeepWheel",Vector3(x,0.53,z),0.42,0.24,dark,Vector3(0,0,90))
+			_cyl("JeepWheel",Vector3(x,0.42,z),0.42,0.24,dark,Vector3(0,0,90))
 
 func _fallback_tank() -> void:
 	var body := _team_material()
 	var dark := _dark_material()
-	_box("TankHull",Vector3(0,0.95,0),Vector3(3.0,1.20,5.0),body)
-	_box("TankUpperHull",Vector3(0,1.65,-0.15),Vector3(2.35,0.60,2.65),body)
-	_box("TankLeftTrack",Vector3(-1.55,0.62,0),Vector3(0.52,0.75,4.9),dark)
-	_box("TankRightTrack",Vector3(1.55,0.62,0),Vector3(0.52,0.75,4.9),dark)
-	var turret := _cyl("TankTurret",Vector3(0,2.10,-0.25),0.90,0.65,body,Vector3.ZERO)
-	var gun := _cyl("TankCannon",Vector3(0,2.10,-2.0),0.11,3.4,dark,Vector3(90,0,0))
+	_box("TankHull",Vector3(0,0.70,0),Vector3(3.0,1.20,5.0),body)
+	_box("TankUpperHull",Vector3(0,1.35,-0.15),Vector3(2.35,0.60,2.65),body)
+	_box("TankLeftTrack",Vector3(-1.55,0.40,0),Vector3(0.52,0.75,4.9),dark)
+	_box("TankRightTrack",Vector3(1.55,0.40,0),Vector3(0.52,0.75,4.9),dark)
+	var turret := _cyl("TankTurret",Vector3(0,1.75,-0.25),0.90,0.65,body,Vector3.ZERO)
+	var gun := _cyl("TankCannon",Vector3(0,1.75,-2.0),0.11,3.4,dark,Vector3(90,0,0))
 
 func _fallback_aircraft() -> void:
 	var body := _team_material()

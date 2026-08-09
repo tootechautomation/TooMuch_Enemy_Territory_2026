@@ -1,75 +1,36 @@
-FRONTLINE: OBJECTIVE v8.97.0
-TEAM REINFORCEMENT WAVES + DEAD-PLAYER RESPAWN FLOW
+FRONTLINE: OBJECTIVE v8.99.2
+VEHICLE LOCATION + ENTRY + GROUNDING FIX
 
-IMPORTANT DISCOVERY
-The game already had real 10-second reinforcement waves. The problem was that
-it used ONE GLOBAL TIMER.
+VEHICLES MOVED INSIDE NORMAL PLAYABLE AREA
 
-The Command Post reinforcement bonus was therefore shortening the wave for BOTH
-teams whenever either side controlled the post.
+ALLIES
+Jeep:  (-46, -18)
+Tank:  (-43,  -6)
 
-v8.97 corrects the existing gameplay instead of adding a duplicate system.
+AXIS
+Jeep:  (46, 18)
+Tank:  (43,  6)
 
-TEAM-SPECIFIC WAVES
-- Allies/Attackers have their own reinforcement timer
-- Axis/Defenders have their own reinforcement timer
-- a team respawns only when ITS timer reaches zero
-- each team uses its own ticket count
-- spawn validation / forward spawns remain unchanged
+AIRCRAFT
+Allied: (-8, 43)
+Axis:    (8, 43)
 
-COMMAND POST BONUS
-SPAWN_WAVE_SECONDS remains 10 seconds.
+GROUNDING FIX
+- vehicle collision shapes now sit above a ground-level vehicle origin
+- tank hull/tracks/turret/cannon lowered
+- Jeep body/wheels lowered
+- unoccupied ground vehicles settle under gravity
 
-The existing FORWARD_SPAWN_WAVE_BONUS is now applied only to the Command Post
-owner:
-- team without CP: normal 10 second reinforcement cycle
-- team controlling CP: 8 second cycle
-- minimum remains protected at 5 seconds
+ENTRY FIX
+- enter radius increased from 3.4m to 4.75m
+- server search radius matches the vehicle controller
+- normal HUD interaction prompt now shows:
+  E · ENTER JEEP
+  E · ENTER TANK
+  E · ENTER FIGHTER
+  E · EXIT VEHICLE
 
-This makes the Command Post materially useful without accidentally buffing the
-enemy team too.
+You no longer need to guess which side of the model contains the interaction point.
 
-NETWORK COMPATIBILITY
-A new lightweight unreliable reinforcement-state RPC synchronizes:
-- attacker_spawn_wave_remaining
-- defender_spawn_wave_remaining
-
-The legacy spawn_wave_remaining variable remains for older HUD/status code and
-is populated with the LOCAL player's team timer on clients.
-
-DEAD-PLAYER HUD
-When fully eliminated, the local player now gets a compact center panel:
-
-WAITING FOR REINFORCEMENTS · Xs
-M CLASS / TEAM · TAB SCOREBOARD
-
-It disappears automatically on respawn.
-
-RESPAWN SAFETY
-server_respawn now explicitly:
-- re-enables the player's collision shape
-- restores player visibility
-- retains existing spawn protection
-- restores normal class loadout/ammunition
-
-PRESERVED
-- v8.96 TAB raw-input scoreboard fix
-- v8.96 F6 cinema toggle
-- bottom HUD alignment
-- LowCostVisualClarity
-- structural collision guard
-- first-person hands/arms fallback
-- menu-aware HUD
-- objective sanity/clamping
-- active-weapon-only death drops
-- same-weapon ammo scavenging
-- cross-faction weapon swaps
-- resupply
-- casualty persistence
-- performance scalability stack
-- working Axis P38
-- Mouse2 zoom + crosshair
-- server authority / objective logic
-
-Build: 8.97.0
+Build: 8.99.2
 Network protocol: 341
