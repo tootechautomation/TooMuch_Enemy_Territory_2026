@@ -59,7 +59,7 @@ func display_name() -> String:
 	return "VEHICLE"
 
 func can_enter(peer_id: int, player_position: Vector3) -> bool:
-	return driver_peer_id == 0 and global_position.distance_to(player_position) <= 4.75
+	return driver_peer_id == 0 and global_position.distance_to(player_position) <= 5.5
 
 func server_enter(peer_id: int) -> bool:
 	if not multiplayer.is_server() or driver_peer_id != 0:
@@ -88,8 +88,29 @@ func server_set_input(
 	steering_input = clampf(steering, -1.0, 1.0)
 	pitch_input = clampf(pitch, -1.0, 1.0)
 
+func seat_position() -> Vector3:
+	var up_offset := 1.05
+	if vehicle_type == VehicleType.TANK:
+		up_offset = 1.35
+	elif vehicle_type == VehicleType.AIRCRAFT:
+		up_offset = 1.05
+	return global_position + Vector3.UP * up_offset
+
+
 func exit_position() -> Vector3:
-	return global_position + global_transform.basis.x * 2.5 + Vector3.UP * 0.8
+	var side_distance := 2.8
+	if vehicle_type == VehicleType.TANK:
+		side_distance = 3.2
+	elif vehicle_type == VehicleType.AIRCRAFT:
+		side_distance = 4.8
+
+	var exit_pos := (
+		global_position
+		+ global_transform.basis.x * side_distance
+		+ Vector3.UP * 1.15
+	)
+	exit_pos.y = maxf(exit_pos.y, 1.15)
+	return exit_pos
 
 func camera_anchor() -> Transform3D:
 	var offset := Vector3(0.0, 2.7, 6.0)

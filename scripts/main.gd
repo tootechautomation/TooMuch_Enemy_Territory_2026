@@ -225,7 +225,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.99.3"
+const BUILD_VERSION := "9.00.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -9730,7 +9730,7 @@ func nearest_vehicle_prompt(
 		return "E · EXIT VEHICLE"
 
 	var nearest: Node3D = null
-	var nearest_distance := 4.75
+	var nearest_distance := 5.5
 
 	for id_value: Variant in vehicles:
 		var id := int(id_value)
@@ -9751,12 +9751,40 @@ func nearest_vehicle_prompt(
 	return "E · ENTER %s" % str(nearest.call("display_name"))
 
 
+func vehicle_seat_position(vehicle_id: int) -> Vector3:
+	if not vehicles.has(vehicle_id):
+		return Vector3.ZERO
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if vehicle == null:
+		return Vector3.ZERO
+	return Vector3(vehicle.call("seat_position"))
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_vehicle_interact() -> void:
+	if not multiplayer.is_server():
+		return
+
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id <= 0 or not players.has(sender_id):
+		return
+
+	var player: Node3D = players.get(sender_id) as Node3D
+	if player == null:
+		return
+
+	server_try_vehicle_interact(player)
+
+
 func server_try_vehicle_interact(player: Node3D) -> bool:
 	if not multiplayer.is_server() or player == null:
 		return false
 
 	var peer_id := int(player.get("peer_id"))
-	var current_id := int(player.get("current_vehicle_id"))
+	var current_id := -1
+	var current_vehicle_value: Variant = player.get("current_vehicle_id")
+	if current_vehicle_value != null:
+		current_id = int(current_vehicle_value)
 
 	if current_id >= 0 and vehicles.has(current_id):
 		var occupied: Node3D = vehicles.get(current_id) as Node3D
@@ -9767,7 +9795,7 @@ func server_try_vehicle_interact(player: Node3D) -> bool:
 			return true
 
 	var nearest_id := -1
-	var nearest_distance := 4.75
+	var nearest_distance := 5.5
 	for id_value: Variant in vehicles:
 		var id := int(id_value)
 		var candidate: Node3D = vehicles.get(id) as Node3D
@@ -9788,8 +9816,9 @@ func server_try_vehicle_interact(player: Node3D) -> bool:
 	if selected == null or not bool(selected.call("server_enter", peer_id)):
 		return false
 
-	player.call("server_set_vehicle_state", nearest_id, selected.global_position)
-	vehicle_state_changed.rpc(peer_id, nearest_id, selected.global_position)
+	var seat_position := Vector3(selected.call("seat_position"))
+	player.call("server_set_vehicle_state", nearest_id, seat_position)
+	vehicle_state_changed.rpc(peer_id, nearest_id, seat_position)
 	return true
 
 

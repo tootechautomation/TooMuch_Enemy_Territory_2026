@@ -287,6 +287,7 @@ var tactical_map_open := false
 var tactical_map_toggle_latched := false
 var scoreboard_key_held := false
 var cinema_mode_enabled := false
+var f6_presentation_mode: int = 2
 var current_vehicle_id: int = -1
 var vehicle_camera_active := false
 var direct_map_key_latched := false
@@ -795,6 +796,23 @@ func _input(event: InputEvent) -> void:
 		else key_event.keycode
 	)
 
+	# Dedicated vehicle E interaction. This bypasses the generic interaction
+	# hold timer, which made vehicle entry unreliable when UI/gameplay focus
+	# changed. The server still validates range and seat availability.
+	if (
+		key_code == KEY_E
+		and key_event.pressed
+		and not key_event.echo
+	):
+		var main_node: Node = get_parent()
+		if (
+			main_node != null
+			and main_node.has_method("request_vehicle_interact")
+		):
+			main_node.request_vehicle_interact.rpc_id(1)
+			get_viewport().set_input_as_handled()
+			return
+
 	# TAB is a hold-to-view scoreboard control. Use _input rather than only
 	# _unhandled_input because focused menus/Controls may consume Tab for focus.
 	if key_code == KEY_TAB:
@@ -802,32 +820,64 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	# F6 restores the dedicated cinema-HUD toggle. It is intentionally raw-key
-	# driven so a GUI focus state cannot trap the player in cinema mode.
+	# F6 cycles presentation modes:
+	# CINEMA -> LOW/LAPTOP -> BALANCED -> HIGH -> CINEMA.
 	if (
 		key_code == KEY_F6
 		and key_event.pressed
 		and not key_event.echo
 	):
-		cinema_mode_enabled = not cinema_mode_enabled
-		_apply_cinema_mode_visibility()
+		f6_presentation_mode = (f6_presentation_mode + 1) % 4
 
 		var main_node: Node = get_parent()
-		if (
-			main_node != null
-			and main_node.has_method("set_local_cinema_mode")
-		):
-			main_node.call(
-				"set_local_cinema_mode",
-				cinema_mode_enabled
-			)
 
-		if selection_status != null:
-			selection_status.text = (
-				"CINEMA HUD ON · F6 TO RESTORE HUD"
-				if cinema_mode_enabled
-				else "GAME HUD RESTORED · F6 CINEMA MODE"
-			)
+		if f6_presentation_mode == 0:
+			cinema_mode_enabled = true
+		_apply_cinema_mode_visibility()
+			if (
+				main_node != null
+				and main_node.has_method("set_local_cinema_mode")
+			):
+				main_node.call("set_local_cinema_mode", true)
+
+			if selection_status != null:
+				selection_status.text = "CINEMA MODE · F6 LOW/LAPTOP"
+		else:
+			cinema_mode_enabled = false
+			_apply_cinema_mode_visibility()
+
+			if (
+				main_node != null
+				and main_node.has_method("set_local_cinema_mode")
+			):
+				main_node.call("set_local_cinema_mode", false)
+
+			var quality_preset := f6_presentation_mode - 1
+			if (
+				main_node != null
+				and main_node.get("visual_quality_manager") != null
+			):
+				var quality_manager: Node = (
+					main_node.get("visual_quality_manager") as Node
+				)
+				if quality_manager != null:
+					quality_manager.call(
+						"set_quality",
+						quality_preset
+					)
+
+			if selection_status != null:
+				var mode_name := (
+					"LOW / LAPTOP"
+					if quality_preset == 0
+					else "BALANCED"
+					if quality_preset == 1
+					else "HIGH"
+				)
+				selection_status.text = (
+					"VIDEO %s · F6 NEXT MODE"
+					% mode_name
+				)
 
 		get_viewport().set_input_as_handled()
 		return
@@ -876,6 +926,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _physics_process(delta: float) -> void:
+	if multiplayer.is_server() and current_vehicle_id >= 0:
+		if _server_lock_to_vehicle():
+			return
+
 	if multiplayer.is_server() and is_bot:
 		_server_bot_tick(delta)
 		return
@@ -1023,17 +1077,8 @@ func _collect_and_send_input() -> void:
 		is_aiming = false
 		_update_aim_view()
 
-		if Input.is_action_pressed("interact"):
-			interact_accumulator += get_physics_process_delta_time()
-			if interact_accumulator >= 0.25:
-				interact_accumulator = 0.0
-				if vehicle_main != null:
-					vehicle_main.request_player_interact.rpc_id(
-						1,
-						multiplayer.get_unique_id()
-					)
-		else:
-			interact_accumulator = 0.0
+		# E enter/exit is handled in raw _input() by the dedicated vehicle RPC.
+		interact_accumulator = 0.0
 		return
 
 	var move := Vector2.ZERO if downed else Input.get_vector(
@@ -2633,11 +2678,38 @@ func server_set_vehicle_state(
 		collision.set_deferred("disabled", vehicle_id >= 0)
 
 	if vehicle_id >= 0:
-		global_position = position + Vector3.UP * 1.0
+		global_position = position
 		visible = false
 	else:
 		global_position = position
 		visible = true
+
+
+func _server_lock_to_vehicle() -> bool:
+	if not multiplayer.is_server():
+		return false
+	if current_vehicle_id < 0:
+		return false
+
+	var main_node: Node = get_parent()
+	if (
+		main_node == null
+		or not main_node.has_method("vehicle_seat_position")
+	):
+		return false
+
+	var seat := Vector3(
+		main_node.call(
+			"vehicle_seat_position",
+			current_vehicle_id
+		)
+	)
+	if seat == Vector3.ZERO:
+		return false
+
+	velocity = Vector3.ZERO
+	global_position = seat
+	return true
 
 
 func client_set_vehicle_state(
@@ -2648,8 +2720,8 @@ func client_set_vehicle_state(
 	vehicle_camera_active = vehicle_id >= 0
 
 	if vehicle_id >= 0:
+		global_position = position
 		if _is_local_player():
-			visible = false
 			_set_first_person_view_visible(false)
 	else:
 		global_position = position
