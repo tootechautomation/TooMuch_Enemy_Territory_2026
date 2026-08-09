@@ -32,6 +32,9 @@ const TeamIdentityHUDScript = preload(
 const WeaponHandlingFeedbackScript = preload(
 	"res://scripts/visuals/weapon_handling_feedback.gd"
 )
+const FirstPersonArmsFallbackScript = preload(
+	"res://scripts/visuals/first_person_arms_fallback.gd"
+)
 
 
 enum PlayerClass { SOLDIER, MEDIC, ENGINEER, FIELD_OPS, SCOUT }
@@ -341,6 +344,7 @@ var visual_animation_time := 0.0
 var weapon_base_position := Vector3.ZERO
 var weapon_base_rotation := Vector3.ZERO
 var weapon_handling_feedback: Node
+var first_person_arms_fallback: Node3D
 var selection_status: Label
 var local_next_fire_feedback_ms := 0
 var grenades_remaining := 2
@@ -461,6 +465,32 @@ func _first_person_heat_gain() -> float:
 		PlayerClass.SCOUT:
 			return 0.24
 	return 0.15
+
+func _initialize_first_person_arms_fallback() -> void:
+	if not _is_local_player():
+		return
+	if weapon_view == null:
+		return
+	if first_person_arms_fallback != null:
+		return
+
+	first_person_arms_fallback = FirstPersonArmsFallbackScript.new()
+	first_person_arms_fallback.name = "FirstPersonArmsFallbackController"
+	add_child(first_person_arms_fallback)
+	first_person_arms_fallback.call(
+		"initialize",
+		self,
+		weapon_view
+	)
+
+
+func _refresh_first_person_arms_pose() -> void:
+	if first_person_arms_fallback != null:
+		first_person_arms_fallback.call(
+			"apply_weapon_slot",
+			current_weapon_index
+		)
+
 
 func _weapon_visual_team(slot_index: int) -> int:
 	if slot_index >= 0 and slot_index < weapon_slot_teams.size():
@@ -642,6 +672,8 @@ func _ready() -> void:
 		weapon_handling_feedback.name = "WeaponHandlingFeedback"
 		add_child(weapon_handling_feedback)
 		weapon_handling_feedback.call("initialize", self)
+
+		call_deferred("_initialize_first_person_arms_fallback")
 
 	safe_margin = 0.08
 	max_slides = 8
@@ -1700,6 +1732,7 @@ func _apply_weapon_index(index: int, rebuild_view: bool = true) -> void:
 		_rebuild_first_person_weapon()
 	if DisplayServer.get_name() != "headless":
 		_refresh_external_weapon_model()
+	_refresh_first_person_arms_pose()
 
 func _local_request_weapon_switch() -> void:
 	if weapon_slots.is_empty():

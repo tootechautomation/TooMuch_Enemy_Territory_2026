@@ -29,6 +29,8 @@ func _process(delta: float) -> void:
 	if world_root == null:
 		return
 
+	_update_safe_layout()
+
 	refresh_accumulator += delta
 	if refresh_accumulator >= REFRESH_INTERVAL:
 		refresh_accumulator = 0.0
@@ -37,6 +39,33 @@ func _process(delta: float) -> void:
 	if event_label != null and event_label.visible:
 		if Time.get_ticks_msec() >= event_until_ms:
 			event_label.visible = false
+
+
+func _update_safe_layout() -> void:
+	if panel == null:
+		return
+
+	var viewport := get_viewport()
+	if viewport == null:
+		return
+
+	var size := viewport.get_visible_rect().size
+
+	# Keep the objective panel below the existing team/class panel.
+	# On shorter 720p-class screens use a more compact lower-left position.
+	var desired_y: float = 205.0
+	if size.y <= 760.0:
+		desired_y = 198.0
+	elif size.y >= 1000.0:
+		desired_y = 220.0
+
+	panel.position = Vector2(18.0, desired_y)
+
+	if event_label != null:
+		event_label.position = Vector2(
+			18.0,
+			desired_y + panel.size.y + 10.0
+		)
 
 
 func show_event(text: String, duration_seconds: float = 2.4) -> void:
@@ -50,8 +79,8 @@ func show_event(text: String, duration_seconds: float = 2.4) -> void:
 func _build_ui() -> void:
 	panel = PanelContainer.new()
 	panel.name = "ObjectiveMatchflowPanel"
-	panel.position = Vector2(18, 54)
-	panel.custom_minimum_size = Vector2(330, 0)
+	panel.position = Vector2(18, 205)
+	panel.custom_minimum_size = Vector2(300, 0)
 	add_child(panel)
 
 	var style := StyleBoxFlat.new()
@@ -77,35 +106,35 @@ func _build_ui() -> void:
 
 	objective_label = Label.new()
 	objective_label.name = "ObjectiveTitle"
-	objective_label.add_theme_font_size_override("font_size", 18)
+	objective_label.add_theme_font_size_override("font_size", 17)
 	objective_label.add_theme_constant_override("outline_size", 5)
 	objective_label.modulate = Color(0.94, 0.90, 0.72)
 	stack.add_child(objective_label)
 
 	detail_label = Label.new()
 	detail_label.name = "ObjectiveDetail"
-	detail_label.add_theme_font_size_override("font_size", 14)
+	detail_label.add_theme_font_size_override("font_size", 13)
 	detail_label.add_theme_constant_override("outline_size", 4)
 	detail_label.modulate = Color(0.88, 0.88, 0.83)
 	stack.add_child(detail_label)
 
 	tickets_label = Label.new()
 	tickets_label.name = "TicketStatus"
-	tickets_label.add_theme_font_size_override("font_size", 14)
+	tickets_label.add_theme_font_size_override("font_size", 13)
 	tickets_label.add_theme_constant_override("outline_size", 4)
 	tickets_label.modulate = Color(0.82, 0.84, 0.80)
 	stack.add_child(tickets_label)
 
 	wave_label = Label.new()
 	wave_label.name = "SpawnWaveStatus"
-	wave_label.add_theme_font_size_override("font_size", 14)
+	wave_label.add_theme_font_size_override("font_size", 13)
 	wave_label.add_theme_constant_override("outline_size", 4)
 	wave_label.modulate = Color(0.82, 0.84, 0.80)
 	stack.add_child(wave_label)
 
 	event_label = Label.new()
 	event_label.name = "ObjectiveEventBanner"
-	event_label.position = Vector2(0, 122)
+	event_label.position = Vector2(18, 338)
 	event_label.custom_minimum_size = Vector2(330, 36)
 	event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	event_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

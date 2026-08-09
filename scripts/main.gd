@@ -66,6 +66,9 @@ const RemotePlayerPresentationLODScript = preload(
 const ObjectiveMatchflowHUDScript = preload(
 	"res://scripts/visuals/objective_matchflow_hud.gd"
 )
+const StructuralCollisionGuardScript = preload(
+	"res://scripts/gameplay/structural_collision_guard.gd"
+)
 const BattlefieldSurfaceFidelityScript = preload(
 	"res://scripts/visuals/battlefield_surface_fidelity.gd"
 )
@@ -210,7 +213,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.93.0"
+const BUILD_VERSION := "8.94.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -449,6 +452,7 @@ var client_performance_governor: Node
 var memory_asset_scalability: Node
 var remote_player_presentation_lod: Node
 var objective_matchflow_hud: CanvasLayer
+var structural_collision_guard: Node
 var battlefield_surface_fidelity: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
@@ -917,6 +921,11 @@ func _initialize_visual_quality_manager() -> void:
 		self,
 		visual_quality_manager
 	)
+
+	structural_collision_guard = StructuralCollisionGuardScript.new()
+	structural_collision_guard.name = "StructuralCollisionGuard"
+	add_child(structural_collision_guard)
+	structural_collision_guard.call("initialize", self)
 
 func _initialize_period_interface_fidelity() -> void:
 	if DisplayServer.get_name() == "headless":
