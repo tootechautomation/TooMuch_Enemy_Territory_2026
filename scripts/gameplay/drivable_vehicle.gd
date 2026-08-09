@@ -266,32 +266,116 @@ func _build_visual() -> void:
 
 func _try_external_model() -> bool:
 	var candidates: Array[String] = []
+
 	match vehicle_type:
 		VehicleType.JEEP:
 			candidates = [
 				"res://assets/external/vehicles/willys_jeep.glb",
 				"res://assets/external/vehicles/jeep_willys.glb"
 			]
+
 		VehicleType.TANK:
 			candidates = [
 				"res://assets/external/vehicles/m4_sherman.glb",
 				"res://assets/external/vehicles/sherman.glb"
 			]
+
 		VehicleType.AIRCRAFT:
-			candidates = [
-				"res://assets/external/vehicles/spitfire.glb",
-				"res://assets/external/vehicles/bf109.glb"
-			]
+			# Allied aircraft use the Spitfire; Axis aircraft use the Bf 109.
+			candidates = (
+				[
+					"res://assets/external/vehicles/spitfire.glb"
+				]
+				if team_id == 0
+				else [
+					"res://assets/external/vehicles/bf109.glb"
+				]
+			)
+
 	for path: String in candidates:
-		if ResourceLoader.exists(path):
-			var resource := load(path)
-			if resource is PackedScene:
-				var node := (resource as PackedScene).instantiate()
-				if node is Node3D:
-					(node as Node3D).name = "ExternalVehicleModel"
-					visual_root.add_child(node)
-					return true
+		if not ResourceLoader.exists(path):
+			continue
+
+		var resource: Resource = load(path)
+		if not resource is PackedScene:
+			continue
+
+		var node: Node = (resource as PackedScene).instantiate()
+		if not node is Node3D:
+			node.queue_free()
+			continue
+
+		var model := node as Node3D
+		model.name = "ExternalVehicleModel"
+		visual_root.add_child(model)
+
+		_prepare_external_vehicle_model(model, path)
+		return true
+
 	return false
+
+
+func _prepare_external_vehicle_model(
+	model: Node3D,
+	resource_path: String
+) -> void:
+	var lower_path := resource_path.to_lower()
+
+	# The uploaded Willys GLB includes a large decorative "ground" mesh.
+	# Remove/hide it so only the Jeep itself is used in gameplay.
+	for descendant: Node in model.find_children("*", "", true):
+		if "ground" in descendant.name.to_lower():
+			if descendant is GeometryInstance3D:
+				(descendant as GeometryInstance3D).visible = false
+
+	# Asset-specific normalization. These values are tuned to the uploaded GLBs,
+	# not generic assumptions about all future models.
+	if "willys_jeep" in lower_path:
+		# Source scene is imported at a very large authoring scale.
+		model.scale = Vector3.ONE * 0.0035
+		model.position = Vector3(-0.03, 2.53, 0.0)
+		model.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+
+	elif "m4_sherman" in lower_path or "sherman" in lower_path:
+		model.scale = Vector3.ONE * 0.85
+		model.position = Vector3(0.0, 0.03, 0.0)
+		model.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+
+	elif "spitfire" in lower_path:
+		model.scale = Vector3.ONE * 0.75
+		model.position = Vector3(0.0, 0.72, -0.15)
+		model.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+
+	elif "bf109" in lower_path:
+		model.scale = Vector3.ONE * 0.82
+		model.position = Vector3(0.0, 0.02, 0.0)
+		model.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+
+	_apply_external_model_performance_settings(model)
+
+
+func _apply_external_model_performance_settings(model: Node3D) -> void:
+	for descendant: Node in model.find_children("*", "", true):
+		if descendant is GeometryInstance3D:
+			var geometry := descendant as GeometryInstance3D
+			geometry.visibility_range_end = (
+				85.0
+				if vehicle_type == VehicleType.AIRCRAFT
+				else 65.0
+			)
+			geometry.visibility_range_end_margin = 8.0
+			geometry.visibility_range_fade_mode = (
+				GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+			)
+
+			# Vehicle models can be material-heavy; avoid every submesh becoming
+			# an expensive long-range dynamic shadow caster.
+			if vehicle_type == VehicleType.AIRCRAFT:
+				geometry.cast_shadow = (
+					GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+				)
+
+
 
 func _team_material() -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
