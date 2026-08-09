@@ -7,6 +7,7 @@ var vehicle_id := -1
 var vehicle_type := VehicleType.JEEP
 var team_id := 0
 var driver_peer_id := 0
+var gunner_peer_id := 0
 var health := 500
 var max_health := 500
 
@@ -20,8 +21,12 @@ var target_yaw := 0.0
 var target_pitch := 0.0
 var aircraft_pitch := 0.0
 var aircraft_roll := 0.0
+var turret_yaw := 0.0
+var turret_target_yaw := 0.0
 
 var visual_root: Node3D
+var spawn_position_saved := Vector3.ZERO
+var spawn_yaw_saved := 0.0
 
 const JEEP_SPEED := 18.0
 const TANK_SPEED := 9.0
@@ -40,6 +45,8 @@ func configure(
 	team_id = clampi(new_team, 0, 1)
 	global_position = spawn_position
 	rotation.y = spawn_yaw
+	spawn_position_saved = spawn_position
+	spawn_yaw_saved = spawn_yaw
 	target_position = global_position
 	target_yaw = rotation.y
 
@@ -60,20 +67,27 @@ func current_speed_kph() -> float:
 func weapon_origin() -> Vector3:
 	var height := 1.25
 	var forward_offset := 2.0
+
 	if vehicle_type == VehicleType.TANK:
 		height = 1.85
 		forward_offset = 3.4
 	elif vehicle_type == VehicleType.AIRCRAFT:
 		height = 0.35
 		forward_offset = 3.8
-	return (
-		global_position
-		+ Vector3.UP * height
-		- global_transform.basis.z * forward_offset
-	)
+
+	var direction := weapon_direction()
+	return global_position + Vector3.UP * height + direction * forward_offset
 
 
 func weapon_direction() -> Vector3:
+	if vehicle_type == VehicleType.TANK:
+		var turret_basis := Basis(Vector3.UP, rotation.y + turret_yaw)
+		return (-turret_basis.z).normalized()
+
+	if vehicle_type == VehicleType.JEEP and gunner_peer_id != 0:
+		var gunner_basis := Basis(Vector3.UP, rotation.y + turret_yaw)
+		return (-gunner_basis.z).normalized()
+
 	return (-global_transform.basis.z).normalized()
 
 
@@ -82,6 +96,8 @@ func weapon_damage() -> int:
 		return 185
 	if vehicle_type == VehicleType.AIRCRAFT:
 		return 22
+	if vehicle_type == VehicleType.JEEP and gunner_peer_id != 0:
+		return 18
 	return 0
 
 
@@ -90,6 +106,8 @@ func weapon_range() -> float:
 		return 120.0
 	if vehicle_type == VehicleType.AIRCRAFT:
 		return 150.0
+	if vehicle_type == VehicleType.JEEP and gunner_peer_id != 0:
+		return 95.0
 	return 0.0
 
 
@@ -98,6 +116,8 @@ func weapon_cooldown_ms() -> int:
 		return 1700
 	if vehicle_type == VehicleType.AIRCRAFT:
 		return 105
+	if vehicle_type == VehicleType.JEEP and gunner_peer_id != 0:
+		return 120
 	return 999999
 
 
@@ -136,23 +156,70 @@ func display_name() -> String:
 	return "VEHICLE"
 
 func can_enter(peer_id: int, player_position: Vector3) -> bool:
-	return not destroyed and driver_peer_id == 0 and global_position.distance_to(player_position) <= 5.5
-
-func server_enter(peer_id: int) -> bool:
-	if not multiplayer.is_server() or driver_peer_id != 0:
+	if destroyed:
 		return false
-	driver_peer_id = peer_id
-	return true
+	if global_position.distance_to(player_position) > 5.5:
+		return false
+	return driver_peer_id == 0 or _supports_gunner_seat() and gunner_peer_id == 0
+
+
+func _supports_gunner_seat() -> bool:
+	return vehicle_type == VehicleType.JEEP or vehicle_type == VehicleType.TANK
+
+
+func available_seat_for(peer_id: int) -> int:
+	if destroyed:
+		return -1
+	if driver_peer_id == 0:
+		return 0
+	if _supports_gunner_seat() and gunner_peer_id == 0:
+		return 1
+	return -1
+
+func server_enter(peer_id: int) -> int:
+	if not multiplayer.is_server() or destroyed:
+		return -1
+
+	if driver_peer_id == 0:
+		driver_peer_id = peer_id
+		return 0
+
+	if _supports_gunner_seat() and gunner_peer_id == 0:
+		gunner_peer_id = peer_id
+		return 1
+
+	return -1
+
 
 func server_exit(peer_id: int) -> bool:
-	if not multiplayer.is_server() or driver_peer_id != peer_id:
+	if not multiplayer.is_server():
 		return false
-	driver_peer_id = 0
-	throttle_input = 0.0
-	steering_input = 0.0
-	pitch_input = 0.0
-	fire_input = false
-	return true
+
+	var exited := false
+	if driver_peer_id == peer_id:
+		driver_peer_id = 0
+		exited = true
+	if gunner_peer_id == peer_id:
+		gunner_peer_id = 0
+		exited = true
+
+	if exited:
+		throttle_input = 0.0
+		steering_input = 0.0
+		pitch_input = 0.0
+		fire_input = false
+
+	return exited
+
+
+func peer_seat(peer_id: int) -> int:
+	if driver_peer_id == peer_id:
+		return 0
+	if gunner_peer_id == peer_id:
+		return 1
+	return -1
+
+
 
 func server_set_input(
 	peer_id: int,
@@ -169,6 +236,61 @@ func server_set_input(
 	steering_input = clampf(steering, -1.0, 1.0)
 	pitch_input = clampf(pitch, -1.0, 1.0)
 	fire_input = fire_pressed
+
+func server_set_gunner_input(
+	peer_id: int,
+	yaw_delta: float,
+	fire_pressed: bool
+) -> void:
+	if not multiplayer.is_server():
+		return
+	if gunner_peer_id != peer_id:
+		return
+	if destroyed:
+		return
+
+	turret_target_yaw += clampf(yaw_delta, -1.0, 1.0) * 0.055
+	fire_input = fire_pressed
+
+
+func seat_position_for(peer_id: int) -> Vector3:
+	var seat := peer_seat(peer_id)
+	if seat == 1:
+		var offset := Vector3(0.0, 1.55, 0.15)
+		if vehicle_type == VehicleType.JEEP:
+			offset = Vector3(0.0, 1.25, 0.35)
+		return global_position + global_transform.basis * offset
+	return seat_position()
+
+
+func weapon_owner_peer() -> int:
+	if _supports_gunner_seat() and gunner_peer_id != 0:
+		return gunner_peer_id
+	return driver_peer_id
+
+
+func reset_for_respawn() -> void:
+	destroyed = false
+	health = max_health
+	driver_peer_id = 0
+	gunner_peer_id = 0
+	throttle_input = 0.0
+	steering_input = 0.0
+	pitch_input = 0.0
+	fire_input = false
+	velocity = Vector3.ZERO
+	global_position = spawn_position_saved
+	rotation = Vector3(0.0, spawn_yaw_saved, 0.0)
+	target_position = global_position
+	target_yaw = rotation.y
+	target_pitch = 0.0
+	turret_yaw = 0.0
+	turret_target_yaw = 0.0
+
+	if visual_root != null:
+		visual_root.rotation_degrees = Vector3.ZERO
+		visual_root.scale = Vector3.ONE
+
 
 func seat_position() -> Vector3:
 	var up_offset := 1.05
@@ -240,6 +362,22 @@ func _physics_process(delta: float) -> void:
 			)
 	_animate_vehicle_visuals(delta)
 
+func _update_turret_visual() -> void:
+	if visual_root == null:
+		return
+
+	for node: Node in visual_root.find_children("*turret*", "", true):
+		if node is Node3D:
+			(node as Node3D).rotation.y = turret_yaw
+
+	for node: Node in visual_root.find_children("*gun*", "", true):
+		if (
+			node is Node3D
+			and vehicle_type == VehicleType.JEEP
+		):
+			(node as Node3D).rotation.y = turret_yaw
+
+
 func _animate_vehicle_visuals(delta: float) -> void:
 	if visual_root == null:
 		return
@@ -260,6 +398,13 @@ func _animate_vehicle_visuals(delta: float) -> void:
 
 
 func _server_simulate(delta: float) -> void:
+	turret_yaw = lerp_angle(
+		turret_yaw,
+		turret_target_yaw,
+		1.0 - exp(-8.0 * delta)
+	)
+	_update_turret_visual()
+
 	if health <= 0 or destroyed:
 		return
 

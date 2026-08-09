@@ -228,7 +228,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.03.3"
+const BUILD_VERSION := "9.04.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -476,6 +476,7 @@ var next_vehicle_id: int = 1
 var vehicle_map_expansion: Node
 var vehicle_snapshot_accumulator := 0.0
 var vehicle_next_fire_ms: Dictionary = {}
+var vehicle_respawn_at_ms: Dictionary = {}
 var low_cost_visual_clarity: Node
 var battlefield_effects_manager: Node3D
 var local_cinema_mode_enabled := false
@@ -1071,6 +1072,7 @@ func _process(delta: float) -> void:
 		if vehicle_snapshot_accumulator >= 0.10:
 			vehicle_snapshot_accumulator = 0.0
 			_broadcast_vehicle_snapshots()
+		_update_vehicle_respawns()
 
 	_update_adaptive_music()
 	atmosphere_elapsed += delta
@@ -9741,6 +9743,78 @@ func submit_vehicle_input(
 		_server_vehicle_fire(vehicle_id, peer_id)
 
 
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func submit_vehicle_gunner_input(
+	vehicle_id: int,
+	yaw_delta: float,
+	fire_pressed: bool
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var peer_id := multiplayer.get_remote_sender_id()
+	if peer_id <= 0 or not vehicles.has(vehicle_id):
+		return
+
+	var vehicle: Node = vehicles.get(vehicle_id) as Node
+	if vehicle == null:
+		return
+
+	vehicle.call(
+		"server_set_gunner_input",
+		peer_id,
+		yaw_delta,
+		fire_pressed
+	)
+
+	if fire_pressed:
+		_server_vehicle_fire(vehicle_id, peer_id)
+
+
+func _update_vehicle_respawns() -> void:
+	if not multiplayer.is_server():
+		return
+
+	var now := Time.get_ticks_msec()
+	var ready: Array[int] = []
+
+	for id_value: Variant in vehicle_respawn_at_ms:
+		var id := int(id_value)
+		var respawn_time := int(vehicle_respawn_at_ms[id])
+		if now >= respawn_time:
+			ready.append(id)
+
+	for id: int in ready:
+		if vehicles.has(id):
+			var vehicle: Node = vehicles.get(id) as Node
+			if vehicle != null:
+				vehicle.call("reset_for_respawn")
+				show_vehicle_respawn.rpc(
+					id,
+					Vector3((vehicle as Node3D).global_position),
+					float((vehicle as Node3D).rotation.y)
+				)
+		vehicle_respawn_at_ms.erase(id)
+
+
+@rpc("authority", "call_local", "reliable")
+func show_vehicle_respawn(
+	vehicle_id: int,
+	position: Vector3,
+	yaw: float
+) -> void:
+	if not vehicles.has(vehicle_id):
+		return
+
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if vehicle == null:
+		return
+
+	vehicle.global_position = position
+	vehicle.rotation.y = yaw
+	vehicle.call("reset_for_respawn")
+
+
 func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 	if not multiplayer.is_server() or not vehicles.has(vehicle_id):
 		return
@@ -9750,7 +9824,7 @@ func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 		return
 	if bool(vehicle.get("destroyed")):
 		return
-	if int(vehicle.get("driver_peer_id")) != peer_id:
+	if int(vehicle.call("weapon_owner_peer")) != peer_id:
 		return
 
 	var damage := int(vehicle.call("weapon_damage"))
@@ -9818,18 +9892,27 @@ func _server_handle_vehicle_destroyed(vehicle: Node) -> void:
 		return
 
 	var driver_id := int(vehicle.get("driver_peer_id"))
+	var gunner_id := int(vehicle.get("gunner_peer_id"))
 	var vehicle_id := int(vehicle.get("vehicle_id"))
 	var position := (vehicle as Node3D).global_position
 
 	vehicle.call("set_destroyed_visual")
 	show_vehicle_explosion.rpc(position, 2.1)
+	vehicle_respawn_at_ms[vehicle_id] = Time.get_ticks_msec() + 20000
 
 	if driver_id > 0 and players.has(driver_id):
 		var player: Node = players.get(driver_id) as Node
 		if player != null:
 			var exit_position := Vector3(vehicle.call("exit_position"))
-			player.call("server_set_vehicle_state", -1, exit_position)
-			vehicle_state_changed.rpc(driver_id, -1, exit_position)
+			player.call("server_set_vehicle_state", -1, exit_position, -1)
+			vehicle_state_changed.rpc(driver_id, -1, exit_position, -1)
+
+	if gunner_id > 0 and players.has(gunner_id):
+		var gunner: Node = players.get(gunner_id) as Node
+		if gunner != null:
+			var gunner_exit := Vector3(vehicle.call("exit_position")) + Vector3(0.8, 0.0, 0.8)
+			gunner.call("server_set_vehicle_state", -1, gunner_exit, -1)
+			vehicle_state_changed.rpc(gunner_id, -1, gunner_exit, -1)
 
 	vehicle_next_fire_ms.erase(vehicle_id)
 
@@ -9900,7 +9983,15 @@ func nearest_vehicle_prompt(
 	if nearest == null:
 		return ""
 
-	return "E · ENTER %s" % str(nearest.call("display_name"))
+	var seat_id := int(nearest.call(
+		"available_seat_for",
+		multiplayer.get_unique_id()
+	))
+	var seat_name := "DRIVER" if seat_id == 0 else "GUNNER"
+	return "E · ENTER %s · %s" % [
+		str(nearest.call("display_name")),
+		seat_name
+	]
 
 
 func vehicle_seat_position(vehicle_id: int) -> Vector3:
@@ -9942,8 +10033,8 @@ func server_try_vehicle_interact(player: Node3D) -> bool:
 		var occupied: Node3D = vehicles.get(current_id) as Node3D
 		if occupied != null and bool(occupied.call("server_exit", peer_id)):
 			var exit_position := Vector3(occupied.call("exit_position"))
-			player.call("server_set_vehicle_state", -1, exit_position)
-			vehicle_state_changed.rpc(peer_id, -1, exit_position)
+			player.call("server_set_vehicle_state", -1, exit_position, -1)
+			vehicle_state_changed.rpc(peer_id, -1, exit_position, -1)
 			return true
 
 	var nearest_id := -1
@@ -9965,12 +10056,26 @@ func server_try_vehicle_interact(player: Node3D) -> bool:
 		return false
 
 	var selected: Node3D = vehicles.get(nearest_id) as Node3D
-	if selected == null or not bool(selected.call("server_enter", peer_id)):
+	if selected == null:
 		return false
 
-	var seat_position := Vector3(selected.call("seat_position"))
-	player.call("server_set_vehicle_state", nearest_id, seat_position)
-	vehicle_state_changed.rpc(peer_id, nearest_id, seat_position)
+	var seat_id := int(selected.call("server_enter", peer_id))
+	if seat_id < 0:
+		return false
+
+	var seat_position := Vector3(selected.call("seat_position_for", peer_id))
+	player.call(
+		"server_set_vehicle_state",
+		nearest_id,
+		seat_position,
+		seat_id
+	)
+	vehicle_state_changed.rpc(
+		peer_id,
+		nearest_id,
+		seat_position,
+		seat_id
+	)
 	return true
 
 
@@ -9978,7 +10083,8 @@ func server_try_vehicle_interact(player: Node3D) -> bool:
 func vehicle_state_changed(
 	peer_id: int,
 	vehicle_id: int,
-	position: Vector3
+	position: Vector3,
+	seat_id: int
 ) -> void:
 	if not players.has(peer_id):
 		return
@@ -10004,6 +10110,8 @@ func _broadcast_vehicle_snapshots() -> void:
 			"health": int(vehicle.get("health")),
 			"max_health": int(vehicle.get("max_health")),
 			"driver": int(vehicle.get("driver_peer_id")),
+			"gunner": int(vehicle.get("gunner_peer_id")),
+			"turret_yaw": float(vehicle.get("turret_yaw")),
 			"destroyed": bool(vehicle.get("destroyed"))
 		})
 	receive_vehicle_snapshots.rpc(payload)
@@ -10028,6 +10136,14 @@ func receive_vehicle_snapshots(payload: Array) -> void:
 			float(item.get("pitch", 0.0)),
 			int(item.get("health", 0)),
 			int(item.get("driver", 0))
+		)
+		vehicle.set(
+			"gunner_peer_id",
+			int(item.get("gunner", 0))
+		)
+		vehicle.set(
+			"turret_target_yaw",
+			float(item.get("turret_yaw", 0.0))
 		)
 		if bool(item.get("destroyed", false)):
 			vehicle.call("set_destroyed_visual")

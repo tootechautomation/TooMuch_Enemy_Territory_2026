@@ -289,9 +289,11 @@ var scoreboard_key_held := false
 var cinema_mode_enabled := false
 var f6_presentation_mode: int = 2
 var current_vehicle_id: int = -1
+var current_vehicle_seat: int = -1
 var vehicle_camera_active := false
 var vehicle_hud_panel: PanelContainer
 var vehicle_hud_label: Label
+var vehicle_gunsight: Label
 var direct_map_key_latched := false
 var et_hud_root: Control
 var et_status_label: Label
@@ -908,6 +910,7 @@ func _physics_process(delta: float) -> void:
 			return
 		# Invalid/stale occupancy must not freeze normal infantry movement.
 		current_vehicle_id = -1
+		current_vehicle_seat = -1
 		velocity = Vector3.ZERO
 		var recovery_collision := $CollisionShape3D as CollisionShape3D
 		if recovery_collision != null:
@@ -1051,15 +1054,24 @@ func _collect_and_send_input() -> void:
 
 		var vehicle_main := get_parent()
 		if vehicle_main != null:
-			vehicle_main.submit_vehicle_input.rpc_id(
-				1,
-				multiplayer.get_unique_id(),
-				current_vehicle_id,
-				vehicle_throttle,
-				vehicle_steering,
-				vehicle_pitch,
-				Input.is_action_pressed("fire")
-			)
+			if current_vehicle_seat == 0:
+				vehicle_main.submit_vehicle_input.rpc_id(
+					1,
+					multiplayer.get_unique_id(),
+					current_vehicle_id,
+					vehicle_throttle,
+					vehicle_steering,
+					vehicle_pitch,
+					Input.is_action_pressed("fire")
+				)
+			else:
+				var gunner_yaw := vehicle_steering
+				vehicle_main.submit_vehicle_gunner_input.rpc_id(
+					1,
+					current_vehicle_id,
+					gunner_yaw,
+					Input.is_action_pressed("fire")
+				)
 
 		is_aiming = false
 		_update_aim_view()
@@ -2657,12 +2669,14 @@ func server_respawn(spawn_position: Vector3) -> void:
 
 func server_set_vehicle_state(
 	vehicle_id: int,
-	position: Vector3
+	position: Vector3,
+	seat_id: int
 ) -> void:
 	if not multiplayer.is_server():
 		return
 
 	current_vehicle_id = vehicle_id
+	current_vehicle_seat = seat_id
 	velocity = Vector3.ZERO
 
 	var collision := $CollisionShape3D as CollisionShape3D
@@ -2674,6 +2688,7 @@ func server_set_vehicle_state(
 		visible = false
 	else:
 		current_vehicle_id = -1
+		current_vehicle_seat = -1
 		global_position = position + Vector3.UP * 0.20
 		velocity = Vector3.ZERO
 		var exit_collision := $CollisionShape3D as CollisionShape3D
@@ -2711,9 +2726,11 @@ func _server_lock_to_vehicle() -> bool:
 
 func client_set_vehicle_state(
 	vehicle_id: int,
-	position: Vector3
+	position: Vector3,
+	seat_id: int
 ) -> void:
 	current_vehicle_id = vehicle_id
+	current_vehicle_seat = seat_id
 	vehicle_camera_active = vehicle_id >= 0
 
 	if vehicle_id >= 0:
@@ -2767,6 +2784,9 @@ func _update_vehicle_hud() -> void:
 		and not scoreboard.visible
 	)
 	vehicle_hud_panel.visible = show_hud
+	if vehicle_gunsight != null:
+		vehicle_gunsight.visible = false
+
 	if not show_hud or vehicle_hud_label == null:
 		return
 
@@ -2787,15 +2807,30 @@ func _update_vehicle_hud() -> void:
 	var speed := int(round(float(vehicle.call("current_speed_kph"))))
 	var weapon_text := "UNARMED"
 	var type_id := int(vehicle.get("vehicle_type"))
-	if type_id == 1:
-		weapon_text = "MOUSE1 · CANNON"
+	var seat_name := "DRIVER" if current_vehicle_seat == 0 else "GUNNER"
+
+	if vehicle_gunsight != null:
+		vehicle_gunsight.visible = (
+			type_id == 2
+			or current_vehicle_seat == 1
+		)
+
+	if type_id == 0 and current_vehicle_seat == 1:
+		weapon_text = "A/D AIM · MOUSE1 MG"
+	elif type_id == 1:
+		weapon_text = (
+			"A/D AIM · MOUSE1 CANNON"
+			if current_vehicle_seat == 1
+			else "W/S DRIVE · A/D STEER"
+		)
 	elif type_id == 2:
-		weapon_text = "MOUSE1 · MACHINE GUNS"
+		weapon_text = "MOUSE1 MACHINE GUNS"
 
 	vehicle_hud_label.text = (
-		"%s · HP %d/%d · %d KM/H\n%s · E EXIT"
+		"%s · %s · HP %d/%d · %d KM/H\n%s · E EXIT"
 		% [
 			str(vehicle.call("display_name")),
+			seat_name,
 			hp,
 			max_hp,
 			speed,
@@ -6613,6 +6648,21 @@ func _build_hud() -> void:
 	else:
 		add_child(vehicle_hud_panel)
 	vehicle_hud_panel.visible = false
+
+	vehicle_gunsight = Label.new()
+	vehicle_gunsight.name = "VehicleGunsight"
+	vehicle_gunsight.text = "⊕"
+	vehicle_gunsight.position = Vector2(620, 332)
+	vehicle_gunsight.add_theme_font_size_override("font_size", 28)
+	vehicle_gunsight.add_theme_constant_override("outline_size", 5)
+	vehicle_gunsight.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vehicle_gunsight.custom_minimum_size = Vector2(40, 40)
+	vehicle_gunsight.visible = false
+
+	if hud_canvas_layer != null:
+		hud_canvas_layer.add_child(vehicle_gunsight)
+	else:
+		add_child(vehicle_gunsight)
 
 func _radar_position(world_position: Vector3, radius_meters: float = 42.0) -> Vector2:
 	var relative: Vector3 = world_position - global_position
