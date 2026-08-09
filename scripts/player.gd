@@ -2725,7 +2725,7 @@ func client_set_vehicle_state(
 		visible = true
 		if _is_local_player():
 			_set_first_person_view_visible(true)
-			_refresh_first_person_weapon_visual()
+			_rebuild_first_person_weapon()
 			_refresh_first_person_arms_pose()
 
 
