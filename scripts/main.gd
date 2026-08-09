@@ -228,7 +228,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.04.0"
+const BUILD_VERSION := "9.06.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -9832,14 +9832,8 @@ func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 	if damage <= 0 or weapon_range <= 0.0:
 		return
 
-	var now := Time.get_ticks_msec()
-	var next_allowed := int(vehicle_next_fire_ms.get(vehicle_id, 0))
-	if now < next_allowed:
+	if not bool(vehicle.call("consume_weapon_round")):
 		return
-
-	vehicle_next_fire_ms[vehicle_id] = (
-		now + int(vehicle.call("weapon_cooldown_ms"))
-	)
 
 	var origin := Vector3(vehicle.call("weapon_origin"))
 	var direction := Vector3(vehicle.call("weapon_direction"))
@@ -9957,6 +9951,81 @@ func show_vehicle_explosion(
 		)
 
 
+@rpc("any_peer", "call_remote", "reliable")
+func request_vehicle_repair(vehicle_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var peer_id := multiplayer.get_remote_sender_id()
+	if peer_id <= 0 or not players.has(peer_id):
+		return
+	if not vehicles.has(vehicle_id):
+		return
+
+	var player: Node3D = players.get(peer_id) as Node3D
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if player == null or vehicle == null:
+		return
+
+	if player.global_position.distance_to(vehicle.global_position) > 4.8:
+		return
+
+	# ENGINEER is class enum index 2 in the existing player class layout.
+	if int(player.get("player_class")) != 2:
+		return
+
+	var repaired := int(vehicle.call("server_repair", 85))
+	if repaired > 0:
+		vehicle_repair_feedback.rpc_id(
+			peer_id,
+			vehicle_id,
+			repaired
+		)
+
+
+@rpc("authority", "call_remote", "reliable")
+func vehicle_repair_feedback(
+	vehicle_id: int,
+	repaired_amount: int
+) -> void:
+	if not players.has(multiplayer.get_unique_id()):
+		return
+
+	var local_player: Node = players.get(
+		multiplayer.get_unique_id()
+	) as Node
+	if local_player != null:
+		local_player.call(
+			"show_vehicle_repair_feedback",
+			vehicle_id,
+			repaired_amount
+		)
+
+
+func vehicle_tactical_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+
+	for id_value: Variant in vehicles:
+		var id := int(id_value)
+		var vehicle: Node3D = vehicles.get(id) as Node3D
+		if vehicle == null:
+			continue
+
+		entries.append({
+			"id": id,
+			"name": str(vehicle.call("display_name")),
+			"position": vehicle.global_position,
+			"team": int(vehicle.get("team_id")),
+			"destroyed": bool(vehicle.get("destroyed")),
+			"driver": int(vehicle.get("driver_peer_id")),
+			"gunner": int(vehicle.get("gunner_peer_id")),
+			"health": int(vehicle.get("health")),
+			"max_health": int(vehicle.get("max_health"))
+		})
+
+	return entries
+
+
 func nearest_vehicle_prompt(
 	player_position: Vector3,
 	current_vehicle_id: int
@@ -9988,6 +10057,16 @@ func nearest_vehicle_prompt(
 		multiplayer.get_unique_id()
 	))
 	var seat_name := "DRIVER" if seat_id == 0 else "GUNNER"
+	var damaged := (
+		int(nearest.get("health"))
+		< int(nearest.get("max_health"))
+	)
+	if damaged:
+		return "E · ENTER %s · %s · ENGINEER R REPAIR" % [
+			str(nearest.call("display_name")),
+			seat_name
+		]
+
 	return "E · ENTER %s · %s" % [
 		str(nearest.call("display_name")),
 		seat_name
@@ -10090,7 +10169,12 @@ func vehicle_state_changed(
 		return
 	var player: Node = players.get(peer_id) as Node
 	if player != null:
-		player.call("client_set_vehicle_state", vehicle_id, position)
+		player.call(
+			"client_set_vehicle_state",
+			vehicle_id,
+			position,
+			seat_id
+		)
 
 
 func _broadcast_vehicle_snapshots() -> void:
@@ -10112,6 +10196,9 @@ func _broadcast_vehicle_snapshots() -> void:
 			"driver": int(vehicle.get("driver_peer_id")),
 			"gunner": int(vehicle.get("gunner_peer_id")),
 			"turret_yaw": float(vehicle.get("turret_yaw")),
+			"ammo": int(vehicle.get("weapon_ammo")),
+			"ammo_max": int(vehicle.get("weapon_ammo_max")),
+			"last_fire_ms": int(vehicle.get("last_fire_ms")),
 			"destroyed": bool(vehicle.get("destroyed"))
 		})
 	receive_vehicle_snapshots.rpc(payload)
@@ -10144,6 +10231,14 @@ func receive_vehicle_snapshots(payload: Array) -> void:
 		vehicle.set(
 			"turret_target_yaw",
 			float(item.get("turret_yaw", 0.0))
+		)
+		vehicle.set(
+			"weapon_ammo",
+			int(item.get("ammo", 0))
+		)
+		vehicle.set(
+			"weapon_ammo_max",
+			int(item.get("ammo_max", 0))
 		)
 		if bool(item.get("destroyed", false)):
 			vehicle.call("set_destroyed_visual")

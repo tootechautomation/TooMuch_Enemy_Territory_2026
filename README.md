@@ -1,65 +1,37 @@
-FRONTLINE: OBJECTIVE v9.04.0
-MULTI-SEAT VEHICLES + TURRET CONTROL + VEHICLE RESPAWN
+FRONTLINE: OBJECTIVE v9.06.0
+AIRCRAFT ENTRY / VEHICLE STATE STABILITY
 
-MULTI-SEAT
-JEEP:
-- first player enters DRIVER seat
-- second player can enter GUNNER seat
-- gunner uses A/D to traverse weapon
-- Mouse1 fires mounted MG
+CRASH FIXED
+client_set_vehicle_state() now receives all 3 required arguments:
+- vehicle_id
+- position
+- seat_id
 
-TANK:
-- first player enters DRIVER seat
-- second player can enter GUNNER seat
-- driver controls hull movement
-- gunner controls turret yaw independently with A/D
-- Mouse1 fires cannon
+The stale two-argument call in vehicle_state_changed() was causing the
+plane/tank entry crash shown in the screenshot.
 
-AIRCRAFT:
-- remains single-seat
-- driver controls aircraft and guns
-- dedicated center gunsight added
+AIRCRAFT CONTROL STABILITY
+- pitch and steering input smoothing added
+- one-frame Space/Crouch input spikes are damped
+- safer pitch/roll limits
+- minimum ground-clearance safeguard
+- smoothed controls reset on exit/respawn
 
-VEHICLE ENTRY PROMPTS
-Now identify available seat:
-E · ENTER JEEP · DRIVER
-E · ENTER JEEP · GUNNER
-E · ENTER TANK · DRIVER
-E · ENTER TANK · GUNNER
-
-VEHICLE HUD
-Shows:
-- vehicle type
-- DRIVER / GUNNER seat
-- HP
-- speed
-- seat-specific controls
-
-VEHICLE RESPAWN
-Destroyed vehicles now respawn automatically after 20 seconds at their
-original staging position with:
-- full health
-- no occupants
-- zero velocity
-- original orientation
-- reset turret
-- restored visual state
-
-PERFORMANCE
-- still uses simplified CharacterBody3D vehicle motion
-- turret is transform-only, no rigid-body turret physics
-- ray-based weapons retained
-- vehicle snapshots remain lightweight
+INPUT ISOLATION
+- Space/Crouch affect pitch only in aircraft
+- Jeep/tank ignore jump/crouch vehicle pitch
 
 PRESERVED
-- real Willys/Sherman/Spitfire/Bf109 models
-- tank cannon / aircraft guns
-- vehicle destruction effects
-- seat lock / safe exit
-- first-person weapon hidden while in vehicles
-- F6/F8 quality controls
+- v9.05 mouse gunner aiming
+- Engineer repair
+- vehicle tactical markers
+- ammo/reload HUD
+- multi-seat Jeep/tank
+- independent turret
+- vehicle respawn/combat/destruction
+- real vehicle GLBs
+- F6/F8
 - --bots 0 / --bots=0 / --no-bots
-- laptop performance system
 
-Build 9.04.0
-Protocol 341
+Build: 9.06.0
+Protocol: 341

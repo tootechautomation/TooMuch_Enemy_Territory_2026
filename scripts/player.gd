@@ -294,6 +294,8 @@ var vehicle_camera_active := false
 var vehicle_hud_panel: PanelContainer
 var vehicle_hud_label: Label
 var vehicle_gunsight: Label
+var vehicle_gunner_mouse_delta := 0.0
+var vehicle_marker_labels: Dictionary = {}
 var direct_map_key_latched := false
 var et_hud_root: Control
 var et_status_label: Label
@@ -790,6 +792,12 @@ func _input(event: InputEvent) -> void:
 		return
 	if DisplayServer.get_name() == "headless":
 		return
+	if event is InputEventMouseMotion:
+		if current_vehicle_id >= 0 and current_vehicle_seat == 1:
+			var motion := event as InputEventMouseMotion
+			vehicle_gunner_mouse_delta += motion.relative.x * 0.018
+		return
+
 	if not event is InputEventKey:
 		return
 
@@ -816,6 +824,47 @@ func _input(event: InputEvent) -> void:
 			main_node.request_vehicle_interact.rpc_id(1)
 			get_viewport().set_input_as_handled()
 			return
+
+	# Engineers can repair a nearby damaged vehicle with R.
+	if (
+		key_code == KEY_R
+		and key_event.pressed
+		and not key_event.echo
+		and current_vehicle_id < 0
+		and player_class == PlayerClass.ENGINEER
+	):
+		var main_node: Node = get_parent()
+		if main_node != null:
+			var entries_value: Variant = main_node.call(
+				"vehicle_tactical_entries"
+			)
+			if entries_value is Array:
+				var nearest_id := -1
+				var nearest_distance := 4.8
+				for entry_value: Variant in entries_value:
+					if not entry_value is Dictionary:
+						continue
+					var entry: Dictionary = entry_value
+					if bool(entry.get("destroyed", false)):
+						continue
+					var hp := int(entry.get("health", 0))
+					var max_hp := int(entry.get("max_health", 1))
+					if hp >= max_hp:
+						continue
+					var distance := global_position.distance_to(
+						Vector3(entry.get("position", Vector3.ZERO))
+					)
+					if distance < nearest_distance:
+						nearest_distance = distance
+						nearest_id = int(entry.get("id", -1))
+
+				if nearest_id >= 0:
+					main_node.request_vehicle_repair.rpc_id(
+						1,
+						nearest_id
+					)
+					get_viewport().set_input_as_handled()
+					return
 
 	# TAB is a hold-to-view scoreboard control. Use _input rather than only
 	# _unhandled_input because focused menus/Controls may consume Tab for focus.
@@ -928,6 +977,7 @@ func _physics_process(delta: float) -> void:
 		_update_vehicle_camera()
 		_update_hud()
 		_update_vehicle_hud()
+		_update_vehicle_tactical_markers()
 		_enforce_vehicle_first_person_visibility()
 		_update_class_role_hud()
 		_update_reinforcement_death_panel()
@@ -1046,13 +1096,23 @@ func _collect_and_send_input() -> void:
 		var vehicle_throttle := -vehicle_move.y
 		var vehicle_steering := vehicle_move.x
 		var vehicle_pitch := 0.0
-
-		if Input.is_action_pressed("jump"):
-			vehicle_pitch = -1.0
-		elif Input.is_action_pressed("crouch"):
-			vehicle_pitch = 1.0
-
 		var vehicle_main := get_parent()
+
+		var current_type := -1
+		if vehicle_main != null:
+			var vehicles_value: Variant = vehicle_main.get("vehicles")
+			if vehicles_value is Dictionary:
+				var current_vehicle: Node = (
+					vehicles_value as Dictionary
+				).get(current_vehicle_id) as Node
+				if current_vehicle != null:
+					current_type = int(current_vehicle.get("vehicle_type"))
+
+		if current_type == 2:
+			if Input.is_action_pressed("jump"):
+				vehicle_pitch = -1.0
+			elif Input.is_action_pressed("crouch"):
+				vehicle_pitch = 1.0
 		if vehicle_main != null:
 			if current_vehicle_seat == 0:
 				vehicle_main.submit_vehicle_input.rpc_id(
@@ -1065,7 +1125,11 @@ func _collect_and_send_input() -> void:
 					Input.is_action_pressed("fire")
 				)
 			else:
-				var gunner_yaw := vehicle_steering
+				var gunner_yaw := vehicle_gunner_mouse_delta
+				if absf(gunner_yaw) < 0.001:
+					gunner_yaw = vehicle_steering
+				vehicle_gunner_mouse_delta = 0.0
+
 				vehicle_main.submit_vehicle_gunner_input.rpc_id(
 					1,
 					current_vehicle_id,
@@ -2731,6 +2795,10 @@ func client_set_vehicle_state(
 ) -> void:
 	current_vehicle_id = vehicle_id
 	current_vehicle_seat = seat_id
+	if vehicle_id >= 0 and current_vehicle_seat < 0:
+		current_vehicle_seat = 0
+	if vehicle_id < 0:
+		current_vehicle_seat = -1
 	vehicle_camera_active = vehicle_id >= 0
 
 	if vehicle_id >= 0:
@@ -2772,6 +2840,99 @@ func _enforce_vehicle_first_person_visibility() -> void:
 			if child is GeometryInstance3D:
 				(child as GeometryInstance3D).visible = false
 
+
+
+func show_vehicle_repair_feedback(
+	vehicle_id: int,
+	repaired_amount: int
+) -> void:
+	if selection_status != null:
+		selection_status.text = (
+			"VEHICLE REPAIRED +%d HP"
+			% repaired_amount
+		)
+
+
+func _update_vehicle_tactical_markers() -> void:
+	if not _is_local_player():
+		return
+
+	var main_node := get_parent()
+	if main_node == null or not main_node.has_method(
+		"vehicle_tactical_entries"
+	):
+		return
+
+	var entries_value: Variant = main_node.call(
+		"vehicle_tactical_entries"
+	)
+	if not entries_value is Array:
+		return
+
+	var seen: Dictionary = {}
+	for value: Variant in entries_value:
+		if not value is Dictionary:
+			continue
+		var entry: Dictionary = value
+		var vehicle_id := int(entry.get("id", -1))
+		if vehicle_id < 0:
+			continue
+		seen[vehicle_id] = true
+
+		var marker: Label = vehicle_marker_labels.get(
+			vehicle_id
+		) as Label
+		if marker == null:
+			marker = Label.new()
+			marker.name = "VehicleMarker_%d" % vehicle_id
+			marker.add_theme_font_size_override("font_size", 12)
+			marker.add_theme_constant_override("outline_size", 4)
+			marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			if hud_canvas_layer != null:
+				hud_canvas_layer.add_child(marker)
+			else:
+				add_child(marker)
+			vehicle_marker_labels[vehicle_id] = marker
+
+		var destroyed := bool(entry.get("destroyed", false))
+		var vehicle_position := Vector3(
+			entry.get("position", Vector3.ZERO)
+		)
+		var distance := int(round(
+			global_position.distance_to(vehicle_position)
+		))
+		var team_id := int(entry.get("team", -1))
+		var friendly := team_id == team
+
+		marker.visible = (
+			not cinema_mode_enabled
+			and not scoreboard.visible
+			and distance <= 55
+		)
+		if not marker.visible:
+			continue
+
+		marker.text = "%s %s · %dm" % [
+			"◆" if friendly else "◇",
+			"DESTROYED" if destroyed else str(entry.get("name", "VEHICLE")),
+			distance
+		]
+
+		# Compact edge-style tactical marker rather than expensive 3D labels.
+		var horizontal := clampf(
+			(vehicle_position.x - global_position.x) * 4.0,
+			-420.0,
+			420.0
+		)
+		marker.position = Vector2(620.0 + horizontal, 115.0)
+
+	for id_value: Variant in vehicle_marker_labels.keys():
+		var id := int(id_value)
+		if not seen.has(id):
+			var stale: Label = vehicle_marker_labels[id] as Label
+			if stale != null:
+				stale.queue_free()
+			vehicle_marker_labels.erase(id)
 
 
 func _update_vehicle_hud() -> void:
@@ -2826,15 +2987,27 @@ func _update_vehicle_hud() -> void:
 	elif type_id == 2:
 		weapon_text = "MOUSE1 MACHINE GUNS"
 
+	var ammo := int(vehicle.get("weapon_ammo"))
+	var ammo_max := int(vehicle.get("weapon_ammo_max"))
+	var reload_ms := int(vehicle.call("reload_remaining_ms"))
+	var reload_text := (
+		"READY"
+		if reload_ms <= 0
+		else "%.1fs" % (float(reload_ms) / 1000.0)
+	)
+
 	vehicle_hud_label.text = (
-		"%s · %s · HP %d/%d · %d KM/H\n%s · E EXIT"
+		"%s · %s · HP %d/%d · %d KM/H\n%s · AMMO %d/%d · %s · E EXIT"
 		% [
 			str(vehicle.call("display_name")),
 			seat_name,
 			hp,
 			max_hp,
 			speed,
-			weapon_text
+			weapon_text,
+			ammo,
+			ammo_max,
+			reload_text
 		]
 	)
 
@@ -6651,8 +6824,8 @@ func _build_hud() -> void:
 
 	vehicle_gunsight = Label.new()
 	vehicle_gunsight.name = "VehicleGunsight"
-	vehicle_gunsight.text = "⊕"
-	vehicle_gunsight.position = Vector2(620, 332)
+	vehicle_gunsight.text = "┼\n○"
+	vehicle_gunsight.position = Vector2(618, 315)
 	vehicle_gunsight.add_theme_font_size_override("font_size", 28)
 	vehicle_gunsight.add_theme_constant_override("outline_size", 5)
 	vehicle_gunsight.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

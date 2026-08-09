@@ -16,10 +16,15 @@ var steering_input := 0.0
 var pitch_input := 0.0
 var fire_input := false
 var destroyed := false
+var weapon_ammo := 0
+var weapon_ammo_max := 0
+var last_fire_ms := 0
 var target_position := Vector3.ZERO
 var target_yaw := 0.0
 var target_pitch := 0.0
 var aircraft_pitch := 0.0
+var aircraft_pitch_input_smoothed := 0.0
+var aircraft_steer_input_smoothed := 0.0
 var aircraft_roll := 0.0
 var turret_yaw := 0.0
 var turret_target_yaw := 0.0
@@ -56,12 +61,71 @@ func configure(
 		VehicleType.AIRCRAFT: max_health = 650
 	health = max_health
 
+	match vehicle_type:
+		VehicleType.JEEP:
+			weapon_ammo_max = 300
+		VehicleType.TANK:
+			weapon_ammo_max = 24
+		VehicleType.AIRCRAFT:
+			weapon_ammo_max = 700
+	weapon_ammo = weapon_ammo_max
+
 	_build_collision()
 	if DisplayServer.get_name() != "headless":
 		_build_visual()
 
 func current_speed_kph() -> float:
 	return velocity.length() * 3.6
+
+
+func can_fire_weapon() -> bool:
+	return (
+		not destroyed
+		and weapon_ammo > 0
+		and Time.get_ticks_msec() - last_fire_ms >= weapon_cooldown_ms()
+	)
+
+
+func consume_weapon_round() -> bool:
+	if not multiplayer.is_server():
+		return false
+	if not can_fire_weapon():
+		return false
+	weapon_ammo -= 1
+	last_fire_ms = Time.get_ticks_msec()
+	return true
+
+
+func reload_remaining_ms() -> int:
+	return maxi(
+		0,
+		weapon_cooldown_ms()
+		- (Time.get_ticks_msec() - last_fire_ms)
+	)
+
+
+func server_repair(amount: int) -> int:
+	if not multiplayer.is_server() or destroyed:
+		return 0
+	var before := health
+	health = clampi(
+		health + maxi(0, amount),
+		0,
+		max_health
+	)
+	return health - before
+
+
+func server_resupply_vehicle(amount: int) -> int:
+	if not multiplayer.is_server() or destroyed:
+		return 0
+	var before := weapon_ammo
+	weapon_ammo = clampi(
+		weapon_ammo + maxi(0, amount),
+		0,
+		weapon_ammo_max
+	)
+	return weapon_ammo - before
 
 
 func weapon_origin() -> Vector3:
@@ -135,6 +199,8 @@ func server_apply_damage(amount: int) -> bool:
 		throttle_input = 0.0
 		steering_input = 0.0
 		pitch_input = 0.0
+		aircraft_pitch_input_smoothed = 0.0
+		aircraft_steer_input_smoothed = 0.0
 		fire_input = false
 		velocity = Vector3.ZERO
 		return true
@@ -207,6 +273,8 @@ func server_exit(peer_id: int) -> bool:
 		throttle_input = 0.0
 		steering_input = 0.0
 		pitch_input = 0.0
+		aircraft_pitch_input_smoothed = 0.0
+		aircraft_steer_input_smoothed = 0.0
 		fire_input = false
 
 	return exited
@@ -249,7 +317,7 @@ func server_set_gunner_input(
 	if destroyed:
 		return
 
-	turret_target_yaw += clampf(yaw_delta, -1.0, 1.0) * 0.055
+	turret_target_yaw += clampf(yaw_delta, -2.5, 2.5) * 0.045
 	fire_input = fire_pressed
 
 
@@ -272,11 +340,15 @@ func weapon_owner_peer() -> int:
 func reset_for_respawn() -> void:
 	destroyed = false
 	health = max_health
+	weapon_ammo = weapon_ammo_max
+	last_fire_ms = 0
 	driver_peer_id = 0
 	gunner_peer_id = 0
 	throttle_input = 0.0
 	steering_input = 0.0
 	pitch_input = 0.0
+	aircraft_pitch_input_smoothed = 0.0
+	aircraft_steer_input_smoothed = 0.0
 	fire_input = false
 	velocity = Vector3.ZERO
 	global_position = spawn_position_saved
@@ -412,6 +484,8 @@ func _server_simulate(delta: float) -> void:
 		throttle_input = 0.0
 		steering_input = 0.0
 		pitch_input = 0.0
+		aircraft_pitch_input_smoothed = 0.0
+		aircraft_steer_input_smoothed = 0.0
 		fire_input = false
 
 		if vehicle_type == VehicleType.AIRCRAFT:
@@ -454,6 +528,17 @@ func _simulate_ground(
 	move_and_slide()
 
 func _simulate_aircraft(delta: float) -> void:
+	aircraft_pitch_input_smoothed = lerpf(
+		aircraft_pitch_input_smoothed,
+		pitch_input,
+		1.0 - exp(-5.5 * delta)
+	)
+	aircraft_steer_input_smoothed = lerpf(
+		aircraft_steer_input_smoothed,
+		steering_input,
+		1.0 - exp(-5.5 * delta)
+	)
+
 	var speed := clampf(
 		maxf(velocity.length(), AIR_SPEED_MIN)
 		+ throttle_input * 14.0 * delta,
@@ -462,24 +547,29 @@ func _simulate_aircraft(delta: float) -> void:
 	)
 
 	aircraft_pitch = clampf(
-		aircraft_pitch + pitch_input * 0.85 * delta,
-		-0.75,
-		0.75
+		aircraft_pitch
+		+ aircraft_pitch_input_smoothed * 0.72 * delta,
+		-0.62,
+		0.62
 	)
+
 	aircraft_roll = lerpf(
 		aircraft_roll,
-		-steering_input * 0.70,
+		-aircraft_steer_input_smoothed * 0.62,
 		1.0 - exp(-3.5 * delta)
 	)
 
 	rotation.x = aircraft_pitch
 	rotation.z = aircraft_roll
-	rotation.y -= steering_input * 0.52 * delta
+	rotation.y -= aircraft_steer_input_smoothed * 0.48 * delta
 
 	velocity = -global_transform.basis.z * speed
-	if global_position.y < 1.8 and velocity.y < 0.0:
-		global_position.y = 1.8
-		velocity.y = 0.0
+
+	if global_position.y < 1.35:
+		global_position.y = 1.35
+		if velocity.y < 0.0:
+			velocity.y = 0.0
+
 	move_and_slide()
 
 func _build_collision() -> void:
