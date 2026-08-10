@@ -231,7 +231,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.09.0"
+const BUILD_VERSION := "9.10.1"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -4467,6 +4467,29 @@ func _reset_destructible_cover() -> void:
 		var cover: Node = cover_value as Node
 		if cover != null and cover.has_method("reset_cover"):
 			cover.call("reset_cover")
+
+func destructible_cover_status_text() -> String:
+	var intact := 0
+	var damaged := 0
+	var destroyed_count := 0
+
+	for value: Variant in vehicle_destructible_barriers.values():
+		var barrier: Node = value as Node
+		if barrier == null:
+			continue
+		if bool(barrier.get("destroyed")):
+			destroyed_count += 1
+		elif int(barrier.get("health")) < int(barrier.get("max_health")):
+			damaged += 1
+		else:
+			intact += 1
+
+	return "COVER I:%d D:%d X:%d" % [
+		intact,
+		damaged,
+		destroyed_count
+	]
+
 
 func emplacement_status_text() -> String:
 	if command_post_control < 0:
@@ -8993,7 +9016,7 @@ func objective_status_text() -> String:
 				bridge_required,
 				attacker_tickets,
 				defender_tickets,
-				guns_text + " · " + sector_status_text(),
+				guns_text + " · " + sector_status_text() + " · " + destructible_cover_status_text(),
 				support_text,
 				overtime_text
 			]
@@ -9807,34 +9830,98 @@ func _initialize_vehicle_destructible_barriers() -> void:
 	if not vehicle_destructible_barriers.is_empty():
 		return
 
+	# These are intentionally simple collision/mesh objects. The visual phase
+	# can later replace them with imported wall/sandbag assets without changing
+	# the destruction/networking rules.
 	var data: Array[Dictionary] = [
+		# Western approach — brick wall sections
 		{
 			"id": 1,
-			"position": Vector3(-18.0, 0.85, -7.0),
-			"yaw": 0.10,
-			"size": Vector3(5.2, 1.7, 0.75),
-			"health": 220
+			"position": Vector3(-22.0, 1.05, -8.5),
+			"yaw": 0.05,
+			"size": Vector3(5.4, 2.1, 0.65),
+			"health": 280,
+			"kind": "BRICK"
 		},
 		{
 			"id": 2,
-			"position": Vector3(-17.0, 0.85, 7.5),
-			"yaw": -0.08,
-			"size": Vector3(4.8, 1.7, 0.75),
-			"health": 220
+			"position": Vector3(-21.0, 1.05, 8.8),
+			"yaw": -0.05,
+			"size": Vector3(5.0, 2.1, 0.65),
+			"health": 280,
+			"kind": "BRICK"
 		},
+
+		# Central roadblocks — wood
 		{
 			"id": 3,
-			"position": Vector3(18.0, 0.85, -7.5),
-			"yaw": 0.08,
-			"size": Vector3(4.8, 1.7, 0.75),
-			"health": 220
+			"position": Vector3(-9.5, 0.85, -12.0),
+			"yaw": 0.22,
+			"size": Vector3(4.6, 1.7, 0.70),
+			"health": 175,
+			"kind": "WOOD"
 		},
 		{
 			"id": 4,
-			"position": Vector3(20.0, 0.85, 7.0),
-			"yaw": -0.12,
-			"size": Vector3(5.2, 1.7, 0.75),
-			"health": 220
+			"position": Vector3(10.0, 0.85, 11.8),
+			"yaw": -0.20,
+			"size": Vector3(4.6, 1.7, 0.70),
+			"health": 175,
+			"kind": "WOOD"
+		},
+
+		# Sandbag defensive pockets
+		{
+			"id": 5,
+			"position": Vector3(-4.0, 0.65, -17.0),
+			"yaw": 0.0,
+			"size": Vector3(6.2, 1.3, 1.10),
+			"health": 220,
+			"kind": "SANDBAG"
+		},
+		{
+			"id": 6,
+			"position": Vector3(4.0, 0.65, 17.0),
+			"yaw": PI,
+			"size": Vector3(6.2, 1.3, 1.10),
+			"health": 220,
+			"kind": "SANDBAG"
+		},
+
+		# Eastern approach — brick wall sections
+		{
+			"id": 7,
+			"position": Vector3(22.0, 1.05, -8.8),
+			"yaw": 0.05,
+			"size": Vector3(5.0, 2.1, 0.65),
+			"health": 280,
+			"kind": "BRICK"
+		},
+		{
+			"id": 8,
+			"position": Vector3(23.0, 1.05, 8.5),
+			"yaw": -0.05,
+			"size": Vector3(5.4, 2.1, 0.65),
+			"health": 280,
+			"kind": "BRICK"
+		},
+
+		# Concrete anti-vehicle chokes
+		{
+			"id": 9,
+			"position": Vector3(-31.0, 0.75, 2.5),
+			"yaw": 0.0,
+			"size": Vector3(2.8, 1.5, 1.6),
+			"health": 360,
+			"kind": "CONCRETE"
+		},
+		{
+			"id": 10,
+			"position": Vector3(31.0, 0.75, -2.5),
+			"yaw": 0.0,
+			"size": Vector3(2.8, 1.5, 1.6),
+			"health": 360,
+			"kind": "CONCRETE"
 		}
 	]
 
@@ -9849,9 +9936,11 @@ func _initialize_vehicle_destructible_barriers() -> void:
 			Vector3(entry["position"]),
 			float(entry["yaw"]),
 			Vector3(entry["size"]),
-			int(entry["health"])
+			int(entry["health"]),
+			str(entry["kind"])
 		)
 		vehicle_destructible_barriers[id] = barrier
+
 
 
 func _reset_vehicle_destructible_barriers() -> void:
@@ -10039,6 +10128,56 @@ func allied_vehicle_objective_support_bonus(
 	return minf(bonus, 0.24)
 
 
+func _vector3_is_finite(value: Vector3) -> bool:
+	return not (
+		is_nan(value.x) or is_inf(value.x)
+		or is_nan(value.y) or is_inf(value.y)
+		or is_nan(value.z) or is_inf(value.z)
+	)
+
+
+func _float_is_finite(value: float) -> bool:
+	return not is_nan(value) and not is_inf(value)
+
+
+func _server_damage_vehicle_barrier_from_bullet(
+	collider: Object,
+	damage: int,
+	impact_position: Vector3
+) -> bool:
+	if not multiplayer.is_server() or collider == null:
+		return false
+	if not collider.has_method("server_apply_damage"):
+		return false
+	if collider.get("barrier_id") == null:
+		return false
+
+	var barrier := collider as Node
+	var kind := str(barrier.get("barrier_kind"))
+
+	var scaled_damage := 0
+	match kind:
+		"WOOD":
+			scaled_damage = maxi(1, int(round(damage * 0.65)))
+		"SANDBAG":
+			scaled_damage = maxi(1, int(round(damage * 0.28)))
+		"BRICK":
+			scaled_damage = maxi(1, int(round(damage * 0.10)))
+		"CONCRETE":
+			scaled_damage = 0
+
+	if scaled_damage <= 0:
+		return true
+
+	if bool(barrier.call("server_apply_damage", scaled_damage)):
+		set_vehicle_barrier_destroyed.rpc(
+			int(barrier.get("barrier_id")),
+			impact_position
+		)
+
+	return true
+
+
 func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 	if not multiplayer.is_server() or not vehicles.has(vehicle_id):
 		return
@@ -10061,7 +10200,18 @@ func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 
 	var origin := Vector3(vehicle.call("weapon_origin"))
 	var direction := Vector3(vehicle.call("weapon_direction"))
+
+	if (
+		not _vector3_is_finite(origin)
+		or not _vector3_is_finite(direction)
+		or direction.length_squared() < 0.000001
+	):
+		return
+
+	direction = direction.normalized()
 	var end := origin + direction * weapon_range
+	if not _vector3_is_finite(end):
+		return
 
 	var query := PhysicsRayQueryParameters3D.create(origin, end)
 	query.exclude = [vehicle]
@@ -10545,11 +10695,24 @@ func _broadcast_vehicle_snapshots() -> void:
 		var vehicle: Node3D = vehicles.get(id) as Node3D
 		if vehicle == null:
 			continue
+		var snapshot_position := vehicle.global_position
+		var snapshot_yaw := vehicle.rotation.y
+		var snapshot_pitch := vehicle.rotation.x
+
+		if (
+			not _vector3_is_finite(snapshot_position)
+			or not _float_is_finite(snapshot_yaw)
+			or not _float_is_finite(snapshot_pitch)
+		):
+			# Do not replicate poisoned transforms. The vehicle script will
+			# recover it to a finite state on its next physics tick.
+			continue
+
 		payload.append({
 			"id": id,
-			"position": vehicle.global_position,
-			"yaw": vehicle.rotation.y,
-			"pitch": vehicle.rotation.x,
+			"position": snapshot_position,
+			"yaw": snapshot_yaw,
+			"pitch": snapshot_pitch,
 			"health": int(vehicle.get("health")),
 			"max_health": int(vehicle.get("max_health")),
 			"driver": int(vehicle.get("driver_peer_id")),
@@ -10575,11 +10738,28 @@ func receive_vehicle_snapshots(payload: Array) -> void:
 		var vehicle: Node = vehicles.get(id) as Node
 		if vehicle == null:
 			continue
+		var received_position := Vector3(
+			item.get("position", vehicle.global_position)
+		)
+		var received_yaw := float(
+			item.get("yaw", vehicle.rotation.y)
+		)
+		var received_pitch := float(
+			item.get("pitch", vehicle.rotation.x)
+		)
+
+		if (
+			not _vector3_is_finite(received_position)
+			or not _float_is_finite(received_yaw)
+			or not _float_is_finite(received_pitch)
+		):
+			continue
+
 		vehicle.call(
 			"apply_network_snapshot",
-			Vector3(item.get("position", Vector3.ZERO)),
-			float(item.get("yaw", 0.0)),
-			float(item.get("pitch", 0.0)),
+			received_position,
+			received_yaw,
+			received_pitch,
 			int(item.get("health", 0)),
 			int(item.get("driver", 0))
 		)

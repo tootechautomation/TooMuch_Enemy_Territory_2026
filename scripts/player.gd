@@ -1658,8 +1658,33 @@ func server_fire(direction: Vector3) -> void:
 
 	if not hit.is_empty():
 		var hit_collider: Object = hit.get("collider")
-		if hit_collider != null and hit_collider.has_method("server_take_damage") and not hit_collider is CharacterBody3D:
-			hit_collider.call("server_take_damage", _weapon_damage(), peer_id)
+		var main_node_for_barrier: Node = get_parent()
+
+		if (
+			main_node_for_barrier != null
+			and main_node_for_barrier.has_method(
+				"_server_damage_vehicle_barrier_from_bullet"
+			)
+			and bool(
+				main_node_for_barrier.call(
+					"_server_damage_vehicle_barrier_from_bullet",
+					hit_collider,
+					_weapon_damage(),
+					effect_end
+				)
+			)
+		):
+			pass
+		elif (
+			hit_collider != null
+			and hit_collider.has_method("server_take_damage")
+			and not hit_collider is CharacterBody3D
+		):
+			hit_collider.call(
+				"server_take_damage",
+				_weapon_damage(),
+				peer_id
+			)
 
 	if (
 		not hit.is_empty()

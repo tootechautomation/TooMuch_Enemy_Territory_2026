@@ -325,9 +325,9 @@ func server_set_input(
 		return
 	if destroyed:
 		return
-	throttle_input = clampf(throttle, -1.0, 1.0)
-	steering_input = clampf(steering, -1.0, 1.0)
-	pitch_input = clampf(pitch, -1.0, 1.0)
+	throttle_input = clampf(_finite_float(throttle, 0.0), -1.0, 1.0)
+	steering_input = clampf(_finite_float(steering, 0.0), -1.0, 1.0)
+	pitch_input = clampf(_finite_float(pitch, 0.0), -1.0, 1.0)
 	fire_input = fire_pressed
 
 	if vehicle_type == VehicleType.AIRCRAFT:
@@ -349,7 +349,11 @@ func server_set_gunner_input(
 	if destroyed:
 		return
 
-	turret_target_yaw += clampf(yaw_delta, -2.5, 2.5) * 0.045
+	turret_target_yaw += clampf(
+		_finite_float(yaw_delta, 0.0),
+		-2.5,
+		2.5
+	) * 0.045
 	fire_input = fire_pressed
 
 
@@ -442,13 +446,124 @@ func apply_network_snapshot(
 	new_health: int,
 	new_driver: int
 ) -> void:
-	target_position = position
-	target_yaw = yaw
-	target_pitch = pitch_value
+	target_position = _finite_vector3(position, global_position)
+	target_yaw = _finite_float(yaw, rotation.y)
+	target_pitch = _finite_float(pitch, 0.0)_value
 	health = new_health
 	driver_peer_id = new_driver
 
+func _finite_float(
+	value: float,
+	fallback: float = 0.0
+) -> float:
+	if is_nan(value) or is_inf(value):
+		return fallback
+	return value
+
+
+func _finite_vector3(
+	value: Vector3,
+	fallback: Vector3 = Vector3.ZERO
+) -> Vector3:
+	if (
+		is_nan(value.x) or is_inf(value.x)
+		or is_nan(value.y) or is_inf(value.y)
+		or is_nan(value.z) or is_inf(value.z)
+	):
+		return fallback
+	return value
+
+
+func _sanitize_vehicle_state() -> void:
+	# A single NaN in position/rotation/velocity causes RenderingServer
+	# instance_set_transform() to spam every frame. Recover immediately.
+	var safe_spawn := spawn_position_saved
+	if (
+		is_nan(safe_spawn.x) or is_inf(safe_spawn.x)
+		or is_nan(safe_spawn.y) or is_inf(safe_spawn.y)
+		or is_nan(safe_spawn.z) or is_inf(safe_spawn.z)
+	):
+		safe_spawn = Vector3.ZERO
+
+	global_position = _finite_vector3(
+		global_position,
+		safe_spawn
+	)
+	velocity = _finite_vector3(
+		velocity,
+		Vector3.ZERO
+	)
+
+	rotation.x = _finite_float(rotation.x, 0.0)
+	rotation.y = _finite_float(
+		rotation.y,
+		spawn_yaw_saved
+	)
+	rotation.z = _finite_float(rotation.z, 0.0)
+
+	aircraft_pitch = _finite_float(
+		aircraft_pitch,
+		0.0
+	)
+	aircraft_roll = _finite_float(
+		aircraft_roll,
+		0.0
+	)
+	aircraft_pitch_input_smoothed = _finite_float(
+		aircraft_pitch_input_smoothed,
+		0.0
+	)
+	aircraft_steer_input_smoothed = _finite_float(
+		aircraft_steer_input_smoothed,
+		0.0
+	)
+
+	throttle_input = clampf(
+		_finite_float(throttle_input, 0.0),
+		-1.0,
+		1.0
+	)
+	steering_input = clampf(
+		_finite_float(steering_input, 0.0),
+		-1.0,
+		1.0
+	)
+	pitch_input = clampf(
+		_finite_float(pitch_input, 0.0),
+		-1.0,
+		1.0
+	)
+	throttle_setting = clampf(
+		_finite_float(throttle_setting, 0.0),
+		0.0,
+		1.0
+	)
+
+	turret_yaw = _finite_float(
+		turret_yaw,
+		0.0
+	)
+	turret_target_yaw = _finite_float(
+		turret_target_yaw,
+		turret_yaw
+	)
+
+	target_position = _finite_vector3(
+		target_position,
+		global_position
+	)
+	target_yaw = _finite_float(
+		target_yaw,
+		rotation.y
+	)
+	target_pitch = _finite_float(
+		target_pitch,
+		0.0
+	)
+
+
 func _physics_process(delta: float) -> void:
+	_sanitize_vehicle_state()
 	if multiplayer.is_server():
 		_server_simulate(delta)
 	else:
@@ -468,6 +583,7 @@ func _physics_process(delta: float) -> void:
 				1.0 - exp(-8.0 * delta)
 			)
 	_animate_vehicle_visuals(delta)
+	_sanitize_vehicle_state()
 
 func _update_turret_visual() -> void:
 	if visual_root == null:
@@ -490,6 +606,8 @@ func _animate_vehicle_visuals(delta: float) -> void:
 		return
 
 	var speed: float = velocity.length()
+	if is_nan(speed) or is_inf(speed):
+		speed = 0.0
 
 	if vehicle_type == VehicleType.JEEP:
 		for wheel_node: Node in visual_root.find_children("*wheel*", "", true):
