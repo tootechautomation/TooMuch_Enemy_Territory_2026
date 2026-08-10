@@ -1,37 +1,58 @@
-FRONTLINE: OBJECTIVE v9.10.2
-DRIVABLE VEHICLE PARSER HOTFIX
+FRONTLINE: OBJECTIVE v9.11.0
+VEHICLE CAMERA + DRIVING/FLIGHT POLISH + WRECK STABILITY
 
-SCREENSHOT ERROR
-main.gd:
-Could not resolve/preload:
-res://scripts/gameplay/drivable_vehicle.gd
+NEW VEHICLE CAMERA MODES
+While seated, press V:
 
-ROOT CAUSE
-The v9.10.1 finite-transform patch accidentally produced this invalid line:
+CHASE
+- normal third-person vehicle view
+- balanced distance for driving/flying
 
-    target_pitch = _finite_float(pitch, 0.0)_value
+CLOSE
+- tighter view for aiming and confined streets
 
-The function parameter is named pitch_value.
+TACTICAL
+- higher/farther camera for route awareness and tank positioning
 
-CORRECTED
-    target_pitch = _finite_float(pitch_value, 0.0)
+Vehicle HUD now shows:
+CAM CHASE / CLOSE / TACTICAL
+and the V CAMERA control hint.
 
-This parser error prevented drivable_vehicle.gd from loading, which then caused
-main.gd's preload to fail.
+CAMERA FEEL
+Vehicle camera follow now scales modestly with vehicle speed.
+Fast aircraft/Jeeps follow more firmly.
+Tactical camera is intentionally smoother.
+
+Vehicle FOV is now separate from infantry ADS FOV:
+- Jeep/tank/aircraft receive vehicle-specific FOV targets
+- faster motion adds a small FOV expansion
+- no motion blur or expensive postprocessing is required
+- infantry ADS code no longer fights the vehicle camera every frame
+
+WRECK STABILITY FIX
+Destroyed vehicle snapshots could repeatedly call set_destroyed_visual().
+Previously that method multiplied visual scale by 0.98 every call, which could
+gradually shrink a wreck over repeated network snapshots.
+
+v9.11 wreck visuals are idempotent:
+- wreck tilt/scale is applied once
+- repeated destroyed snapshots do not compound transforms
+- respawn resets the wreck state cleanly
 
 PRESERVED
-- v9.10.1 NaN/infinite transform protection
-- network transform validation
-- destructible streets
-- brick/sandbag/wood/concrete cover
+- v9.10.2 parser fix
+- v9.10.1 finite-transform/NaN recovery
+- destructible streets/cover
 - tank bunker support
 - anti-vehicle grenades
-- vehicle service zones
-- aircraft handling
-- multi-seat vehicle system
-- real Willys/Sherman/Spitfire/Bf109 models
-- F6/F8
+- vehicle service areas
+- aircraft takeoff/landing
+- multi-seat Jeep/tank
+- turret/mouse aiming
+- vehicle combat/HUD/respawn
+- real Willys/Sherman/Spitfire/Bf109 GLBs
+- F6/F8 quality controls
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.10.2
+Build: 9.11.0
 Protocol: 341
