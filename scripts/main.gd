@@ -243,8 +243,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "14.0.0"
-const NETWORK_PROTOCOL := 356
+const BUILD_VERSION := "15.0.0"
+const NETWORK_PROTOCOL := 357
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -266,6 +266,10 @@ const ARTILLERY_RADIUS := 7.5
 const ARTILLERY_DAMAGE := 92
 const SENSOR_BEACON_DURATION := 18.0
 const SENSOR_BEACON_RADIUS := 24.0
+const SQUAD_ORDER_LIFETIME_MS := 14000
+const SQUAD_ORDER_MAX_ASSIGNEES := 4
+const SQUAD_ORDER_ASSIGN_RADIUS := 38.0
+const SQUAD_ORDER_ARRIVAL_RADIUS := 8.5
 const FIELD_EMPLACEMENT_COUNT := 2
 const SUPPLY_DEPOT_CAPTURE_SECONDS := 10.0
 const SUPPLY_DEPOT_RADIUS := 5.2
@@ -348,6 +352,9 @@ var players: Dictionary = {}
 var squad_shared_targets: Dictionary = {}
 var squad_target_claims: Dictionary = {}
 var squad_order_revision := 0
+var squad_tactical_orders: Dictionary = {}
+var team_tactical_order_display: Dictionary = {}
+var squad_order_next_id := 1
 var squad_claim_reset_ms := 0
 var player_teams: Dictionary = {}
 var player_names: Dictionary = {}
@@ -1312,6 +1319,7 @@ func _process(delta: float) -> void:
 	_update_supply_depot(delta)
 	_update_sector_warfare(delta)
 	_update_class_warfare(delta)
+	_update_squad_command_system()
 
 	station_accumulator += delta
 	if station_accumulator >= COMMAND_POST_STATION_INTERVAL:
@@ -6927,6 +6935,23 @@ func _on_peer_connected(id: int) -> void:
 			bool(support.get("frontline_bonus"))
 		)
 
+	# v15 late-join synchronization for current tactical team orders.
+	var order_now := Time.get_ticks_msec()
+	for order_id_value: Variant in squad_tactical_orders.keys():
+		var order_id := int(order_id_value)
+		var order := Dictionary(squad_tactical_orders[order_id])
+		var remaining_ms := int(order.get("expires_ms", 0)) - order_now
+		if remaining_ms <= 0:
+			continue
+		sync_team_tactical_order.rpc_id(
+			id,
+			int(order.get("team", -1)),
+			order_id,
+			str(order.get("label", "ORDER")),
+			str(order.get("sector", "FRONT")),
+			remaining_ms
+		)
+
 	for grenade_value in grenades.values():
 		var grenade: Node3D = grenade_value as Node3D
 		if grenade == null:
@@ -7217,17 +7242,20 @@ func request_squad_ping(
 				hit.get("position", end_position)
 			)
 
+	var order_label := _server_issue_tactical_order(player, end_position)
 	show_squad_ping.rpc(
 		int(player.get("team")),
 		end_position,
-		str(player.get("player_name"))
+		str(player.get("player_name")),
+		order_label
 	)
 
 @rpc("authority", "call_local", "reliable")
 func show_squad_ping(
 	ping_team: int,
 	ping_position: Vector3,
-	sender_name: String
+	sender_name: String,
+	order_label: String = "MARK"
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -7263,7 +7291,8 @@ func show_squad_ping(
 
 	var marker := Label3D.new()
 	marker.name = "SquadPing"
-	marker.text = "▲ %s · %dm" % [
+	marker.text = "▲ %s · %s · %dm" % [
+		order_label,
 		sender_name,
 		int(round(distance))
 	]
@@ -7290,10 +7319,232 @@ func show_squad_ping(
 
 	_show_team_callout(
 		ping_team,
-		"SQUAD MARK · %dm" % int(round(distance)),
+		"%s ORDER · %dm" % [order_label, int(round(distance))],
 		"PING_%s" % sender_name
 	)
 
+
+func _nearest_sector_to_position(world_position: Vector3) -> String:
+	var best_name := ""
+	var best_distance := INF
+	for sector_name_value: Variant in sector_positions.keys():
+		var sector_name: String = str(sector_name_value)
+		var center := Vector3(sector_positions.get(sector_name, Vector3.ZERO))
+		var distance := center.distance_to(world_position)
+		if distance < best_distance:
+			best_distance = distance
+			best_name = sector_name
+	return best_name
+
+
+func _tactical_order_label(team_id: int, world_position: Vector3) -> String:
+	var sector_name := _nearest_sector_to_position(world_position)
+	if sector_name.is_empty():
+		return "REGROUP"
+	if bool(sector_contested.get(sector_name, false)):
+		return "CONTEST"
+	if int(sector_control.get(sector_name, -1)) == team_id:
+		return "DEFEND"
+	return "ATTACK"
+
+
+func _server_issue_tactical_order(issuer: Node3D, world_position: Vector3) -> String:
+	if not multiplayer.is_server() or issuer == null:
+		return "MARK"
+	var team_id := int(issuer.get("team"))
+	var issuer_id := int(issuer.get("peer_id"))
+	var order_label := _tactical_order_label(team_id, world_position)
+	var candidates: Array[Dictionary] = []
+	for player_value: Variant in players.values():
+		var candidate := player_value as Node3D
+		if candidate == null or candidate == issuer:
+			continue
+		if not bool(candidate.get("is_bot")):
+			continue
+		if int(candidate.get("team")) != team_id:
+			continue
+		if not bool(candidate.get("alive")) or bool(candidate.get("downed")):
+			continue
+		var issuer_distance := candidate.global_position.distance_to(issuer.global_position)
+		var order_distance := candidate.global_position.distance_to(world_position)
+		if minf(issuer_distance, order_distance) > SQUAD_ORDER_ASSIGN_RADIUS:
+			continue
+		candidates.append({
+			"id": int(candidate.get("peer_id")),
+			"score": issuer_distance * 0.65 + order_distance * 0.35
+		})
+	candidates.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a["score"]) < float(b["score"])
+	)
+	var assigned: Array[int] = []
+	for candidate: Dictionary in candidates:
+		if assigned.size() >= SQUAD_ORDER_MAX_ASSIGNEES:
+			break
+		assigned.append(int(candidate["id"]))
+
+	var order_id := squad_order_next_id
+	squad_order_next_id += 1
+	var sector_name := _nearest_sector_to_position(world_position)
+	squad_tactical_orders[order_id] = {
+		"team": team_id,
+		"issuer_id": issuer_id,
+		"position": world_position,
+		"label": order_label,
+		"sector": sector_name,
+		"assigned": assigned,
+		"expires_ms": Time.get_ticks_msec() + SQUAD_ORDER_LIFETIME_MS,
+		"completed": false
+	}
+	squad_order_revision += 1
+	sync_team_tactical_order.rpc(
+		team_id,
+		order_id,
+		order_label,
+		sector_name,
+		SQUAD_ORDER_LIFETIME_MS
+	)
+	if not assigned.is_empty():
+		issuer.call("add_xp", 1, "squad order")
+	return order_label
+
+
+func _update_squad_command_system() -> void:
+	if not multiplayer.is_server():
+		return
+	var now := Time.get_ticks_msec()
+	var remove_ids: Array[int] = []
+	for order_id_value: Variant in squad_tactical_orders.keys():
+		var order_id := int(order_id_value)
+		var order := Dictionary(squad_tactical_orders[order_id])
+		var team_id := int(order.get("team", -1))
+		var issuer_id := int(order.get("issuer_id", 0))
+		var label := str(order.get("label", "REGROUP"))
+		var sector_name := str(order.get("sector", ""))
+		var completed := false
+		if not sector_name.is_empty():
+			var control := int(sector_control.get(sector_name, -1))
+			if label == "ATTACK" and control == team_id:
+				completed = true
+			elif label == "CONTEST" and control == team_id and not bool(sector_contested.get(sector_name, false)):
+				completed = true
+		if completed:
+			if players.has(issuer_id):
+				players[issuer_id].call("add_xp", 8, "tactical order completed")
+			push_kill_feed.rpc("TACTICAL ORDER COMPLETE — %s" % sector_name.to_upper())
+			remove_ids.append(order_id)
+			continue
+		if now >= int(order.get("expires_ms", 0)):
+			if label == "DEFEND" and not sector_name.is_empty() and int(sector_control.get(sector_name, -1)) == team_id:
+				if players.has(issuer_id):
+					players[issuer_id].call("add_xp", 4, "defense order held")
+			remove_ids.append(order_id)
+	for order_id: int in remove_ids:
+		if squad_tactical_orders.has(order_id):
+			var removed_order := Dictionary(squad_tactical_orders[order_id])
+			clear_team_tactical_order.rpc(
+				int(removed_order.get("team", -1)),
+				order_id
+			)
+		squad_tactical_orders.erase(order_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func sync_team_tactical_order(
+	team_id: int,
+	order_id: int,
+	order_label: String,
+	sector_name: String,
+	duration_ms: int
+) -> void:
+	var current: Dictionary = Dictionary(
+		team_tactical_order_display.get(team_id, {})
+	)
+	if int(current.get("order_id", -1)) > order_id:
+		return
+	team_tactical_order_display[team_id] = {
+		"order_id": order_id,
+		"text": "%s %s" % [order_label, sector_name.to_upper()],
+		"expires_ms": Time.get_ticks_msec() + maxi(0, duration_ms)
+	}
+
+
+@rpc("authority", "call_local", "reliable")
+func clear_team_tactical_order(team_id: int, order_id: int) -> void:
+	if not team_tactical_order_display.has(team_id):
+		return
+	var current := Dictionary(team_tactical_order_display[team_id])
+	if int(current.get("order_id", -1)) == order_id:
+		team_tactical_order_display.erase(team_id)
+
+
+func squad_command_goal(actor: Node3D) -> Variant:
+	if actor == null:
+		return null
+	var actor_id := int(actor.get("peer_id"))
+	var team_id := int(actor.get("team"))
+	var now := Time.get_ticks_msec()
+	var best_position: Variant = null
+	var best_expiry := -1
+	for order_value: Variant in squad_tactical_orders.values():
+		var order := Dictionary(order_value)
+		if int(order.get("team", -1)) != team_id:
+			continue
+		if now >= int(order.get("expires_ms", 0)):
+			continue
+		var assigned: Array = order.get("assigned", [])
+		if not assigned.has(actor_id):
+			continue
+		var expiry := int(order.get("expires_ms", 0))
+		if expiry > best_expiry:
+			best_expiry = expiry
+			best_position = Vector3(order.get("position", actor.global_position))
+	return best_position
+
+
+func squad_command_text(actor: Node3D) -> String:
+	if actor == null:
+		return ""
+	var actor_id := int(actor.get("peer_id"))
+	var team_id := int(actor.get("team"))
+	var now := Time.get_ticks_msec()
+	for order_value: Variant in squad_tactical_orders.values():
+		var order := Dictionary(order_value)
+		if int(order.get("team", -1)) != team_id or now >= int(order.get("expires_ms", 0)):
+			continue
+		var assigned: Array = order.get("assigned", [])
+		if assigned.has(actor_id):
+			return "%s %s" % [str(order.get("label", "ORDER")), str(order.get("sector", "FRONT"))]
+	return ""
+
+
+func team_tactical_order_text(team_id: int) -> String:
+	if team_tactical_order_display.has(team_id):
+		var display := Dictionary(team_tactical_order_display[team_id])
+		if Time.get_ticks_msec() < int(display.get("expires_ms", 0)):
+			return str(display.get("text", ""))
+		team_tactical_order_display.erase(team_id)
+
+	# Server fallback for headless/state inspection. Clients receive the compact
+	# display state above via RPC rather than replicating the whole order table.
+	if not multiplayer.is_server():
+		return ""
+	var now := Time.get_ticks_msec()
+	var newest_expiry := -1
+	var text := ""
+	for order_value: Variant in squad_tactical_orders.values():
+		var order := Dictionary(order_value)
+		if int(order.get("team", -1)) != team_id:
+			continue
+		var expiry := int(order.get("expires_ms", 0))
+		if expiry <= now or expiry <= newest_expiry:
+			continue
+		newest_expiry = expiry
+		text = "%s %s" % [
+			str(order.get("label", "ORDER")),
+			str(order.get("sector", "FRONT")).to_upper()
+		]
+	return text
 
 
 func server_call_artillery(caller: Node3D, target_position: Vector3) -> void:
@@ -11225,6 +11476,8 @@ func _reset_round() -> void:
 	objective_stage = 0
 	squad_shared_targets.clear()
 	squad_target_claims.clear()
+	squad_tactical_orders.clear()
+	team_tactical_order_display.clear()
 	squad_order_revision += 1
 	bridge_progress = 0
 	defuse_progress = 0

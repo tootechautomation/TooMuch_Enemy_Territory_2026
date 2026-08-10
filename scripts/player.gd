@@ -2779,7 +2779,11 @@ func _update_objective_compass() -> void:
 	elif fd < 0.0:
 		arrow = "▼"
 	var tactical_suffix := ""
-	if main_node.has_method("battlefield_flow_text"):
+	if main_node.has_method("team_tactical_order_text"):
+		var team_order := str(main_node.call("team_tactical_order_text", team))
+		if not team_order.is_empty():
+			tactical_suffix = " · ORDER %s" % team_order
+	elif main_node.has_method("battlefield_flow_text"):
 		var order_text := str(
 			main_node.call("battlefield_flow_text", team)
 		)
@@ -4747,15 +4751,27 @@ func _bot_class_tactical_goal(main: Node) -> Vector3:
 		if class_goal is Vector3 and global_position.distance_to(Vector3(class_goal)) > 3.0:
 			anchor = Vector3(class_goal)
 
+	var has_tactical_order := false
+	if main.has_method("squad_command_goal"):
+		var command_goal: Variant = main.call("squad_command_goal", self)
+		if command_goal is Vector3:
+			var accept_order := true
+			if player_class == PlayerClass.ENGINEER and main.has_method("bot_objective_urgency"):
+				accept_order = float(main.call("bot_objective_urgency", self)) < 0.72
+			if accept_order and global_position.distance_to(Vector3(command_goal)) > 2.5:
+				anchor = Vector3(command_goal)
+				has_tactical_order = true
+
 	match player_class:
 		PlayerClass.MEDIC:
 			var wounded: Node3D = _bot_nearest_wounded_teammate()
 			if wounded != null:
 				return wounded.global_position
 		PlayerClass.FIELD_OPS:
-			var cluster: Vector3 = _bot_nearest_support_cluster()
-			if cluster.distance_to(global_position) > 3.0:
-				return cluster
+			if not has_tactical_order:
+				var cluster: Vector3 = _bot_nearest_support_cluster()
+				if cluster.distance_to(global_position) > 3.0:
+					return cluster
 		PlayerClass.SCOUT:
 			# Scouts hold their assigned sightline unless threatened.
 			if Time.get_ticks_msec() < bot_hold_position_until_ms:
@@ -9110,7 +9126,7 @@ func _class_role_prompt_text() -> String:
 
 	match player_class:
 		PlayerClass.SOLDIER:
-			return "Q HEAVY FIRE · %s · LEAD THE PUSH" % ready_text
+			return "Q HEAVY FIRE · %s · PING = SQUAD ORDER" % ready_text
 		PlayerClass.MEDIC:
 			return "Q REVIVE PULSE · %s · E REVIVE" % ready_text
 		PlayerClass.ENGINEER:

@@ -1,64 +1,86 @@
-FRONTLINE: OBJECTIVE v14.0.0
-MAJOR UPDATE — CLASS WARFARE / FRONTLINE SUPPORT
-Network Protocol 356
+FRONTLINE: OBJECTIVE v15.0.0
+MAJOR UPDATE — SQUAD COMMAND / TACTICAL ORDERS / FIRETEAM COORDINATION
+Network Protocol 357
 
 SOURCE / COMPATIBILITY
-- Built directly on the supplied v13.0.0 Battlefield Flow major overlay.
-- v13 environment/map scripts and all supplied GLB assets are preserved.
-- No map redesign, procedural replacement, or giant visible collision boxes were added.
-- v12.1 safe human deployment logic was left intact.
-- Existing --bots 0, --bots=0 and --no-bots command-line behavior remains in main.gd.
+- Built directly on the approved v14.0.0 Class Warfare / Frontline Support overlay.
+- v14 class support/deployable systems are preserved.
+- No environment redesign, map replacement, procedural rebuilding, or giant visible collision boxes were added.
+- Existing v12.1 safe human deployment/spawn recovery logic remains untouched.
+- Existing --bots 0, --bots=0 and --no-bots command-line parsing remains present.
+- Existing maps, grenades, support deployable script, Ruined City map script, objectives, vehicles, FX and other referenced base-project systems remain in place.
 
-CLASS WARFARE
-MEDIC
-- Revive Pulse still heals/revives nearby teammates.
-- Revive Pulse now also establishes a temporary team aid station.
-- Aid stations are server-authoritative, destructible, time-limited, team restricted, and deliberately used with INTERACT.
-- Aid stations near the Frontline Director pressure sector receive a modest frontline durability/healing bonus.
-- Support providers receive XP when teammates use their station.
+SQUAD COMMAND
+- The existing squad-ping action now creates a temporary server-authoritative tactical order at the marked world position.
+- Orders are classified automatically from battlefield state as ATTACK, DEFEND, CONTEST or REGROUP.
+- Sector classification uses the existing v13 sector-control/frontline data rather than creating a parallel objective system.
+- Tactical orders last 14 seconds and clean themselves up server-side.
+- Orders are intentionally limited in scope instead of redirecting every bot on the team.
 
-FIELD OPS
-- Artillery and the existing immediate ammunition pack remain.
-- Artillery Strike now also establishes a temporary team ammunition crate.
-- Ammo crates use the same server-authoritative, destructible, capped support-deployable framework.
-- Frontline crates receive a modest durability/ammo bonus.
+BOT FIRETEAMS
+- A human order can assign up to four nearby allied bots.
+- Assignment favors bots close to the issuing player and/or the ordered position.
+- Assignment radius is limited to 38 meters to keep orders local and believable.
+- Assigned bots use the order position as a tactical anchor while the order is active.
+- Engineers preserve objective urgency priority and can ignore a tactical order when objective pressure is high.
+- Medics still override movement orders for wounded/revive priorities.
+- Field Ops can follow tactical orders instead of always drifting back toward generic support clusters.
+- Scouts and Soldiers can use ordered positions as squad-level combat anchors.
+- Existing vehicle avoidance, suppression cover, squad formations, shared enemy intelligence and class-warfare goals remain active.
 
-ENGINEER
-- Existing manual barricade deployment remains unchanged.
-- Fortify now uses frontline-aware repair support and gives additional repair value when the engineer is operating near the current pressure sector.
-- Objective construction, dynamite arming/defusing, and existing barricade limits remain intact.
-- No automatic collision wall is spawned around engineers or players.
+FRONTLINE DIRECTOR INTEGRATION
+- Orders near enemy-held sectors become ATTACK orders.
+- Orders in contested sectors become CONTEST orders.
+- Orders in friendly-held sectors become DEFEND orders.
+- Tactical orders therefore reinforce the existing Frontline Director instead of replacing it.
+- Order markers and team callouts display the tactical intent and distance.
 
-SOLDIER
-- Existing Heavy Fire specialization is preserved as the sustained-fire / suppression role.
-- Soldier bots can now use the class-warfare tactical goal path to reinforce the active pressure sector.
+TEAMPLAY / SCORING
+- Issuing an order that successfully assigns a local bot fireteam grants a small coordination XP reward.
+- Completing ATTACK/CONTEST orders by securing the associated sector awards additional objective XP to the issuer.
+- Holding a DEFEND order through its lifetime while retaining the sector awards a smaller defense XP reward.
+- Completion produces a tactical-order completion feed event.
 
-AI / FRONTLINE DIRECTOR
-- Class-warfare goals now participate directly in bot movement before generic route travel.
-- Medics retain casualty/wounded priority.
-- Engineers retain primary objective priority and gain frontline fortification logic.
-- Field Ops can move toward nearby squad support clusters.
-- Soldiers can reinforce the Frontline Director pressure sector.
-- Existing suppression, cover, grenade, squad intelligence, shared targets, and vehicle avoidance remain.
+MULTIPLAYER / NETWORKING
+- Full bot assignment/order state remains server-authoritative.
+- Clients receive only compact tactical-order display state through reliable RPCs.
+- The latest team tactical order appears in the objective/compass presentation while active.
+- Active tactical order display state synchronizes to late-joining clients with its remaining lifetime.
+- Order cleanup only clears the matching displayed order so a newer order is not accidentally removed by an older one expiring.
+- Network protocol incremented from 356 to 357.
 
-MULTIPLAYER / PERFORMANCE
-- Support deployables are spawned through authoritative RPCs.
-- Maximum of 2 aid stations and 2 ammo crates per team at one time.
-- Oldest same-type team support position is removed when the cap is exceeded.
-- Support positions expire after 50 seconds.
-- Stale deployable references are pruned server-side.
-- Support deployables are cleared on round reset.
-- No persistent particle systems or high-node-count effects were added.
+PERFORMANCE
+- No persistent particle systems or map geometry were added.
+- Tactical orders use small Dictionary state records and existing ping markers.
+- Maximum assigned bot count per order is four.
+- Orders self-expire quickly and are pruned every server update.
+- No hundreds-of-node deployable or marker system was introduced.
 
 TEST FOCUS
-1. Launch headless server and confirm v14.0.0 / protocol 356 handshake.
-2. Confirm --bots 0, --bots=0, and --no-bots still produce zero bots.
-3. Confirm initial human spawn still uses safe base deployment and does not appear inside architecture.
-4. As Medic, use class ability near teammates: verify revive/heal plus AID STATION spawn; INTERACT should heal teammates and award provider XP.
-5. As Field Ops, use class ability: verify artillery still works and AMMO CRATE appears; INTERACT should add reserve ammo.
-6. Shoot enemy support crates: they should take damage and be destroyable; friendly fire should not damage them.
-7. Confirm support cap: deploying a third same-type team station removes the oldest, not map/environment content.
-8. As Engineer, verify existing barricade deployment still works, Fortify repairs nearby allied barricades, and bridge/dynamite/defuse interactions still work.
-9. Run bots and observe medics moving toward casualties, engineers keeping objective priority, Field Ops supporting clusters, and soldiers reinforcing pressure sectors.
-10. Verify TAB scoreboard still renders above the normal HUD and existing weapons, vehicles, aircraft, FX, maps, and collisions remain unchanged.
-11. Join a match after support crates have already been deployed; active aid/ammo positions should synchronize to the late-joining client.
+1. Start the headless server and verify v15.0.0 / protocol 357 handshake.
+2. Confirm --bots 0, --bots=0 and --no-bots still reliably disable bot spawning.
+3. Confirm initial human deployment still uses the known-safe base deployment and does not spawn inside architecture.
+4. Use the existing squad-ping control on an enemy-held sector; marker/callout should read ATTACK and nearby allied bots should move toward it.
+5. Ping a contested sector; it should read CONTEST.
+6. Ping a friendly-held sector; it should read DEFEND.
+7. Verify only a limited local fireteam responds rather than every bot on the team.
+8. Confirm Medic bots still abandon an order when a nearby teammate needs revive/triage.
+9. Confirm Engineer bots retain objective priority during high objective urgency and are not pulled away from critical construction/dynamite work.
+10. Confirm Soldier / Field Ops / Scout bots can visibly react to an active order when no higher-priority behavior overrides it.
+11. Capture a sector after issuing ATTACK/CONTEST and verify the tactical-order completion event / XP occurs.
+12. Hold a friendly sector through a DEFEND order and verify the smaller defense reward occurs when the order expires.
+13. Join an in-progress match while a tactical order is active; the current order should appear for the late-joining client for the correct remaining duration.
+14. Confirm v14 aid stations/ammo crates, Engineer barricades/Fortify, Field Ops artillery, Soldier Heavy Fire, Medic Revive Pulse and Scout Sensor Beacon still work.
+15. Confirm TAB scoreboard remains above the normal HUD and existing objective, vehicle, combat FX, environment and collision presentation remain unchanged.
+
+FILES MODIFIED IN THIS OVERLAY
+- main.gd
+- scripts/player.gd
+- V15.0_RELEASE_NOTES.txt (new)
+
+FILES INTENTIONALLY NOT MODIFIED
+- scripts/class_warfare_deployable.gd
+- scripts/grenade.gd
+- scripts/maps/ruined_city_map.gd
+- V13.0_README.txt
+- V14.0_RELEASE_NOTES.txt
