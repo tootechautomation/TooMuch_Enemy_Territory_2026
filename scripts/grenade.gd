@@ -56,22 +56,71 @@ func _build_team_grenade_visual() -> void:
 	if external_visual != null:
 		external_visual.queue_free()
 		external_visual = null
-	var scene: PackedScene = ExternalAssetRegistryScript.grenade_scene(owner_team)
+
+	var scene: PackedScene = null
+	var using_allied_mk2 := false
+
+	# Allied team uses the user-supplied Mk 2 grenade. Axis keeps the existing
+	# Model 24/external-registry behavior unchanged.
+	if owner_team == 0:
+		var mk2_path := "res://assets/external/weapons/mk2_grenade.glb"
+		if ResourceLoader.exists(mk2_path):
+			var mk2_resource: Resource = load(mk2_path)
+			if mk2_resource is PackedScene:
+				scene = mk2_resource as PackedScene
+				using_allied_mk2 = true
+
+	if scene == null:
+		scene = ExternalAssetRegistryScript.grenade_scene(owner_team)
+
 	if scene == null:
 		return
+
 	var instance: Node = scene.instantiate()
 	if not instance is Node3D:
 		instance.queue_free()
 		return
+
 	external_visual = instance as Node3D
-	external_visual.name = "ExternalModel24Grenade"
-	# Model 24 is a long stick grenade; fit it to a compact throwable silhouette.
-	external_visual.rotation_degrees = Vector3(0.0, 0.0, 90.0)
+	external_visual.name = (
+		"ExternalMk2Grenade"
+		if using_allied_mk2
+		else "ExternalModel24Grenade"
+	)
+
 	add_child(external_visual)
-	RealAssetAdapterScript.adapt_weapon(external_visual, 0.36)
-	var fallback_mesh := get_node_or_null("MeshInstance3D") as MeshInstance3D
+
+	if using_allied_mk2:
+		# Compact pineapple grenade: keep it upright enough to read while
+		# tumbling under the existing CharacterBody3D grenade physics.
+		external_visual.rotation_degrees = Vector3(
+			0.0,
+			0.0,
+			-18.0
+		)
+		RealAssetAdapterScript.adapt_weapon(
+			external_visual,
+			0.18
+		)
+	else:
+		# Preserve existing Axis Model 24 setup.
+		external_visual.rotation_degrees = Vector3(
+			0.0,
+			0.0,
+			90.0
+		)
+		RealAssetAdapterScript.adapt_weapon(
+			external_visual,
+			0.36
+		)
+
+	var fallback_mesh := (
+		get_node_or_null("MeshInstance3D")
+		as MeshInstance3D
+	)
 	if fallback_mesh != null:
 		fallback_mesh.visible = false
+
 
 func _physics_process(delta: float) -> void:
 	if beep_audio != null and fuse_remaining > 0.0:
