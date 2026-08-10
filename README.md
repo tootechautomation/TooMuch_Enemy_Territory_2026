@@ -1,59 +1,56 @@
-FRONTLINE: OBJECTIVE v9.07.0
-AIRCRAFT HANDLING + VEHICLE FEEDBACK POLISH
+FRONTLINE: OBJECTIVE v9.08.0
+VEHICLE SERVICE AREAS + OBJECTIVE SUPPORT
 
-AIRCRAFT THROTTLE
-W/S now adjusts a persistent aircraft throttle setting instead of acting like
-a spring-loaded forward/back input.
+TEAM VEHICLE SERVICE ZONES
+Allied service area:
+approximately (-48, -10)
 
-Aircraft HUD shows:
-THR XX% · GROUND/AIRBORNE
+Axis service area:
+approximately (48, 10)
 
-TAKEOFF / LANDING
-- aircraft can settle near zero speed on runway at low throttle
-- simple lift model added
-- nose-up pitch at sufficient speed assists takeoff
-- landing gear mode damps vertical impact near ground
-- low-speed landing automatically levels pitch
-- ground steering is gentler than airborne turning
-- existing input smoothing retained
+When a friendly vehicle is within 8m and moving 6 KM/H or slower:
+- repairs 35 HP per second
+- rearms 40 rounds/shell units per second
+- vehicle HUD shows SERVICE · REPAIR/REARM
 
-VEHICLE DAMAGE FEEDBACK
-Damaged vehicles begin emitting lightweight smoke at ~45% damage.
-Smoke automatically clears when vehicle is repaired/respawned/destroyed.
+If moving too quickly:
+SERVICE · SLOW BELOW 6 KM/H
 
-VEHICLE WEAPON FEEDBACK
-Tank, Jeep MG and aircraft guns now produce a lightweight muzzle flash at the
-server-authoritative weapon origin.
+This creates a reason to return damaged vehicles to the motor pool instead of
+treating them as disposable one-life assets.
 
-PERFORMANCE
-LOW:
-- very small particle counts
-- no extra shadow lights
-BALANCED/HIGH:
-- progressively richer smoke/effects
+BRIDGE OBJECTIVE INTEGRATION
+The vehicle-support helper from v9.07 is now connected to Stage 1.
 
-No wheel rigid bodies, shell rigid bodies, or full aerodynamic simulation were
-added.
+If an occupied Allied vehicle is within ~14m of the bridge build site while an
+Allied Engineer constructs:
+- normal engineer interaction = +1 construction
+- supported engineer interaction = +2 construction
 
-OBJECTIVE INTEGRATION FOUNDATION
-Added allied_vehicle_objective_support_bonus() for upcoming objective stages.
-It reports a capped bonus when occupied Allied vehicles are positioned near a
-target objective. This is intentionally exposed as a helper rather than
-silently rewriting established objective balance in this phase.
+Engineers are still mandatory. Vehicles cannot build the bridge on their own.
+
+HUD/status reports:
+VEHICLE SUPPORT
+when the support condition is active.
+
+BALANCE
+The support bonus is deliberately modest and capped:
+- vehicle does not replace Engineer
+- vehicle must be occupied
+- vehicle must survive close to the objective
+- defenders can counter the support vehicle
 
 PRESERVED
-- v9.06 vehicle-state crash fix
-- aircraft entry stability
-- v9.05 mouse turret aiming
-- Engineer repair
-- tactical vehicle markers
-- ammo/reload HUD
-- multi-seat Jeep/tank
-- independent turret
-- vehicle respawn/combat/destruction
+- v9.07 improved aircraft throttle/takeoff/landing
+- damage smoke/muzzle flash
+- v9.06 aircraft state stability
+- v9.05 mouse turret aiming/repair/markers
+- multi-seat vehicles
+- combat/destruction/respawn
 - real GLB models
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
+- laptop scalability work
 
-Build: 9.07.0
+Build: 9.08.0
 Protocol: 341

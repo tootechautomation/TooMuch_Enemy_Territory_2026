@@ -228,7 +228,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.07.0"
+const BUILD_VERSION := "9.08.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -478,6 +478,13 @@ var vehicle_snapshot_accumulator := 0.0
 var vehicle_next_fire_ms: Dictionary = {}
 var vehicle_respawn_at_ms: Dictionary = {}
 var vehicle_damage_smoke_nodes: Dictionary = {}
+var vehicle_service_accumulator := 0.0
+const VEHICLE_SERVICE_INTERVAL := 1.0
+const VEHICLE_SERVICE_RADIUS := 8.0
+const VEHICLE_SERVICE_REPAIR := 35
+const VEHICLE_SERVICE_AMMO := 40
+const ALLIED_SERVICE_POSITION := Vector3(-48.0, 0.0, -10.0)
+const AXIS_SERVICE_POSITION := Vector3(48.0, 0.0, 10.0)
 var low_cost_visual_clarity: Node
 var battlefield_effects_manager: Node3D
 var local_cinema_mode_enabled := false
@@ -1074,6 +1081,11 @@ func _process(delta: float) -> void:
 			vehicle_snapshot_accumulator = 0.0
 			_broadcast_vehicle_snapshots()
 		_update_vehicle_respawns()
+
+		vehicle_service_accumulator += delta
+		if vehicle_service_accumulator >= VEHICLE_SERVICE_INTERVAL:
+			vehicle_service_accumulator = 0.0
+			_update_vehicle_service_zones()
 
 	_update_adaptive_music()
 	_update_vehicle_damage_smoke()
@@ -7304,8 +7316,24 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 	if objective_stage == 0:
 		var build_site := get_node_or_null("BridgeBuildSite")
 		if engineer_team == 0 and build_site and engineer.global_position.distance_to(build_site.global_position) <= 3.5:
-			bridge_progress = mini(bridge_required, bridge_progress + 1)
+			var vehicle_bonus := allied_vehicle_objective_support_bonus(
+				build_site.global_position,
+				14.0
+			)
+			var build_amount := 1
+			if vehicle_bonus >= 0.08:
+				build_amount += 1
+
+			bridge_progress = mini(
+				bridge_required,
+				bridge_progress + build_amount
+			)
 			engineer.add_xp(5, "construction")
+
+			if build_amount > 1:
+				push_kill_feed.rpc(
+					"Allied vehicle support accelerated bridge construction"
+				)
 			_update_objective_visuals()
 			if bridge_progress >= bridge_required:
 				objective_stage = 1
@@ -8870,14 +8898,25 @@ func objective_status_text() -> String:
 	)
 
 	if objective_stage == 0:
+		var support_text := ""
+		var build_site := get_node_or_null("BridgeBuildSite") as Node3D
+		if build_site != null:
+			var vehicle_bonus := allied_vehicle_objective_support_bonus(
+				build_site.global_position,
+				14.0
+			)
+			if vehicle_bonus >= 0.08:
+				support_text = " · VEHICLE SUPPORT"
+
 		return (
-			"Stage 1: Build bridge %d/%d · Tickets %d-%d · %s%s"
+			"Stage 1: Build bridge %d/%d · Tickets %d-%d · %s%s%s"
 			% [
 				bridge_progress,
 				bridge_required,
 				attacker_tickets,
 				defender_tickets,
 				guns_text + " · " + sector_status_text(),
+				support_text,
 				overtime_text
 			]
 		)
@@ -10045,6 +10084,66 @@ func vehicle_repair_feedback(
 			vehicle_id,
 			repaired_amount
 		)
+
+
+func vehicle_service_position(team_id: int) -> Vector3:
+	return ALLIED_SERVICE_POSITION if team_id == 0 else AXIS_SERVICE_POSITION
+
+
+func vehicle_in_service_zone(vehicle: Node3D) -> bool:
+	if vehicle == null:
+		return false
+	var service_position := vehicle_service_position(
+		int(vehicle.get("team_id"))
+	)
+	return (
+		vehicle.global_position.distance_to(service_position)
+		<= VEHICLE_SERVICE_RADIUS
+	)
+
+
+func _update_vehicle_service_zones() -> void:
+	if not multiplayer.is_server():
+		return
+
+	for id_value: Variant in vehicles:
+		var vehicle: Node3D = vehicles.get(int(id_value)) as Node3D
+		if vehicle == null:
+			continue
+		if bool(vehicle.get("destroyed")):
+			continue
+		if not vehicle_in_service_zone(vehicle):
+			continue
+
+		# Service areas work whether occupied or empty, but require the vehicle
+		# to be nearly stopped so they cannot be abused as drive-through healing.
+		if float(vehicle.call("current_speed_kph")) > 6.0:
+			continue
+
+		vehicle.call(
+			"server_repair",
+			VEHICLE_SERVICE_REPAIR
+		)
+		vehicle.call(
+			"server_resupply_vehicle",
+			VEHICLE_SERVICE_AMMO
+		)
+
+
+func vehicle_service_status(vehicle_id: int) -> String:
+	if not vehicles.has(vehicle_id):
+		return ""
+
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if vehicle == null:
+		return ""
+
+	if vehicle_in_service_zone(vehicle):
+		if float(vehicle.call("current_speed_kph")) <= 6.0:
+			return "SERVICE · REPAIR/REARM"
+		return "SERVICE · SLOW BELOW 6 KM/H"
+
+	return ""
 
 
 func vehicle_tactical_entries() -> Array[Dictionary]:

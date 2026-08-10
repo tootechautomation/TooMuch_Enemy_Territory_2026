@@ -3002,8 +3002,19 @@ func _update_vehicle_hud() -> void:
 		else "%.1fs" % (float(reload_ms) / 1000.0)
 	)
 
+	var service_text := ""
+	if main_node.has_method("vehicle_service_status"):
+		service_text = str(
+			main_node.call(
+				"vehicle_service_status",
+				current_vehicle_id
+			)
+		)
+	if not service_text.is_empty():
+		service_text = " · " + service_text
+
 	vehicle_hud_label.text = (
-		"%s · %s · HP %d/%d · %d KM/H%s\n%s · AMMO %d/%d · %s · E EXIT"
+		"%s · %s · HP %d/%d · %d KM/H%s%s\n%s · AMMO %d/%d · %s · E EXIT"
 		% [
 			str(vehicle.call("display_name")),
 			seat_name,
@@ -3011,6 +3022,7 @@ func _update_vehicle_hud() -> void:
 			max_hp,
 			speed,
 			aircraft_status,
+			service_text,
 			weapon_text,
 			ammo,
 			ammo_max,
