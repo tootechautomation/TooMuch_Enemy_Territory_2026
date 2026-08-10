@@ -1,0 +1,17 @@
+Frontline Objective v9.27.3 cumulative asset inventory
+
+YES  assets/external/vehicles/willys_jeep.glb  (1.0 MB)
+YES  assets/external/vehicles/m4_sherman.glb  (22.3 MB)
+YES  assets/external/vehicles/spitfire.glb  (2.8 MB)
+YES  assets/external/vehicles/bf109.glb  (2.5 MB)
+YES  assets/pbr/gunmetal_albedo.png  (0.2 MB)
+YES  assets/pbr/gunmetal_normal.png  (0.4 MB)
+YES  assets/pbr/wood_albedo.png  (0.1 MB)
+YES  assets/textures/weapon_rifle.png  (0.1 MB)
+YES  assets/textures/weapon_pistol.png  (0.1 MB)
+YES  assets/external/weapons/m1a1_thompson.fbx  (0.5 MB)
+YES  assets/external/weapons/tt_pistol.fbx  (0.2 MB)
+NO   assets/external/weapons/walther_p38.fbx
+YES  assets/external/weapons/model24_grenade.fbx  (0.0 MB)
+YES  assets/external/characters/ww2_allied_soldier.glb  (20.7 MB)
+YES  assets/external/characters/ww2_german_wehrmacht_soldier.glb  (25.2 MB)
