@@ -17,6 +17,7 @@ var steering_input := 0.0
 var pitch_input := 0.0
 var fire_input := false
 var destroyed := false
+var wreck_visual_applied := false
 var weapon_ammo := 0
 var weapon_ammo_max := 0
 var last_fire_ms := 0
@@ -234,9 +235,17 @@ func server_apply_damage(amount: int) -> bool:
 
 func set_destroyed_visual() -> void:
 	destroyed = true
+
+	# Network snapshots can report a destroyed vehicle repeatedly. The wreck
+	# transform must therefore be idempotent rather than multiplying scale on
+	# every snapshot.
+	if wreck_visual_applied:
+		return
+
+	wreck_visual_applied = true
 	if visual_root != null:
-		visual_root.rotation_degrees.z = 7.0
-		visual_root.scale *= 0.98
+		visual_root.rotation_degrees = Vector3(0.0, 0.0, 7.0)
+		visual_root.scale = Vector3(0.98, 0.98, 0.98)
 
 
 func display_name() -> String:
@@ -375,6 +384,7 @@ func weapon_owner_peer() -> int:
 
 func reset_for_respawn() -> void:
 	destroyed = false
+	wreck_visual_applied = false
 	health = max_health
 	weapon_ammo = weapon_ammo_max
 	last_fire_ms = 0
@@ -428,16 +438,74 @@ func exit_position() -> Vector3:
 	return exit_pos
 
 func camera_anchor() -> Transform3D:
-	var offset := Vector3(0.0, 2.7, 6.0)
-	if vehicle_type == VehicleType.TANK:
-		offset = Vector3(0.0, 3.4, 7.4)
-	elif vehicle_type == VehicleType.AIRCRAFT:
-		offset = Vector3(0.0, 2.4, 9.0)
+	return camera_anchor_for_mode(0)
+
+
+func camera_anchor_for_mode(mode: int) -> Transform3D:
+	var safe_mode := clampi(mode, 0, 2)
+	var offset := Vector3.ZERO
+
+	match vehicle_type:
+		VehicleType.JEEP:
+			match safe_mode:
+				0:
+					offset = Vector3(0.0, 2.65, 6.4)
+				1:
+					offset = Vector3(0.0, 1.85, 3.6)
+				_:
+					offset = Vector3(0.0, 5.4, 10.2)
+
+		VehicleType.TANK:
+			match safe_mode:
+				0:
+					offset = Vector3(0.0, 3.5, 7.8)
+				1:
+					offset = Vector3(0.0, 2.65, 4.8)
+				_:
+					offset = Vector3(0.0, 6.6, 11.8)
+
+		VehicleType.AIRCRAFT:
+			match safe_mode:
+				0:
+					offset = Vector3(0.0, 2.5, 9.4)
+				1:
+					offset = Vector3(0.0, 1.35, 4.8)
+				_:
+					offset = Vector3(0.0, 5.6, 14.5)
+
 	var basis := global_transform.basis
+	var camera_position := (
+		global_position
+		+ basis.y * offset.y
+		+ basis.z * offset.z
+	)
+
 	return Transform3D(
 		basis,
-		global_position + basis.y * offset.y + basis.z * offset.z
+		_finite_vector3(camera_position, global_position)
 	)
+
+
+func camera_mode_name(mode: int) -> String:
+	match clampi(mode, 0, 2):
+		0:
+			return "CHASE"
+		1:
+			return "CLOSE"
+		2:
+			return "TACTICAL"
+	return "CHASE"
+
+
+func recommended_camera_fov(mode: int) -> float:
+	var safe_mode := clampi(mode, 0, 2)
+	if vehicle_type == VehicleType.AIRCRAFT:
+		return 82.0 if safe_mode == 0 else 74.0 if safe_mode == 1 else 88.0
+	if vehicle_type == VehicleType.TANK:
+		return 78.0 if safe_mode == 0 else 72.0 if safe_mode == 1 else 84.0
+	return 76.0 if safe_mode == 0 else 70.0 if safe_mode == 1 else 82.0
+
+
 
 func apply_network_snapshot(
 	position: Vector3,

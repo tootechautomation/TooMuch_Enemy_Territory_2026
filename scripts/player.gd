@@ -291,6 +291,7 @@ var f6_presentation_mode: int = 2
 var current_vehicle_id: int = -1
 var current_vehicle_seat: int = -1
 var vehicle_camera_active := false
+var vehicle_camera_mode := 0
 var vehicle_hud_panel: PanelContainer
 var vehicle_hud_label: Label
 var vehicle_gunsight: Label
@@ -807,6 +808,22 @@ func _input(event: InputEvent) -> void:
 		if key_event.physical_keycode != 0
 		else key_event.keycode
 	)
+
+	# V cycles vehicle camera distance while seated.
+	if (
+		key_code == KEY_V
+		and key_event.pressed
+		and not key_event.echo
+		and current_vehicle_id >= 0
+	):
+		vehicle_camera_mode = (vehicle_camera_mode + 1) % 3
+		if selection_status != null:
+			selection_status.text = (
+				"VEHICLE CAMERA · %s"
+				% _vehicle_camera_mode_name()
+			)
+		get_viewport().set_input_as_handled()
+		return
 
 	# Dedicated vehicle E interaction. This bypasses the generic interaction
 	# hold timer, which made vehicle entry unreliable when UI/gameplay focus
@@ -2824,6 +2841,7 @@ func client_set_vehicle_state(
 		current_vehicle_seat = 0
 	if vehicle_id < 0:
 		current_vehicle_seat = -1
+		vehicle_camera_mode = 0
 	vehicle_camera_active = vehicle_id >= 0
 
 	if vehicle_id >= 0:
@@ -3039,10 +3057,11 @@ func _update_vehicle_hud() -> void:
 		service_text = " · " + service_text
 
 	vehicle_hud_label.text = (
-		"%s · %s · HP %d/%d · %d KM/H%s%s\n%s · AMMO %d/%d · %s · E EXIT"
+		"%s · %s · CAM %s · HP %d/%d · %d KM/H%s%s\n%s · AMMO %d/%d · %s · V CAMERA · E EXIT"
 		% [
 			str(vehicle.call("display_name")),
 			seat_name,
+			_vehicle_camera_mode_name(),
 			hp,
 			max_hp,
 			speed,
@@ -3054,6 +3073,35 @@ func _update_vehicle_hud() -> void:
 			reload_text
 		]
 	)
+
+
+func _vehicle_camera_mode_name() -> String:
+	if current_vehicle_id < 0:
+		return ""
+
+	var main_node := get_parent()
+	if main_node == null:
+		return ""
+
+	var vehicles_value: Variant = main_node.get("vehicles")
+	if not vehicles_value is Dictionary:
+		return ""
+
+	var vehicle: Node = (
+		vehicles_value as Dictionary
+	).get(current_vehicle_id) as Node
+	if vehicle == null:
+		return ""
+
+	if vehicle.has_method("camera_mode_name"):
+		return str(
+			vehicle.call(
+				"camera_mode_name",
+				vehicle_camera_mode
+			)
+		)
+
+	return "CHASE"
 
 
 func _update_vehicle_camera() -> void:
@@ -3072,16 +3120,68 @@ func _update_vehicle_camera() -> void:
 	if not vehicle_dict.has(current_vehicle_id):
 		return
 
-	var vehicle: Node3D = vehicle_dict.get(current_vehicle_id) as Node3D
+	var vehicle: Node3D = (
+		vehicle_dict.get(current_vehicle_id) as Node3D
+	)
 	var camera := $Head/Camera3D as Camera3D
 	if vehicle == null or camera == null:
 		return
 
-	var target: Transform3D = vehicle.call("camera_anchor")
-	camera.global_transform = camera.global_transform.interpolate_with(
-		target,
-		0.22
+	var target: Transform3D
+	if vehicle.has_method("camera_anchor_for_mode"):
+		target = Transform3D(
+			vehicle.call(
+				"camera_anchor_for_mode",
+				vehicle_camera_mode
+			)
+		)
+	else:
+		target = Transform3D(vehicle.call("camera_anchor"))
+
+	var speed_kph := 0.0
+	if vehicle.has_method("current_speed_kph"):
+		speed_kph = float(
+			vehicle.call("current_speed_kph")
+		)
+
+	if is_nan(speed_kph) or is_inf(speed_kph):
+		speed_kph = 0.0
+
+	# Faster movement receives slightly firmer camera follow so aircraft and
+	# fast Jeeps do not feel detached from the controlled vehicle.
+	var follow_weight := clampf(
+		0.16 + speed_kph * 0.0022,
+		0.16,
+		0.34
 	)
+	if vehicle_camera_mode == 2:
+		follow_weight *= 0.82
+
+	camera.global_transform = (
+		camera.global_transform.interpolate_with(
+			target,
+			follow_weight
+		)
+	)
+
+	var target_fov := profile_field_of_view
+	if vehicle.has_method("recommended_camera_fov"):
+		target_fov = float(
+			vehicle.call(
+				"recommended_camera_fov",
+				vehicle_camera_mode
+			)
+		)
+
+	# Small speed-based FOV expansion improves perceived vehicle motion without
+	# expensive motion blur.
+	target_fov += clampf(speed_kph / 120.0, 0.0, 1.0) * 4.0
+	camera.fov = lerpf(
+		camera.fov,
+		target_fov,
+		clampf(get_process_delta_time() * 8.0, 0.0, 1.0)
+	)
+
 
 
 func server_interact_request() -> void:
@@ -5241,6 +5341,9 @@ func _is_scout_scope_active() -> bool:
 	)
 
 func _update_aim_view() -> void:
+	if current_vehicle_id >= 0:
+		return
+
 	if not _is_local_player():
 		return
 
