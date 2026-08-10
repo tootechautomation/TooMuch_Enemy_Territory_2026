@@ -1,51 +1,53 @@
-FRONTLINE: OBJECTIVE v10.0.1
-SERVER-AUTHORITATIVE MAP SELECTION HOTFIX
+FRONTLINE: OBJECTIVE v10.1.0
+MAP IDENTITY + MAP-AWARE HUD + RUINED CITY BOT ROUTES
 
-PROBLEM FIXED
-v10.0.0 allowed the server to select Ruined City, but graphical clients built
-Operation Black River before they connected. The client therefore remained on
-Black River even though the server was running Map 2.
+Operation Black River remains the default and its geometry is unchanged.
 
-NEW STARTUP ORDER
-- Headless/dedicated server parses --map first and builds that map.
-- Graphical clients sitting at the connection menu build NO playable world.
-- When the client connects, the server sends:
-  protocol + build version + active map id
-- The client accepts the server map id and constructs that map exactly once.
-- The server remains authoritative for map selection.
+RUINED CITY is now presented as:
+OPERATION ASHEN STREETS
 
-IMPORTANT
-For multiplayer Map 2 testing, ONLY THE SERVER needs:
+ATTACK:
+Open the central crossing, seize the command post, and demolish the eastern
+pillbox.
 
+DEFEND:
+Hold the central streets, deny the command post, and protect the eastern
+pillbox.
+
+MAP-AWARE PRESENTATION
+- TAB scoreboard shows active operation and location
+- objective marker uses map-specific language
+- contextual E prompts use map-specific language
+- status bar says CROSSING/PILLBOX on Ruined City
+- tactical map is unique per map
+- a 5.2-second mission banner appears after map load
+- server console prints operation/mission details
+
+BOT FIX
+Ruined City bots now have their own four-route waypoint set per team instead
+of following Black River coordinates.
+
+Ruined City forward-spawn sector priority now uses:
+West Ruins / Central Square / Pillbox Ridge.
+
+MAP SELECTION
+Server:
 --map ruined_city
 
-Clients can start normally and connect through the menu. They should print:
+Clients still receive the server-selected map automatically.
 
-Connected: v10.0.1 protocol 343 · map Ruined City
-
-The server should print:
-
-Active map: Ruined City [ruined_city]
-
-BLACK RIVER
-No map argument = Operation Black River.
-
-RUINED CITY SERVER EXAMPLE
-godot --headless --path /project --server --port 27960 --bots 0 --map ruined_city
-
-or:
-
-godot --headless --path /project --server --port 27960 --bots=0 --map=ruined_city
-
-PRESERVED
-- Operation Black River remains unchanged/default
-- separate Ruined City assets/map builder
+UNCHANGED
+- Black River map detail
+- Ruined City geometry/setpieces
 - Jeep / Sherman / Spitfire / Bf 109
-- WWII soldier models
+- WWII character models
 - Allied Mk 2 grenade
-- Axis grenade behavior
-- bots and --bots 0
-- current HUD/gameplay systems
+- Axis grenade path
+- weapons/textures
+- collision/destruction
+- TAB priority behavior
+- contextual E mechanics
+- --bots 0 / --bots=0 / --no-bots
 
-Build: 10.0.1
-Protocol: 343
+Build: 10.1.0
+Protocol: 344

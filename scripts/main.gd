@@ -240,8 +240,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "10.0.1"
-const NETWORK_PROTOCOL := 343
+const BUILD_VERSION := "10.1.0"
+const NETWORK_PROTOCOL := 344
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -619,6 +619,42 @@ func active_map_display_name() -> String:
 	return "Operation Black River"
 
 
+func active_map_operation_title() -> String:
+	if active_map_id == MAP_RUINED_CITY:
+		return "OPERATION ASHEN STREETS"
+	return "OPERATION BLACK RIVER"
+
+
+func active_map_location_line() -> String:
+	if active_map_id == MAP_RUINED_CITY:
+		return "RUINED CITY · URBAN ASSAULT"
+	return "BLACK RIVER · BRIDGEHEAD ASSAULT"
+
+
+func active_map_attacker_mission() -> String:
+	if active_map_id == MAP_RUINED_CITY:
+		return "Open the central crossing, seize the command post, and demolish the eastern pillbox."
+	return "Construct the bridge, secure the command post, and destroy the bunker."
+
+
+func active_map_defender_mission() -> String:
+	if active_map_id == MAP_RUINED_CITY:
+		return "Hold the central streets, deny the command post, and protect the eastern pillbox."
+	return "Delay the bridge crossing, hold the command post, and defend the bunker."
+
+
+func active_map_stage_name() -> String:
+	if active_map_id == MAP_RUINED_CITY:
+		return "CENTRAL CROSSING" if objective_stage == 0 else "EASTERN PILLBOX"
+	return "BRIDGE" if objective_stage == 0 else "BUNKER"
+
+
+func active_map_objective_action_name() -> String:
+	if active_map_id == MAP_RUINED_CITY:
+		return "OPEN CENTRAL CROSSING" if objective_stage == 0 else "DESTROY EASTERN PILLBOX"
+	return "BUILD THE BRIDGE" if objective_stage == 0 else "DESTROY THE BUNKER"
+
+
 func _build_selected_map() -> void:
 	if active_map_id == MAP_RUINED_CITY:
 		RuinedCityMapScript.build(self)
@@ -691,6 +727,13 @@ func _ensure_playable_world_initialized() -> void:
 
 	playable_world_initialized = true
 	playable_world_initializing = false
+
+	if DisplayServer.get_name() != "headless":
+		mission_banner_text = "%s · %s" % [
+			active_map_operation_title(),
+			active_map_stage_name()
+		]
+		mission_banner_until_ms = Time.get_ticks_msec() + 5200
 
 	print(
 		"Playable world ready: %s [%s]"
@@ -5143,22 +5186,41 @@ func sector_status_text() -> String:
 	return " ".join(parts)
 
 func tactical_map_text() -> String:
+	if active_map_id == MAP_RUINED_CITY:
+		var west := _sector_map_code("West Ruins")
+		var center := _sector_map_code("Central Square")
+		var ridge := _sector_map_code("Pillbox Ridge")
+		var objective_name := (
+			"CROSSING"
+			if objective_stage == 0
+			else "PILLBOX"
+		)
+		return (
+			"OPERATION ASHEN STREETS\n"
+			+ "════════════════════════════════════════════\n"
+			+ "            NORTH RUINED STREET\n"
+			+ " [WEST RUINS %s] -- [CENTRAL SQUARE %s] -- [PILLBOX RIDGE %s]\n"
+			+ "                  [ACTIVE: %s]\n"
+			+ "                       ||\n"
+			+ "                 SOUTH ALLEY\n"
+			+ "                       ||\n"
+			+ "                 SUPPLY DEPOT\n"
+			+ "════════════════════════════════════════════\n"
+			+ "A=Attackers  D=Defenders  N=Neutral  X=Contested"
+		) % [west, center, ridge, objective_name]
+
 	var village := _sector_map_code("Village")
 	var rail := _sector_map_code("Rail Yard")
 	var fort := _sector_map_code("Fort")
-	var objective_name := (
-		"BRIDGE"
-		if objective_stage == 0
-		else "BUNKER"
-	)
+	var objective_name := "BRIDGE" if objective_stage == 0 else "BUNKER"
 
 	return (
 		"OPERATION BLACK RIVER\n"
 		+ "════════════════════════════════════════════\n"
 		+ "       NORTH ROAD / VILLAGE APPROACH\n"
 		+ "  [VILLAGE %s]          [RAIL YARD %s]\n"
-		+ "          \\              //\n"
-		+ "           \\  BLACK RIVER //\n"
+		+ "          \\\\              //\n"
+		+ "           \\\\  BLACK RIVER //\n"
 		+ "            [ACTIVE: %s]\n"
 		+ "                 ||\n"
 		+ "          [SUPPLY DEPOT]\n"
@@ -5167,6 +5229,7 @@ func tactical_map_text() -> String:
 		+ "════════════════════════════════════════════\n"
 		+ "A=Attackers  D=Defenders  N=Neutral  X=Contested"
 	) % [village, rail, objective_name, fort]
+
 
 func _sector_map_code(sector_name: String) -> String:
 	if bool(sector_contested.get(sector_name, false)):
@@ -5181,6 +5244,73 @@ func _sector_map_code(sector_name: String) -> String:
 	return "N"
 
 func bot_route_waypoint(
+	player: Node3D,
+	route_index: int
+) -> Vector3:
+	if active_map_id == MAP_RUINED_CITY:
+		var team_id: int = int(player.get("team"))
+		var role: int = int(player.get("bot_squad_role"))
+		var city_routes: Array[Array] = []
+
+		if team_id == 0:
+			city_routes = [
+				[
+					Vector3(-52,1,-18), Vector3(-38,1,-18),
+					Vector3(-22,1,-16), Vector3(-6,1,-8),
+					Vector3(8,1,-2), Vector3(24,1,5),
+					Vector3(38,1,8)
+				],
+				[
+					Vector3(-52,1,14), Vector3(-36,1,18),
+					Vector3(-20,1,24), Vector3(-4,1,22),
+					Vector3(12,1,18), Vector3(28,1,14),
+					Vector3(38,1,8)
+				],
+				[
+					Vector3(-48,1,0), Vector3(-30,1,-2),
+					Vector3(-14,1,2), Vector3(0,1,0),
+					Vector3(15,1,4), Vector3(30,1,7)
+				],
+				[
+					Vector3(-44,1,28), Vector3(-28,1,30),
+					Vector3(-15,1,19), Vector3(0,1,12),
+					Vector3(18,1,14), Vector3(34,1,10)
+				]
+			]
+		else:
+			city_routes = [
+				[
+					Vector3(52,1,18), Vector3(38,1,18),
+					Vector3(24,1,14), Vector3(10,1,8),
+					Vector3(-6,1,2), Vector3(-24,1,-8),
+					Vector3(-38,1,-16)
+				],
+				[
+					Vector3(52,1,-16), Vector3(36,1,-22),
+					Vector3(20,1,-26), Vector3(4,1,-20),
+					Vector3(-12,1,-18), Vector3(-28,1,-15)
+				],
+				[
+					Vector3(48,1,0), Vector3(30,1,2),
+					Vector3(14,1,-2), Vector3(0,1,0),
+					Vector3(-15,1,-4), Vector3(-30,1,-10)
+				],
+				[
+					Vector3(44,1,-28), Vector3(28,1,-30),
+					Vector3(15,1,-19), Vector3(0,1,-12),
+					Vector3(-18,1,-14), Vector3(-34,1,-10)
+				]
+			]
+
+		var selected_city_route: Array = city_routes[
+			clampi(role, 0, city_routes.size() - 1)
+		]
+		return Vector3(
+			selected_city_route[
+				posmod(route_index, selected_city_route.size())
+			]
+		)
+
 	player: Node3D,
 	route_index: int
 ) -> Vector3:
@@ -5265,11 +5395,19 @@ func bot_route_waypoint(
 func sector_forward_spawn(
 	team_id: int
 ) -> Variant:
-	var priority: Array[String] = (
-		["Fort", "Rail Yard", "Village"]
-		if team_id == 0
-		else ["Village", "Rail Yard", "Fort"]
-	)
+	var priority: Array[String] = []
+	if active_map_id == MAP_RUINED_CITY:
+		priority = (
+			["Pillbox Ridge", "Central Square", "West Ruins"]
+			if team_id == 0
+			else ["West Ruins", "Central Square", "Pillbox Ridge"]
+		)
+	else:
+		priority = (
+			["Fort", "Rail Yard", "Village"]
+			if team_id == 0
+			else ["Village", "Rail Yard", "Fort"]
+		)
 	for sector_name in priority:
 		if int(sector_control.get(sector_name, -1)) != team_id:
 			continue
@@ -5557,6 +5695,9 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 		"Active map: %s [%s]"
 		% [active_map_display_name(), active_map_id]
 	)
+	print("Operation: %s" % active_map_operation_title())
+	print("Attack mission: %s" % active_map_attacker_mission())
+	print("Defense mission: %s" % active_map_defender_mission())
 
 	if desired_bot_count <= 0:
 		print("Bots disabled for this server session.")
@@ -9474,34 +9615,40 @@ func _update_objective_visuals() -> void:
 	if match_over:
 		objective_marker.text = "ROUND COMPLETE"
 		objective_marker.modulate = Color(1.0, 0.82, 0.22)
-		objective_progress_label.text = (
-			"Restart in %.1fs" % round_restart_remaining
-		)
+		objective_progress_label.text = "Restart in %.1fs" % round_restart_remaining
 	elif objective_stage == 0:
 		var build_percent: int = int(round(
 			100.0 * float(bridge_progress)
 			/ float(maxi(1, bridge_required))
 		))
-		objective_marker.text = "BUILD THE BRIDGE"
+		objective_marker.text = active_map_objective_action_name()
 		objective_marker.modulate = Color(0.92, 0.76, 0.16)
-		objective_progress_label.text = "%d%%  (%d/%d)" % [
-			build_percent,
-			bridge_progress,
-			bridge_required
-		]
-	elif dynamite_armed:
-		objective_marker.text = "CHARGE ARMED"
-		objective_marker.modulate = Color(1.0, 0.16, 0.08)
-		objective_progress_label.text = (
-			"Fuse %.1fs  ·  Defuse %d/%d"
-			% [
-				dynamite_remaining,
-				defuse_progress,
-				defuse_required
+		if active_map_id == MAP_RUINED_CITY:
+			objective_progress_label.text = "CROSSING %d%% · ENGINEER %d/%d" % [
+				build_percent,
+				bridge_progress,
+				bridge_required
 			]
+		else:
+			objective_progress_label.text = "%d%%  (%d/%d)" % [
+				build_percent,
+				bridge_progress,
+				bridge_required
+			]
+	elif dynamite_armed:
+		objective_marker.text = (
+			"PILLBOX CHARGE ARMED"
+			if active_map_id == MAP_RUINED_CITY
+			else "CHARGE ARMED"
 		)
+		objective_marker.modulate = Color(1.0, 0.16, 0.08)
+		objective_progress_label.text = "Fuse %.1fs  ·  Defuse %d/%d" % [
+			dynamite_remaining,
+			defuse_progress,
+			defuse_required
+		]
 	else:
-		objective_marker.text = "DESTROY THE BUNKER"
+		objective_marker.text = active_map_objective_action_name()
 		objective_marker.modulate = Color(0.90, 0.22, 0.14)
 		objective_progress_label.text = "Integrity %d%%" % objective_health
 
@@ -9510,10 +9657,10 @@ func _update_objective_visuals() -> void:
 	if dynamite_light != null:
 		dynamite_light.visible = dynamite_armed
 		if dynamite_armed:
-			var pulse: float = 1.4 + sin(
-				Time.get_ticks_msec() * 0.012
-			) * 0.8
-			dynamite_light.light_energy = pulse
+			dynamite_light.light_energy = (
+				1.4 + sin(Time.get_ticks_msec() * 0.012) * 0.8
+			)
+
 
 func interaction_prompt_for(player: Node3D) -> String:
 	if player != null:
@@ -9533,40 +9680,57 @@ func interaction_prompt_for(player: Node3D) -> String:
 
 	if player_class != 2:
 		if objective_stage == 0:
-			return "Engineer required to construct the bridge"
+			return (
+				"Engineer required to open the central crossing"
+				if active_map_id == MAP_RUINED_CITY
+				else "Engineer required to construct the bridge"
+			)
 		if dynamite_armed and player_team == 1:
 			return "Engineer required to defuse the charge"
 		return ""
 
 	if objective_stage == 0:
-		var build_site: Node3D = get_node_or_null(
-			"BridgeBuildSite"
-		) as Node3D
+		var build_site: Node3D = get_node_or_null("BridgeBuildSite") as Node3D
 		if build_site == null:
 			return ""
-		var distance: float = player_position.distance_to(
-			build_site.global_position
-		)
+
+		var distance: float = player_position.distance_to(build_site.global_position)
 		if distance <= 4.5:
+			if active_map_id == MAP_RUINED_CITY:
+				return "Hold E: Open crossing  %d/%d" % [
+					bridge_progress,
+					bridge_required
+				]
 			return "Hold E: Construct bridge  %d/%d" % [
 				bridge_progress,
 				bridge_required
 			]
-		return "Reach the yellow bridge construction zone"
+
+		return (
+			"Reach the central crossing"
+			if active_map_id == MAP_RUINED_CITY
+			else "Reach the yellow bridge construction zone"
+		)
 
 	var objective: Node3D = get_node_or_null("Objective") as Node3D
 	if objective == null:
 		return ""
 
-	var objective_distance: float = player_position.distance_to(
-		objective.global_position
-	)
+	var objective_distance: float = player_position.distance_to(objective.global_position)
 	if player_team == 0:
 		if dynamite_armed:
 			return "Defend the armed charge  %.1fs" % dynamite_remaining
 		if objective_distance <= 4.5:
-			return "Hold E: Arm dynamite"
-		return "Reach the bunker and arm dynamite"
+			return (
+				"Hold E: Arm pillbox charge"
+				if active_map_id == MAP_RUINED_CITY
+				else "Hold E: Arm dynamite"
+			)
+		return (
+			"Reach the eastern pillbox and arm the charge"
+			if active_map_id == MAP_RUINED_CITY
+			else "Reach the bunker and arm dynamite"
+		)
 
 	if dynamite_armed:
 		if objective_distance <= 4.5:
@@ -9574,9 +9738,18 @@ func interaction_prompt_for(player: Node3D) -> String:
 				defuse_progress,
 				defuse_required
 			]
-		return "Reach the bunker and defuse the charge"
+		return (
+			"Reach the eastern pillbox and defuse the charge"
+			if active_map_id == MAP_RUINED_CITY
+			else "Reach the bunker and defuse the charge"
+		)
 
-	return "Defend the bunker"
+	return (
+		"Defend the eastern pillbox"
+		if active_map_id == MAP_RUINED_CITY
+		else "Defend the bunker"
+	)
+
 
 func objective_status_text() -> String:
 	if match_over:
@@ -9586,11 +9759,7 @@ func objective_status_text() -> String:
 	var post_text := (
 		"NEUTRAL"
 		if command_post_control < 0
-		else (
-			"ATK"
-			if command_post_control == 0
-			else "DEF"
-		)
+		else ("ATK" if command_post_control == 0 else "DEF")
 	)
 
 	if objective_stage == 0:
@@ -9604,42 +9773,46 @@ func objective_status_text() -> String:
 			if vehicle_bonus >= 0.08:
 				support_text = " · VEHICLE SUPPORT"
 
-		return (
-			"BRIDGE %d/%d · TICKETS %d-%d%s%s"
-			% [
-				bridge_progress,
-				bridge_required,
-				attacker_tickets,
-				defender_tickets,
-				support_text,
-				overtime_text
-			]
+		var stage_label := (
+			"CROSSING"
+			if active_map_id == MAP_RUINED_CITY
+			else "BRIDGE"
 		)
+		return "%s %d/%d · TICKETS %d-%d%s%s" % [
+			stage_label,
+			bridge_progress,
+			bridge_required,
+			attacker_tickets,
+			defender_tickets,
+			support_text,
+			overtime_text
+		]
 
 	if dynamite_armed:
-		return (
-			"CHARGE %.1fs · DEFUSE %d/%d · CP %s · TICKETS %d-%d%s"
-			% [
-				dynamite_remaining,
-				defuse_progress,
-				defuse_required,
-				post_text,
-				attacker_tickets,
-				defender_tickets,
-				overtime_text
-			]
-		)
-
-	return (
-		"BUNKER %d%% · CP %s · TICKETS %d-%d · TANK SUPPORT%s"
-		% [
-			objective_health,
+		return "CHARGE %.1fs · DEFUSE %d/%d · CP %s · TICKETS %d-%d%s" % [
+			dynamite_remaining,
+			defuse_progress,
+			defuse_required,
 			post_text,
 			attacker_tickets,
 			defender_tickets,
 			overtime_text
 		]
+
+	var target_label := (
+		"PILLBOX"
+		if active_map_id == MAP_RUINED_CITY
+		else "BUNKER"
 	)
+	return "%s %d%% · CP %s · TICKETS %d-%d · TANK SUPPORT%s" % [
+		target_label,
+		objective_health,
+		post_text,
+		attacker_tickets,
+		defender_tickets,
+		overtime_text
+	]
+
 
 
 
@@ -9773,7 +9946,8 @@ func scoreboard_text() -> String:
 	]
 
 	var lines: Array[String] = [
-		"FRONTLINE: OBJECTIVE · OPERATION BLACK RIVER",
+		"FRONTLINE: OBJECTIVE · %s" % active_map_operation_title(),
+		active_map_location_line(),
 		(
 			"Time %02d:%02d    ATK Tickets %d    DEF Tickets %d"
 			% [
