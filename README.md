@@ -1,64 +1,67 @@
-FRONTLINE: OBJECTIVE v9.17.0
-FIRST-PERSON VISIBILITY FIX + GAMEPLAY SCREENSHOT RESPONSE
+FRONTLINE: OBJECTIVE v9.18.0
+WWII ENVIRONMENT COHESION + MATERIAL/DETAIL PASS
 
-WHY THIS PHASE
-The v9.16 gameplay screenshots showed the procedural arm fallback obscuring
-large portions of the screen:
-- large white rounded geometry could cover the center view
-- black/oval arm geometry could sit beside/over the weapon
-- nearby vehicle marker text overlapped compass/objective information
+GOAL
+Recent gameplay screenshots still showed large flat/bright surfaces even though
+the underlying world has many visual passes. v9.18 adds a conservative final
+cohesion layer rather than replacing map collision or gameplay geometry.
 
-FIRST-PERSON ARM SAFETY REDESIGN
-The long capsule-based forearms from v9.16 have been removed.
+EXISTING MATERIAL RETUNING
+Only existing StandardMaterial3D overrides on world/environment meshes are
+adjusted. Imported PBR assets are left alone.
 
-New fallback:
-- compact palm geometry
-- three low-poly grip fingers per hand
-- thumb
-- small cuff
-- optional SHORT box-style forearm sleeve
+Name-based world tuning:
+- brick/ruins: darker warmer masonry
+- concrete/bunker/fort: darker neutral concrete
+- roads/ground/cobble: reduced brightness and higher roughness
+- roof/slate: darker roof values
+- wood/crates/timber: darker weathered wood
 
-LOW/LAPTOP
-- hands only
-- short forearm sleeves hidden entirely
-- no long arm primitive can cross the camera
+Players, weapons, first-person arms, vehicles, tracers, pickups and HUD-related
+meshes are explicitly excluded.
 
-BALANCED/HIGH
-- compact hands
-- short sleeves behind the hands
-- no long capsules
+STREET DEFINITION
+Thin non-colliding curb/edge strips now break up large flat road/ground areas.
+They are visual only and do not affect movement or vehicle collision.
 
-HARD VIEW SAFETY
-- entire fallback root scaled to 72%
-- hand positions are clamped to safe lower-screen ranges
-- ADS motion cannot pull hands toward the center sight picture
-- sprint moves hands farther down
-- reload movement stays below the crosshair
-- vehicle/cinema modes force fallback visibility off
+ARCHITECTURAL DEPTH
+Added small low-cost visual cues:
+- masonry posts
+- timber braces
+- shallow facade recesses
+- stone lintels
 
-TACTICAL MARKER CLEANUP
-Nearby vehicle markers have moved from y=115 to y=205 so they no longer sit
-inside the heading/objective strip.
+These help flat procedural facades read more like buildings instead of boxes.
 
-Far markers are also shortened to symbol + distance.
+PERFORMANCE / DISTANCE CULLING
+Every new detail uses GeometryInstance3D visibility ranges.
 
-PERFORMANCE
-The new fallback is cheaper than v9.16:
-- fewer finger segments
-- no long capsule forearms
-- Low/Laptop hides sleeve geometry
-- no shadows
-- no skeleton/skin/animation tree
+LOW/LAPTOP:
+- keeps major curb/street definition
+- hides facade recesses and minor posts/braces
+- caps new-detail distance around 34m
+
+BALANCED:
+- enables all new detail
+- facade/minor detail around 42-45m
+
+HIGH:
+- extends detail visibility to roughly 58-60m
+
+No new collision bodies.
+No new dynamic lights.
+No shadows on added detail.
+No extra physics processing.
 
 PRESERVED
-- v9.15 HUD throttling/objective cleanup
-- v9.14 infantry combat feedback
+- v9.17 first-person visibility fix
+- v9.15 HUD performance/objective cleanup
+- v9.14 combat feedback
 - v9.13.2 tracer fixes
-- battlefield atmosphere
 - destructible streets
-- all vehicle/aircraft systems
+- all vehicles/aircraft
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.17.0
+Build: 9.18.0
 Protocol: 341
