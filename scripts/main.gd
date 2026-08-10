@@ -243,8 +243,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "15.0.0"
-const NETWORK_PROTOCOL := 357
+const BUILD_VERSION := "16.0.0"
+const NETWORK_PROTOCOL := 358
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -519,6 +519,9 @@ var active_combat_presentation_fx: Array[Node] = []
 const COMBAT_PRESENTATION_FX_CAP := 42
 var world_audio_cleanup_accumulator := 0.0
 var vehicle_service_accumulator := 0.0
+# v16 server-only lightweight state. No extra scene nodes are created.
+var vehicle_designations: Dictionary = {}
+var vehicle_frontline_reward_next_ms: Dictionary = {}
 var player_unstuck_next_ms: Dictionary = {}
 const PLAYER_UNSTUCK_COOLDOWN_MS := 15000
 const PLAYER_WORLD_FALL_Y := -8.0
@@ -526,6 +529,17 @@ const VEHICLE_SERVICE_INTERVAL := 1.0
 const VEHICLE_SERVICE_RADIUS := 8.0
 const VEHICLE_SERVICE_REPAIR := 35
 const VEHICLE_SERVICE_AMMO := 40
+
+# v16 Combined Arms / Armored Frontline Coordination. These values are
+# deliberately conservative so vehicles support infantry objectives without
+# becoming passive capture machines or creating persistent-node spam.
+const VEHICLE_DESIGNATION_DURATION_MS := 12000
+const VEHICLE_DESIGNATION_RADIUS := 9.0
+const VEHICLE_FRONTLINE_REWARD_INTERVAL_MS := 8000
+const VEHICLE_FRONTLINE_SUPPORT_RADIUS := 16.0
+const FORWARD_VEHICLE_SERVICE_RADIUS := 9.5
+const FORWARD_VEHICLE_SERVICE_REPAIR := 18
+const FORWARD_VEHICLE_SERVICE_AMMO := 20
 const ALLIED_SERVICE_POSITION := Vector3(-48.0, 0.0, -10.0)
 const AXIS_SERVICE_POSITION := Vector3(48.0, 0.0, 10.0)
 var low_cost_visual_clarity: Node
@@ -1293,6 +1307,7 @@ func _process(delta: float) -> void:
 		if vehicle_service_accumulator >= VEHICLE_SERVICE_INTERVAL:
 			vehicle_service_accumulator = 0.0
 			_update_vehicle_service_zones()
+			_update_vehicle_frontline_support_rewards()
 
 	_update_adaptive_music()
 	_update_vehicle_damage_smoke()
@@ -6952,6 +6967,26 @@ func _on_peer_connected(id: int) -> void:
 			remaining_ms
 		)
 
+	# v16 late-join synchronization for active anti-vehicle designations.
+	var designation_now := Time.get_ticks_msec()
+	for designation_id_value: Variant in vehicle_designations.keys():
+		var designation_vehicle_id := int(designation_id_value)
+		var designation := Dictionary(
+			vehicle_designations.get(designation_vehicle_id, {})
+		)
+		var designation_remaining := (
+			int(designation.get("expires_ms", 0)) - designation_now
+		)
+		if designation_remaining <= 0:
+			continue
+		sync_vehicle_designation.rpc_id(
+			id,
+			designation_vehicle_id,
+			int(designation.get("team", -1)),
+			int(designation.get("issuer_id", 0)),
+			designation_remaining
+		)
+
 	for grenade_value in grenades.values():
 		var grenade: Node3D = grenade_value as Node3D
 		if grenade == null:
@@ -7354,6 +7389,13 @@ func _server_issue_tactical_order(issuer: Node3D, world_position: Vector3) -> St
 	var team_id := int(issuer.get("team"))
 	var issuer_id := int(issuer.get("peer_id"))
 	var order_label := _tactical_order_label(team_id, world_position)
+	var designated_vehicle_id := _server_designate_enemy_vehicle(
+		team_id,
+		issuer_id,
+		world_position
+	)
+	if designated_vehicle_id >= 0:
+		order_label = "ANTI-ARMOR"
 	var candidates: Array[Dictionary] = []
 	for player_value: Variant in players.values():
 		var candidate := player_value as Node3D
@@ -7393,6 +7435,7 @@ func _server_issue_tactical_order(issuer: Node3D, world_position: Vector3) -> St
 		"label": order_label,
 		"sector": sector_name,
 		"assigned": assigned,
+		"designated_vehicle_id": designated_vehicle_id,
 		"expires_ms": Time.get_ticks_msec() + SQUAD_ORDER_LIFETIME_MS,
 		"completed": false
 	}
@@ -7413,6 +7456,7 @@ func _update_squad_command_system() -> void:
 	if not multiplayer.is_server():
 		return
 	var now := Time.get_ticks_msec()
+	_cleanup_vehicle_designations(now)
 	var remove_ids: Array[int] = []
 	for order_id_value: Variant in squad_tactical_orders.keys():
 		var order_id := int(order_id_value)
@@ -11479,6 +11523,8 @@ func _reset_round() -> void:
 	squad_tactical_orders.clear()
 	team_tactical_order_display.clear()
 	squad_order_revision += 1
+	vehicle_designations.clear()
+	vehicle_frontline_reward_next_ms.clear()
 	bridge_progress = 0
 	defuse_progress = 0
 	dynamite_armed = false
@@ -11947,6 +11993,127 @@ func show_vehicle_respawn(
 	vehicle.call("reset_for_respawn")
 
 
+func _server_designate_enemy_vehicle(
+	team_id: int,
+	issuer_id: int,
+	world_position: Vector3
+) -> int:
+	if not multiplayer.is_server():
+		return -1
+	var best_id := -1
+	var best_distance := VEHICLE_DESIGNATION_RADIUS + 0.001
+	for id_value: Variant in vehicles:
+		var vehicle_id := int(id_value)
+		var vehicle := vehicles.get(vehicle_id) as Node3D
+		if vehicle == null or bool(vehicle.get("destroyed")):
+			continue
+		if int(vehicle.get("team_id")) == team_id:
+			continue
+		var distance := vehicle.global_position.distance_to(world_position)
+		if distance < best_distance:
+			best_distance = distance
+			best_id = vehicle_id
+	if best_id < 0:
+		return -1
+	vehicle_designations[best_id] = {
+		"team": team_id,
+		"issuer_id": issuer_id,
+		"expires_ms": Time.get_ticks_msec() + VEHICLE_DESIGNATION_DURATION_MS
+	}
+	sync_vehicle_designation.rpc(
+		best_id,
+		team_id,
+		issuer_id,
+		VEHICLE_DESIGNATION_DURATION_MS
+	)
+	if players.has(issuer_id):
+		players[issuer_id].call("add_xp", 2, "anti-armor designation")
+	push_kill_feed.rpc("ENEMY VEHICLE DESIGNATED")
+	return best_id
+
+
+@rpc("authority", "call_local", "reliable")
+func sync_vehicle_designation(
+	vehicle_id: int,
+	team_id: int,
+	issuer_id: int,
+	duration_ms: int
+) -> void:
+	vehicle_designations[vehicle_id] = {
+		"team": team_id,
+		"issuer_id": issuer_id,
+		"expires_ms": Time.get_ticks_msec() + maxi(0, duration_ms)
+	}
+
+
+@rpc("authority", "call_local", "reliable")
+func clear_vehicle_designation(vehicle_id: int) -> void:
+	vehicle_designations.erase(vehicle_id)
+
+
+func _cleanup_vehicle_designations(now_ms: int) -> void:
+	var remove_ids: Array[int] = []
+	for id_value: Variant in vehicle_designations.keys():
+		var vehicle_id := int(id_value)
+		var designation := Dictionary(vehicle_designations.get(vehicle_id, {}))
+		if (
+			now_ms >= int(designation.get("expires_ms", 0))
+			or not vehicles.has(vehicle_id)
+		):
+			remove_ids.append(vehicle_id)
+	for vehicle_id: int in remove_ids:
+		clear_vehicle_designation.rpc(vehicle_id)
+
+
+func _reward_destroyed_vehicle_designation(vehicle_id: int) -> void:
+	if not vehicle_designations.has(vehicle_id):
+		return
+	var designation := Dictionary(vehicle_designations[vehicle_id])
+	var issuer_id := int(designation.get("issuer_id", 0))
+	if players.has(issuer_id):
+		players[issuer_id].call("add_xp", 10, "designated vehicle destroyed")
+	clear_vehicle_designation.rpc(vehicle_id)
+
+
+func _update_vehicle_frontline_support_rewards() -> void:
+	if not multiplayer.is_server():
+		return
+	var now := Time.get_ticks_msec()
+	for id_value: Variant in vehicles:
+		var vehicle_id := int(id_value)
+		var vehicle := vehicles.get(vehicle_id) as Node3D
+		if vehicle == null or bool(vehicle.get("destroyed")):
+			continue
+		var team_id := int(vehicle.get("team_id"))
+		var driver_id := int(vehicle.get("driver_peer_id"))
+		var gunner_id := int(vehicle.get("gunner_peer_id"))
+		if driver_id <= 0 and gunner_id <= 0:
+			continue
+		if now < int(vehicle_frontline_reward_next_ms.get(vehicle_id, 0)):
+			continue
+
+		var supported_sector := ""
+		for sector_name_value: Variant in sector_positions.keys():
+			var sector_name := str(sector_name_value)
+			var center := Vector3(sector_positions.get(sector_name, Vector3.ZERO))
+			if vehicle.global_position.distance_to(center) > VEHICLE_FRONTLINE_SUPPORT_RADIUS:
+				continue
+			var contested := bool(sector_contested.get(sector_name, false))
+			var enemy_or_neutral := int(sector_control.get(sector_name, -1)) != team_id
+			if contested or enemy_or_neutral:
+				supported_sector = sector_name
+				break
+		if supported_sector.is_empty():
+			continue
+
+		vehicle_frontline_reward_next_ms[vehicle_id] = (
+			now + VEHICLE_FRONTLINE_REWARD_INTERVAL_MS
+		)
+		for crew_id: int in [driver_id, gunner_id]:
+			if crew_id > 0 and players.has(crew_id):
+				players[crew_id].call("add_xp", 1, "armored frontline support")
+
+
 func allied_vehicle_objective_support_bonus(
 	objective_position: Vector3,
 	radius: float = 14.0
@@ -12139,6 +12306,8 @@ func _server_handle_vehicle_destroyed(vehicle: Node) -> void:
 	var vehicle_id := int(vehicle.get("vehicle_id"))
 	var position := (vehicle as Node3D).global_position
 
+	_reward_destroyed_vehicle_designation(vehicle_id)
+	vehicle_frontline_reward_next_ms.erase(vehicle_id)
 	vehicle.call("set_destroyed_visual")
 	show_vehicle_explosion.rpc(position, 2.1)
 	vehicle_respawn_at_ms[vehicle_id] = Time.get_ticks_msec() + 20000
@@ -12252,6 +12421,11 @@ func request_vehicle_repair(vehicle_id: int) -> void:
 
 	var repaired := int(vehicle.call("server_repair", 85))
 	if repaired > 0:
+		player.call(
+			"add_xp",
+			clampi(int(ceil(float(repaired) / 35.0)), 1, 4),
+			"vehicle repair"
+		)
 		vehicle_repair_feedback.rpc_id(
 			peer_id,
 			vehicle_id,
@@ -12294,6 +12468,20 @@ func vehicle_in_service_zone(vehicle: Node3D) -> bool:
 	)
 
 
+func _vehicle_forward_service_available(vehicle: Node3D) -> bool:
+	if vehicle == null or supply_depot_control < 0:
+		return false
+	if int(vehicle.get("team_id")) != supply_depot_control:
+		return false
+	var depot := _supply_depot_node()
+	if depot == null:
+		return false
+	return (
+		vehicle.global_position.distance_to(depot.global_position)
+		<= FORWARD_VEHICLE_SERVICE_RADIUS
+	)
+
+
 func _update_vehicle_service_zones() -> void:
 	if not multiplayer.is_server():
 		return
@@ -12304,21 +12492,30 @@ func _update_vehicle_service_zones() -> void:
 			continue
 		if bool(vehicle.get("destroyed")):
 			continue
-		if not vehicle_in_service_zone(vehicle):
+
+		# Both home service pads and a team-controlled supply depot can repair
+		# and rearm vehicles. The forward depot is intentionally slower.
+		var home_service := vehicle_in_service_zone(vehicle)
+		var forward_service := _vehicle_forward_service_available(vehicle)
+		if not home_service and not forward_service:
 			continue
 
-		# Service areas work whether occupied or empty, but require the vehicle
-		# to be nearly stopped so they cannot be abused as drive-through healing.
+		# Service requires the vehicle to be nearly stopped so neither location
+		# becomes drive-through healing during combat.
 		if float(vehicle.call("current_speed_kph")) > 6.0:
 			continue
 
 		vehicle.call(
 			"server_repair",
 			VEHICLE_SERVICE_REPAIR
+			if home_service
+			else FORWARD_VEHICLE_SERVICE_REPAIR
 		)
 		vehicle.call(
 			"server_resupply_vehicle",
 			VEHICLE_SERVICE_AMMO
+			if home_service
+			else FORWARD_VEHICLE_SERVICE_AMMO
 		)
 
 
@@ -12330,10 +12527,16 @@ func vehicle_service_status(vehicle_id: int) -> String:
 	if vehicle == null:
 		return ""
 
+	var service_label := ""
 	if vehicle_in_service_zone(vehicle):
+		service_label = "BASE SERVICE"
+	elif _vehicle_forward_service_available(vehicle):
+		service_label = "FORWARD SERVICE"
+
+	if not service_label.is_empty():
 		if float(vehicle.call("current_speed_kph")) <= 6.0:
-			return "SERVICE · REPAIR/REARM"
-		return "SERVICE · SLOW BELOW 6 KM/H"
+			return "%s · REPAIR/REARM" % service_label
+		return "%s · SLOW BELOW 6 KM/H" % service_label
 
 	return ""
 
@@ -12347,6 +12550,9 @@ func vehicle_tactical_entries() -> Array[Dictionary]:
 		if vehicle == null:
 			continue
 
+		var designation: Dictionary = Dictionary(
+			vehicle_designations.get(id, {})
+		)
 		entries.append({
 			"id": id,
 			"name": str(vehicle.call("display_name")),
@@ -12356,7 +12562,12 @@ func vehicle_tactical_entries() -> Array[Dictionary]:
 			"driver": int(vehicle.get("driver_peer_id")),
 			"gunner": int(vehicle.get("gunner_peer_id")),
 			"health": int(vehicle.get("health")),
-			"max_health": int(vehicle.get("max_health"))
+			"max_health": int(vehicle.get("max_health")),
+			"designated_by_team": int(designation.get("team", -1)),
+			"designation_remaining_ms": maxi(
+				0,
+				int(designation.get("expires_ms", 0)) - Time.get_ticks_msec()
+			)
 		})
 
 	return entries

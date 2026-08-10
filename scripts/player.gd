@@ -3479,8 +3479,14 @@ func _update_vehicle_tactical_markers() -> void:
 		))
 		var team_id := int(entry.get("team", -1))
 		var friendly := team_id == team
+		var designated := (
+			int(entry.get("designated_by_team", -1)) == team
+			and int(entry.get("designation_remaining_ms", 0)) > 0
+		)
 
 		var marker_range := 52
+		if designated:
+			marker_range = 72
 		if _local_visual_quality_preset() == 0:
 			marker_range = 42
 
@@ -3503,9 +3509,10 @@ func _update_vehicle_tactical_markers() -> void:
 				distance
 			]
 		else:
-			marker.text = "%s %s · %dm" % [
-				"◆" if friendly else "◇",
+			marker.text = "%s %s%s · %dm" % [
+				"◆" if friendly else ("◎" if designated else "◇"),
 				vehicle_name,
+				" · DESIGNATED" if designated else "",
 				distance
 			]
 
