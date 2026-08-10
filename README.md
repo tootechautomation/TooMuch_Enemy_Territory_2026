@@ -1,60 +1,75 @@
-FRONTLINE: OBJECTIVE v10.7.0
-MAJOR UPDATE — COMBAT PRESENTATION OVERHAUL
+FRONTLINE: OBJECTIVE v11.0.0
+MAJOR GAMEPLAY UPDATE — COMBAT FEEL + AI + AUDIO + FEEDBACK
 
-FOCUS
-This phase does not rewrite either map. It improves the visual response of
-combat while preserving the now-working Ruined City architecture collision.
+THIS IS A CONSOLIDATED RELEASE
+v11 is intentionally a larger gameplay phase instead of another sequence of
+tiny one-off patches.
 
-BULLET IMPACTS
-- existing impact/tracer systems retained
-- additional lightweight impact debris/dust
-- different impact coloration for player hits vs world surfaces
-- short lifetimes
-- no rigid-body debris
+MAP / ENVIRONMENT FREEZE
+This update DOES NOT change:
+- Operation Black River geometry
+- Ruined City geometry
+- buildings
+- imported architecture collision
+- vehicle placement
+- objectives / sector placement
 
-GRENADE EXPLOSIONS
-- brighter fast explosion core
-- expanding smoke volumes
-- short non-shadowing explosion light
-- directional debris chunks
-- existing shockwave/audio/debris systems preserved
+COMBAT FEEL
+- near-miss bullets now create server-authoritative suppression
+- suppression radius: approximately 2.35m around the shot path
+- closer near misses produce longer suppression
+- direct hits are excluded from duplicate near-miss suppression
+- existing suppression accuracy penalty remains
 
-VEHICLE WEAPON IMPACTS
-- tank/heavy weapon impacts now get a compact explosion presentation
-- effect scales with existing impact_scale
+DAMAGE FEEDBACK
+- directional damage indicator lasts longer
+- damage direction adds a subtle LOCAL camera response
+- camera feedback does not alter server aim or movement physics
+- headshot marker persists slightly longer
+- standard hit marker is slightly easier to read
 
-VEHICLE DESTRUCTION
-- larger explosion presentation layered over existing vehicle explosion/fire
-- persistent physics debris is NOT added
+BOT COMBAT
+- suppressed bots commit to cover for a short period
+- suppressed bots are less likely to immediately fire back
+- existing accuracy suppression penalty remains
+- existing medic / engineer / grenade / vehicle avoidance logic preserved
+- existing map-specific bot routes preserved
 
-PERFORMANCE
-v10.7 introduces a hard client-side combat-presentation budget:
-42 temporary effect roots maximum.
+FOOTSTEPS
+- sprint cadence tightened
+- crouched footsteps are slower and substantially quieter
+- sprint footsteps are slightly louder
+- subtle per-step pitch variation reduces repetitive audio
+- existing ground/gravel/stone/wood/metal selection remains
+- existing remote-footstep distance optimization remains
 
-When the budget is exceeded, the oldest effect is removed first.
-Effects are visual-only and never execute on a headless server.
+RESPAWN / DEATH FLOW
+- normal reinforcement-wave respawns now trigger the same spawn-protection
+  presentation used by forced/team respawns
+- respawn HUD briefly confirms REINFORCEMENTS DEPLOYED
+- existing death/reinforcement panel remains
 
-No new:
-- network snapshots
-- rigid bodies
-- shadow-casting explosion lights
-- permanent debris
-- expensive volumetric particle systems
+COMBAT PRESENTATION FROM v10.7 PRESERVED
+- bullet impact dust/debris
+- grenade smoke/blast presentation
+- heavy weapon impact presentation
+- vehicle destruction effects
+- 42-effect visual budget
 
 PRESERVED
-- Operation Black River
-- Operation Ashen Streets / Ruined City
-- true imported architecture collision from v10.6
-- Jeeps / Sherman / Spitfire / Bf 109
-- WWII soldiers
-- Allied Mk 2 and Axis grenades
-- existing weapon textures/models
-- bots
-- objectives/sectors
+- Black River
+- Ruined City
+- true architecture collision
+- Jeep / Sherman / Spitfire / Bf 109
+- WWII Allied/German soldiers
+- Allied Mk 2 / Axis grenade
+- weapons/textures
+- map-aware HUD and scoreboard
 - TAB priority
-- contextual E
+- contextual E interaction
 - F6/F8
-- --bots 0
+- --bots 0 / --bots=0 / --no-bots
+- server-authoritative map selection
 
-Build: 10.7.0
-Protocol: 351
+Build: 11.0.0
+Protocol: 352

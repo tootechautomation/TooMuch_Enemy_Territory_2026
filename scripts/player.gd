@@ -1805,6 +1805,77 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 		elif not alive and not spawn_menu_open:
 			_show_spawn_menu()
 
+func _distance_to_shot_segment(
+	point: Vector3,
+	start: Vector3,
+	end: Vector3
+) -> float:
+	var segment: Vector3 = end - start
+	var length_squared: float = segment.length_squared()
+	if length_squared <= 0.0001:
+		return point.distance_to(start)
+
+	var t: float = clampf(
+		(point - start).dot(segment) / length_squared,
+		0.0,
+		1.0
+	)
+	var closest: Vector3 = start + segment * t
+	return point.distance_to(closest)
+
+
+func _server_apply_near_miss_suppression(
+	shot_start: Vector3,
+	shot_end: Vector3,
+	direct_hit_peer_id: int = -1
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var main_node: Node = get_parent()
+	if main_node == null:
+		return
+
+	var players_value: Variant = main_node.get("players")
+	if not players_value is Dictionary:
+		return
+
+	for player_value: Variant in (
+		players_value as Dictionary
+	).values():
+		var other: Node3D = player_value as Node3D
+		if other == null or other == self:
+			continue
+		if not bool(other.get("alive")) or bool(other.get("downed")):
+			continue
+		if int(other.get("team")) == team:
+			continue
+		if int(other.get("peer_id")) == direct_hit_peer_id:
+			continue
+
+		var chest_position := (
+			other.global_position + Vector3.UP * 0.75
+		)
+		var miss_distance := _distance_to_shot_segment(
+			chest_position,
+			shot_start,
+			shot_end
+		)
+
+		if miss_distance > 2.35:
+			continue
+
+		var strength := 1.0 - clampf(
+			miss_distance / 2.35,
+			0.0,
+			1.0
+		)
+		var duration_ms := int(round(
+			450.0 + 1250.0 * strength
+		))
+		other.call("_apply_suppression", duration_ms)
+
+
 func server_fire(direction: Vector3) -> void:
 	if not multiplayer.is_server() or not alive or downed:
 		return
@@ -1870,6 +1941,7 @@ func server_fire(direction: Vector3) -> void:
 	)
 	var hit_player := false
 	var was_headshot := false
+	var direct_hit_peer_id := -1
 
 	if not hit.is_empty():
 		effect_end = Vector3(hit.get("position", effect_end))
@@ -1924,6 +1996,7 @@ func server_fire(direction: Vector3) -> void:
 			var target_team: int = int(target.get("team"))
 			if target_team != team:
 				hit_player = true
+				direct_hit_peer_id = int(target.get("peer_id"))
 				var local_hit_height: float = (
 					effect_end.y - target.global_position.y
 				)
@@ -1942,6 +2015,12 @@ func server_fire(direction: Vector3) -> void:
 					confirm_headshot.rpc_id(peer_id)
 				else:
 					confirm_hit.rpc_id(peer_id)
+
+	_server_apply_near_miss_suppression(
+		origin,
+		effect_end,
+		direct_hit_peer_id
+	)
 
 	var main_node: Node = get_parent()
 
@@ -2613,11 +2692,17 @@ func _show_combat_medal(title: String, headshot: bool) -> void:
 	medal_until_ms = Time.get_ticks_msec() + 1250
 
 func _show_spawn_presentation() -> void:
-	if spawn_shield_icon == null:
-		return
-	spawn_shield_icon.texture = tex_spawn_shield
-	spawn_shield_icon.visible = spawn_shield_icon.texture != null
-	spawn_shield_until_ms = Time.get_ticks_msec() + 1800
+	if spawn_shield_icon != null:
+		spawn_shield_icon.texture = tex_spawn_shield
+		spawn_shield_icon.visible = (
+			spawn_shield_icon.texture != null
+		)
+		spawn_shield_until_ms = Time.get_ticks_msec() + 1800
+
+	if elimination_notice != null:
+		elimination_notice.text = "REINFORCEMENTS DEPLOYED"
+		elimination_notice_until_ms = Time.get_ticks_msec() + 900
+		elimination_notice.visible = true
 
 func _update_objective_compass() -> void:
 	if compass_label == null or not alive:
@@ -2662,7 +2747,7 @@ func confirm_hit() -> void:
 	if not _is_local_player():
 		return
 	_play_confirm_sound(false)
-	hit_marker_until_ms = Time.get_ticks_msec() + 150
+	hit_marker_until_ms = Time.get_ticks_msec() + 185
 	if hit_marker != null:
 		hit_marker.text = "×"
 		hit_marker.position = Vector2(638, 346)
@@ -2675,7 +2760,7 @@ func confirm_headshot() -> void:
 		return
 
 	_play_confirm_sound(true)
-	hit_marker_until_ms = Time.get_ticks_msec() + 290
+	hit_marker_until_ms = Time.get_ticks_msec() + 340
 	if hit_marker != null:
 		hit_marker.text = "✦"
 		hit_marker.position = Vector2(638, 344)
@@ -2937,7 +3022,7 @@ func damage_feedback(attacker_position: Vector3, amount: int) -> void:
 	if not _is_local_player():
 		return
 
-	damage_indicator_until_ms = Time.get_ticks_msec() + 420
+	damage_indicator_until_ms = Time.get_ticks_msec() + 620
 	if damage_indicator == null:
 		return
 
@@ -2975,6 +3060,22 @@ func damage_feedback(attacker_position: Vector3, amount: int) -> void:
 	) as Label
 	if direction_arrow != null:
 		var severity := clampf(float(amount) / 50.0, 0.35, 1.0)
+
+		# Local camera response communicates direction without changing
+		# authoritative aim or player physics.
+		var camera_push_x := 0.0
+		match direction_text:
+			"LEFT":
+				camera_push_x = -1.0
+			"RIGHT":
+				camera_push_x = 1.0
+			_:
+				camera_push_x = 0.0
+		camera_inertia += Vector2(
+			camera_push_x * severity * 0.009,
+			(-0.006 if direction_text == "FRONT" else 0.003)
+			* severity
+		)
 		direction_arrow.add_theme_font_size_override(
 			"font_size",
 			int(round(26.0 + severity * 10.0))
@@ -3148,6 +3249,8 @@ func server_respawn(spawn_position: Vector3) -> void:
 
 	velocity = Vector3.ZERO
 	input_vector = Vector2.ZERO
+
+	show_spawn_presentation.rpc_id(peer_id)
 
 func server_set_vehicle_state(
 	vehicle_id: int,
@@ -4829,6 +4932,14 @@ func _server_bot_tick(delta: float) -> void:
 		movement_goal = Vector3(suppression_goal)
 		has_movement_goal = true
 
+		# Suppressed bots commit to cover briefly instead of instantly
+		# re-entering the open on the next think cycle.
+		if suppression_remaining_ms() > 0:
+			bot_hold_position_until_ms = maxi(
+				bot_hold_position_until_ms,
+				now + 900
+			)
+
 	if player_class == PlayerClass.MEDIC:
 		var downed_teammate: Node3D = main.call(
 			"nearest_downed_teammate",
@@ -4983,6 +5094,10 @@ func _server_bot_tick(delta: float) -> void:
 			if (
 				bot_fire_accumulator <= 0.0
 				and not _bot_should_hold_fire(target_player)
+				and (
+					suppression_remaining_ms() <= 0
+					or randf() >= 0.32
+				)
 			):
 				bot_fire_accumulator = maxf(
 					0.10,
@@ -7001,7 +7116,14 @@ func _update_footstep_audio(delta: float) -> void:
 		footstep_accumulator = 0.0
 		footstep_audio.volume_db = 0.0
 		return
-	var interval: float = 0.29 if speed >= 8.0 else (0.40 if speed >= 5.0 else 0.52)
+	var interval: float = (
+		0.28
+		if speed >= 8.0
+		else (0.39 if speed >= 5.0 else 0.52)
+	)
+	if is_crouching:
+		interval *= 1.28
+
 	footstep_accumulator += delta
 	if footstep_accumulator >= interval:
 		footstep_accumulator = 0.0
@@ -7045,9 +7167,18 @@ func _update_footstep_audio(delta: float) -> void:
 		footstep_audio.pitch_scale = _surface_footstep_pitch(
 			current_surface_name
 		)
-		footstep_audio.volume_db = _surface_footstep_volume(
-			current_surface_name
-		) - (3.0 if not _is_local_player() else 0.0)
+		var movement_volume_adjust := 0.0
+		if is_crouching:
+			movement_volume_adjust -= 6.0
+		elif speed >= 8.0:
+			movement_volume_adjust += 2.5
+
+		footstep_audio.volume_db = (
+			_surface_footstep_volume(current_surface_name)
+			- (3.0 if not _is_local_player() else 0.0)
+			+ movement_volume_adjust
+		)
+		footstep_audio.pitch_scale *= randf_range(0.965, 1.035)
 		footstep_audio.play()
 
 func _play_confirm_sound(headshot: bool) -> void:
