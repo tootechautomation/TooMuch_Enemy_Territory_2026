@@ -81,6 +81,9 @@ const VehicleDestructibleBarrierScript = preload(
 const VehicleMapExpansionScript = preload(
 	"res://scripts/gameplay/vehicle_map_expansion.gd"
 )
+const RuinedCityMapScript = preload(
+	"res://scripts/maps/ruined_city_map.gd"
+)
 const LowCostVisualClarityScript = preload(
 	"res://scripts/visuals/low_cost_visual_clarity.gd"
 )
@@ -237,8 +240,11 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.27.7"
-const NETWORK_PROTOCOL := 341
+const BUILD_VERSION := "10.0.0"
+const NETWORK_PROTOCOL := 342
+const MAP_BLACK_RIVER := "black_river"
+const MAP_RUINED_CITY := "ruined_city"
+var active_map_id := MAP_BLACK_RIVER
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -563,7 +569,115 @@ var forward_spawn_points := {
 	]
 }
 
+func _parse_map_selection_early() -> void:
+	active_map_id = MAP_BLACK_RIVER
+
+	var args: PackedStringArray = OS.get_cmdline_args()
+	var user_args: PackedStringArray = OS.get_cmdline_user_args()
+	for user_arg: String in user_args:
+		if user_arg not in args:
+			args.append(user_arg)
+
+	var index: int = 0
+	while index < args.size():
+		var argument: String = args[index]
+
+		if argument == "--map" and index + 1 < args.size():
+			_set_requested_map(args[index + 1])
+			index += 2
+			continue
+
+		if argument.begins_with("--map="):
+			_set_requested_map(
+				argument.trim_prefix("--map=")
+			)
+
+		index += 1
+
+
+func _set_requested_map(requested_map: String) -> void:
+	var normalized: String = requested_map.strip_edges().to_lower()
+
+	match normalized:
+		"ruined_city", "ruined-city", "city", "map2":
+			active_map_id = MAP_RUINED_CITY
+		"black_river", "black-river", "operation_black_river", "map1":
+			active_map_id = MAP_BLACK_RIVER
+		_:
+			push_warning(
+				"Unknown map '%s'; using Operation Black River."
+				% requested_map
+			)
+			active_map_id = MAP_BLACK_RIVER
+
+
+func active_map_display_name() -> String:
+	if active_map_id == MAP_RUINED_CITY:
+		return "Ruined City"
+	return "Operation Black River"
+
+
+func _build_selected_map() -> void:
+	if active_map_id == MAP_RUINED_CITY:
+		RuinedCityMapScript.build(self)
+		return
+
+	# IMPORTANT: the restored first map remains the original path.
+	_build_world()
+
+
+func _build_selected_map_visual_stack() -> void:
+	if active_map_id == MAP_RUINED_CITY:
+		# New map intentionally uses its own environment and imported setpieces.
+		# Keep only systems that are map-agnostic.
+		_initialize_visual_quality_manager()
+		_build_fps_presentation_pass()
+		_build_combat_feedback_pass()
+		_build_round_results_ui()
+		_initialize_period_interface_fidelity()
+		return
+
+	# Exact existing Black River visual stack.
+	_initialize_external_lod()
+	_build_external_asset_overlay()
+	_spawn_external_environment_assets()
+	_update_external_asset_overlay()
+	_build_concept_art_realism_pass()
+	_build_concept_art_realism_pass2()
+	_build_structural_depth_reconstruction()
+	_build_hero_location_reconstruction()
+	_build_terrain_architecture_reconstruction()
+	_build_battlefield_environment_pass()
+	_build_fps_presentation_pass()
+	_build_combat_feedback_pass()
+	_build_weathering_microdetail_pass()
+	_build_environment_material_upgrade_pass()
+	_build_scene_composition_upgrade_pass()
+	_build_world_detail_density_pass()
+	_build_combat_readability_pass()
+	_build_objective_atmosphere_pass()
+	_build_surface_depth_breakup_pass()
+	_build_hero_environment_detail_pass()
+	_build_architectural_realism_pass()
+	_build_interior_battlefield_props_pass()
+	_build_battlefield_life_pass()
+	_build_material_weathering_pass()
+	_build_terrain_vegetation_pass()
+	_build_objective_identity_pass()
+	_initialize_visual_quality_manager()
+	_build_wwii_environment_cohesion_pass()
+	_build_visibility_route_readability_pass()
+	_build_round_results_ui()
+	_initialize_period_interface_fidelity()
+
+
 func _ready() -> void:
+	_parse_map_selection_early()
+	print(
+		"Loading map: %s [%s]"
+		% [active_map_display_name(), active_map_id]
+	)
+
 	profile_manager = PlayerProfileScript.new()
 	local_profile = profile_manager.load_profile()
 	progression_store = ServerProgressionStoreScript.new()
@@ -676,41 +790,10 @@ func _ready() -> void:
 		visual_field_gun_scene = _load_optional_scene("res://assets/models/field_artillery.glb")
 		visual_prop_cluster_scene = _load_optional_scene("res://assets/models/crate_barrel_cluster.glb")
 
-	_build_world()
+	_build_selected_map()
 	_initialize_vehicle_map_and_spawns()
 	_build_resupply_stations()
-	_initialize_external_lod()
-	_build_external_asset_overlay()
-	_spawn_external_environment_assets()
-	_update_external_asset_overlay()
-	# v8.89: quality manager now owns AA/post-processing/scalability.
-	_build_concept_art_realism_pass()
-	_build_concept_art_realism_pass2()
-	_build_structural_depth_reconstruction()
-	_build_hero_location_reconstruction()
-	_build_terrain_architecture_reconstruction()
-	_build_battlefield_environment_pass()
-	_build_fps_presentation_pass()
-	_build_combat_feedback_pass()
-	_build_weathering_microdetail_pass()
-	_build_environment_material_upgrade_pass()
-	_build_scene_composition_upgrade_pass()
-	_build_world_detail_density_pass()
-	_build_combat_readability_pass()
-	_build_objective_atmosphere_pass()
-	_build_surface_depth_breakup_pass()
-	_build_hero_environment_detail_pass()
-	_build_architectural_realism_pass()
-	_build_interior_battlefield_props_pass()
-	_build_battlefield_life_pass()
-	_build_material_weathering_pass()
-	_build_terrain_vegetation_pass()
-	_build_objective_identity_pass()
-	_initialize_visual_quality_manager()
-	_build_wwii_environment_cohesion_pass()
-	_build_visibility_route_readability_pass()
-	_build_round_results_ui()
-	_initialize_period_interface_fidelity()
+	_build_selected_map_visual_stack()
 	_update_objective_visuals()
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
@@ -7264,7 +7347,18 @@ func server_recover_stuck_player(
 	return best_position
 
 func _spawn_enemy_staging_position(team_id: int) -> Vector3:
-	return Vector3(56.0,0.0,10.0) if team_id == 0 else Vector3(-56.0,0.0,-10.0)
+	if active_map_id == MAP_RUINED_CITY:
+		return (
+			Vector3(58.0, 0.0, 18.0)
+			if team_id == 0
+			else Vector3(-58.0, 0.0, -18.0)
+		)
+
+	return (
+		Vector3(56.0, 0.0, 10.0)
+		if team_id == 0
+		else Vector3(-56.0, 0.0, -10.0)
+	)
 
 func _nearby_safe_recovery_position(
 	player: Node3D,
@@ -10272,14 +10366,59 @@ func _initialize_vehicle_map_and_spawns() -> void:
 	vehicle_map_expansion = VehicleMapExpansionScript.new()
 	vehicle_map_expansion.name = "VehicleMapExpansion"
 	add_child(vehicle_map_expansion)
-	vehicle_map_expansion.call("initialize", self)
-	_initialize_vehicle_destructible_barriers()
+
+	# The old map-expansion decorator is specific to Black River.
+	if active_map_id == MAP_BLACK_RIVER:
+		vehicle_map_expansion.call("initialize", self)
+
+	if active_map_id == MAP_BLACK_RIVER:
+		_initialize_vehicle_destructible_barriers()
 
 	if not multiplayer.is_server():
 		return
 
-	# v8.99.2: stage ground vehicles inside the normal infantry perimeter.
-	# Allied infantry spawns around x=-58..-50.
+	if active_map_id == MAP_RUINED_CITY:
+		_server_create_vehicle(
+			DrivableVehicleScript.VehicleType.JEEP,
+			0,
+			Vector3(-52.0, 0.15, -28.0),
+			-PI * 0.5
+		)
+		_server_create_vehicle(
+			DrivableVehicleScript.VehicleType.TANK,
+			0,
+			Vector3(-48.0, 0.15, -18.0),
+			-PI * 0.5
+		)
+		_server_create_vehicle(
+			DrivableVehicleScript.VehicleType.JEEP,
+			1,
+			Vector3(52.0, 0.15, 28.0),
+			PI * 0.5
+		)
+		_server_create_vehicle(
+			DrivableVehicleScript.VehicleType.TANK,
+			1,
+			Vector3(48.0, 0.15, 18.0),
+			PI * 0.5
+		)
+
+		# Aircraft start in a wide southern staging lane.
+		_server_create_vehicle(
+			DrivableVehicleScript.VehicleType.AIRCRAFT,
+			0,
+			Vector3(-15.0, 0.95, 38.0),
+			PI
+		)
+		_server_create_vehicle(
+			DrivableVehicleScript.VehicleType.AIRCRAFT,
+			1,
+			Vector3(15.0, 0.95, 38.0),
+			PI
+		)
+		return
+
+	# Original Black River staging — unchanged.
 	_server_create_vehicle(
 		DrivableVehicleScript.VehicleType.JEEP,
 		0, Vector3(-46.0, 0.15, -18.0), -PI * 0.5
@@ -10288,8 +10427,6 @@ func _initialize_vehicle_map_and_spawns() -> void:
 		DrivableVehicleScript.VehicleType.TANK,
 		0, Vector3(-43.0, 0.15, -6.0), -PI * 0.5
 	)
-
-	# Axis infantry spawns around x=50..58.
 	_server_create_vehicle(
 		DrivableVehicleScript.VehicleType.JEEP,
 		1, Vector3(46.0, 0.15, 18.0), PI * 0.5
@@ -10298,8 +10435,6 @@ func _initialize_vehicle_map_and_spawns() -> void:
 		DrivableVehicleScript.VehicleType.TANK,
 		1, Vector3(43.0, 0.15, 6.0), PI * 0.5
 	)
-
-	# Aircraft are placed on reachable southern ground near the original map.
 	_server_create_vehicle(
 		DrivableVehicleScript.VehicleType.AIRCRAFT,
 		0, Vector3(-8.0, 0.95, 43.0), PI
@@ -10308,6 +10443,7 @@ func _initialize_vehicle_map_and_spawns() -> void:
 		DrivableVehicleScript.VehicleType.AIRCRAFT,
 		1, Vector3(8.0, 0.95, 43.0), PI
 	)
+
 
 
 func _initialize_vehicle_destructible_barriers() -> void:
