@@ -1697,44 +1697,53 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 	_apply_first_person_body_visibility()
 
 	if revive_marker != null:
-		var local_team := team
+		var local_team: int = team
+		var revive_distance: float = INF
 		var main_node: Node = get_parent()
 		var local_id: int = multiplayer.get_unique_id()
+
 		if main_node != null:
-			var player_map: Dictionary = main_node.get("players")
-			if player_map.has(local_id):
-				var local_player: Node = player_map[local_id] as Node
-				if local_player != null:
-					local_team = int(local_player.get("team"))
-
-	var revive_distance: float = INF
-	if main_node != null:
-		var revive_players_value: Variant = main_node.get("players")
-		if revive_players_value is Dictionary:
-			var revive_players: Dictionary = revive_players_value
-			if revive_players.has(local_id):
-				var local_player_node: Node3D = revive_players.get(local_id) as Node3D
-				if local_player_node != null:
-					revive_distance = local_player_node.global_position.distance_to(
-						global_position
+			var players_value: Variant = main_node.get("players")
+			if players_value is Dictionary:
+				var player_map: Dictionary = players_value
+				if player_map.has(local_id):
+					var local_player_node: Node3D = (
+						player_map.get(local_id) as Node3D
 					)
+					if local_player_node != null:
+						local_team = int(
+							local_player_node.get("team")
+						)
+						revive_distance = (
+							local_player_node.global_position.distance_to(
+								global_position
+							)
+						)
 
-	var revive_range := 30.0
-	if _local_visual_quality_preset() == 0:
-		revive_range = 20.0
-	elif _local_visual_quality_preset() == 2:
-		revive_range = 38.0
+		var revive_range: float = 30.0
+		var quality_preset: int = _local_visual_quality_preset()
+		if quality_preset == 0:
+			revive_range = 20.0
+		elif quality_preset == 2:
+			revive_range = 38.0
 
-	revive_marker.visible = (
+		revive_marker.visible = (
 			alive
 			and downed
 			and local_team == team
 			and not _is_local_player()
 			and revive_distance <= revive_range
 		)
-	if revive_marker.visible:
-		var displayed_revive_distance: int = maxi(0, int(round(revive_distance)))
-		revive_marker.text = "✚ REVIVE · %dm" % displayed_revive_distance
+
+		if revive_marker.visible:
+			var displayed_revive_distance: int = maxi(
+				0,
+				int(round(revive_distance))
+			)
+			revive_marker.text = (
+				"✚ REVIVE · %dm"
+				% displayed_revive_distance
+			)
 
 	if _is_local_player():
 		if not has_deployed and not spawn_menu_open:
