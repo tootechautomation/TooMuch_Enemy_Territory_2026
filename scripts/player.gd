@@ -2742,8 +2742,16 @@ func _update_objective_compass() -> void:
 	elif fd < 0.0:
 		arrow = "▼"
 	var tactical_suffix := ""
-	if main_node.has_method("squad_order_text"):
-		var order_text := str(main_node.call("squad_order_text", team))
+	if main_node.has_method("battlefield_flow_text"):
+		var order_text := str(
+			main_node.call("battlefield_flow_text", team)
+		)
+		if not order_text.is_empty():
+			tactical_suffix = " · %s" % order_text
+	elif main_node.has_method("squad_order_text"):
+		var order_text := str(
+			main_node.call("squad_order_text", team)
+		)
 		if not order_text.is_empty():
 			tactical_suffix = " · %s" % order_text
 	compass_label.text = "%s OBJECTIVE %dm%s" % [arrow, distance, tactical_suffix]
@@ -9261,8 +9269,16 @@ func _update_hud() -> void:
 		elif post_control == 1:
 			gun_status = "GUNS DEF"
 
+		var front_status := ""
+		if main.has_method("frontline_sector_name"):
+			var front_name := str(
+				main.call("frontline_sector_name", team)
+			)
+			if not front_name.is_empty():
+				front_status = " · FRONT %s" % front_name.to_upper()
+
 		operations_label.text = (
-			"%s · ATK %d · CP %s · %s · %s · DEF %d%s"
+			"%s · ATK %d · CP %s · %s · %s · DEF %d%s%s"
 			% [
 				battle_state,
 				int(main.get("attacker_tickets")),
@@ -9270,7 +9286,8 @@ func _update_hud() -> void:
 				gun_status,
 				depot_status,
 				int(main.get("defender_tickets")),
-				overtime_suffix
+				overtime_suffix,
+				front_status
 			]
 		)
 	if command_post_bar != null and main != null:

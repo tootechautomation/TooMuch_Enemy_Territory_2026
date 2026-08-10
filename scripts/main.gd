@@ -240,8 +240,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "12.1.0"
-const NETWORK_PROTOCOL := 354
+const BUILD_VERSION := "13.0.0"
+const NETWORK_PROTOCOL := 355
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -5697,6 +5697,84 @@ func bot_route_waypoint(
 		posmod(route_index, selected_route.size())
 	])
 
+func frontline_sector_name(team_id: int) -> String:
+	var best_name := ""
+	var best_score := -INF
+
+	for sector_name_value in sector_positions.keys():
+		var sector_name: String = str(sector_name_value)
+		var control: int = int(
+			sector_control.get(sector_name, -1)
+		)
+		var progress: float = float(
+			sector_progress.get(sector_name, 0.0)
+		)
+		var contested: bool = bool(
+			sector_contested.get(sector_name, false)
+		)
+
+		var score := 0.0
+		if contested:
+			score += 100.0
+		if control != team_id:
+			score += 35.0
+		else:
+			score += 12.0
+
+		# Progress toward the opposing side indicates an active pressure point.
+		score += absf(progress) * 0.22
+
+		var center: Vector3 = Vector3(
+			sector_positions.get(sector_name, Vector3.ZERO)
+		)
+		var objective_node: Node3D = (
+			get_node_or_null("BridgeBuildSite") as Node3D
+			if objective_stage == 0
+			else get_node_or_null("Objective") as Node3D
+		)
+		if objective_node != null:
+			score += maxf(
+				0.0,
+				30.0 - center.distance_to(
+					objective_node.global_position
+				) * 0.18
+			)
+
+		if score > best_score:
+			best_score = score
+			best_name = sector_name
+
+	return best_name
+
+
+func frontline_sector_position(team_id: int) -> Variant:
+	var sector_name := frontline_sector_name(team_id)
+	if sector_name.is_empty():
+		return null
+	return Vector3(
+		sector_positions.get(sector_name, Vector3.ZERO)
+	)
+
+
+func battlefield_flow_text(team_id: int) -> String:
+	var sector_name := frontline_sector_name(team_id)
+	if sector_name.is_empty():
+		return squad_order_text(team_id)
+
+	var contested: bool = bool(
+		sector_contested.get(sector_name, false)
+	)
+	var control: int = int(
+		sector_control.get(sector_name, -1)
+	)
+
+	if contested:
+		return "FIGHT FOR %s" % sector_name.to_upper()
+	if control == team_id:
+		return "HOLD %s" % sector_name.to_upper()
+	return "PUSH %s" % sector_name.to_upper()
+
+
 func sector_forward_spawn(
 	team_id: int
 ) -> Variant:
@@ -10665,12 +10743,42 @@ func bot_tactical_anchor(
 	if bot == null:
 		return Vector3.ZERO
 
+	var primary_goal: Vector3 = bot_goal_position(bot)
+	var urgency: float = bot_objective_urgency(bot)
+
+	# Engineers remain objective specialists. Other classes may reinforce the
+	# hottest nearby sector, particularly before the final objective phase.
+	if class_id != 2 and urgency < 0.90:
+		var front_value: Variant = frontline_sector_position(
+			int(bot.get("team"))
+		)
+		if front_value is Vector3:
+			var front: Vector3 = Vector3(front_value)
+			var objective_distance := primary_goal.distance_to(
+				bot.global_position
+			)
+			var front_distance := front.distance_to(
+				bot.global_position
+			)
+			if (
+				front_distance + 7.0 < objective_distance
+				or bool(
+					sector_contested.get(
+						frontline_sector_name(
+							int(bot.get("team"))
+						),
+						false
+					)
+				)
+			):
+				primary_goal = front
+
 	return TacticalDirectorScript.tactical_anchor(
 		bot,
 		class_id,
 		squad_role,
 		objective_stage,
-		bot_goal_position(bot)
+		primary_goal
 	)
 
 func bot_cover_position(

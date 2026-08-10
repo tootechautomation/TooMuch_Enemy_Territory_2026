@@ -1,23 +1,37 @@
-FRONTLINE: OBJECTIVE v12.1.0
-MAJOR UPDATE — SPAWN RECOVERY / DEPLOYMENT STABILITY
+FRONTLINE: OBJECTIVE v13.0.0
+MAJOR UPDATE — BATTLEFIELD FLOW / FRONTLINE DIRECTOR
 
-PRIMARY FIX
-The inherited spawn table was still using old map-edge coordinates around
-x +/-50 to +/-58 even though the current authored team deployment zones are
-centered around x +/-15. That could spawn a player inside a building, ruin,
-roof volume, or boxed architectural space.
+This release continues the large-update model and does NOT rewrite map geometry.
 
-CHANGES
-- Re-authored both teams' primary spawn arrays inside the actual deployment zones.
-- Human players now prioritize safe base deployment on join.
-- Tactical rally / sector forward spawns no longer hijack a human's initial spawn.
-- Bots retain tactical forward-spawn behavior.
-- Emergency spawn now uses the known team deployment zone.
-- Removed the extra +0.35m respawn lift after spawn validation.
-- Existing spawn capsule validation remains active.
-- Existing manual unstuck/recovery system remains active.
-- v12 objective warfare and squad intelligence preserved.
-- No map geometry, building, ruin, vehicle, weapon, or environment rewrite.
+FRONTLINE DIRECTOR
+- Server evaluates all active sectors and identifies the current pressure point.
+- Contested sectors receive highest priority.
+- Enemy-held sectors and sectors close to the current objective receive additional priority.
+- HUD reports the active FRONT sector.
+- Objective compass can issue PUSH / HOLD / FIGHT FOR sector orders.
 
-Build 12.1.0
-Protocol 354
+BOT BATTLEFIELD FLOW
+- Engineers remain focused on primary construction/destruction objectives.
+- Other classes can reinforce the hottest sector instead of marching directly
+  to one coordinate every life.
+- Contested sectors pull nearby squads into the fight.
+- Critical objective urgency still overrides sector diversion.
+- Existing squad formations, suppression, cover, medics, grenades, shared
+  targets and vehicle avoidance remain.
+
+SPAWN SAFETY
+- v12.1 safe deployment coordinates preserved.
+- human initial-spawn protection preserved.
+- no new collision boxes or map-edge spawn locations.
+
+PRESERVED
+- Black River and Ruined City
+- tanks, jeeps and aircraft
+- WWII soldier models
+- weapons and grenades
+- v11 combat/suppression/audio changes
+- v12 objective warfare/squad intelligence
+- v10.7 visual combat presentation
+
+Build 13.0.0
+Protocol 355
