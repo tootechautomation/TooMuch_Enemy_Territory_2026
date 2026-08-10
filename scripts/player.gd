@@ -1707,18 +1707,17 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 				if local_player != null:
 					local_team = int(local_player.get("team"))
 
-		var revive_distance := INF
-	var local_player_id := multiplayer.get_unique_id()
-	if main.players.has(local_player_id):
-		var local_player_node: Node3D = (
-			main.players[local_player_id] as Node3D
-		)
-		if local_player_node != null:
-			revive_distance = (
-				local_player_node.global_position.distance_to(
-					global_position
-				)
-			)
+	var revive_distance: float = INF
+	if main_node != null:
+		var revive_players_value: Variant = main_node.get("players")
+		if revive_players_value is Dictionary:
+			var revive_players: Dictionary = revive_players_value
+			if revive_players.has(local_id):
+				var local_player_node: Node3D = revive_players.get(local_id) as Node3D
+				if local_player_node != null:
+					revive_distance = local_player_node.global_position.distance_to(
+						global_position
+					)
 
 	var revive_range := 30.0
 	if _local_visual_quality_preset() == 0:
@@ -1734,9 +1733,8 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 			and revive_distance <= revive_range
 		)
 	if revive_marker.visible:
-		revive_marker.text = "✚ REVIVE · %dm" % int(
-			round(revive_distance)
-		)
+		var displayed_revive_distance: int = maxi(0, int(round(revive_distance)))
+		revive_marker.text = "✚ REVIVE · %dm" % displayed_revive_distance
 
 	if _is_local_player():
 		if not has_deployed and not spawn_menu_open:
