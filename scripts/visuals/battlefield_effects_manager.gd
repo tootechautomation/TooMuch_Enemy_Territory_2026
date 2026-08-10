@@ -4,10 +4,129 @@ class_name BattlefieldEffectsManager
 var world_root: Node
 var quality_manager: Node
 var active_effects: Array[Node3D] = []
+var active_tracers: Array[Node] = []
+var active_impacts: Array[Node] = []
+var active_flashes: Array[Node] = []
+var maintenance_accumulator: float = 0.0
 
 func initialize(root: Node, manager: Node) -> void:
 	world_root = root
 	quality_manager = manager
+
+
+func _camera_distance_to(position: Vector3) -> float:
+	var viewport: Viewport = get_viewport()
+	if viewport == null:
+		return 0.0
+
+	var camera: Camera3D = viewport.get_camera_3d()
+	if camera == null:
+		return 0.0
+
+	return camera.global_position.distance_to(position)
+
+
+func _effect_distance_allowed(
+	position: Vector3,
+	low_range: float,
+	balanced_range: float,
+	high_range: float
+) -> bool:
+	var preset: int = _preset()
+	var max_distance: float = balanced_range
+
+	if preset == 0:
+		max_distance = low_range
+	elif preset == 2:
+		max_distance = high_range
+
+	var camera_distance: float = _camera_distance_to(position)
+
+	# A missing current camera returns 0.0 and is treated as visible.
+	return camera_distance <= max_distance
+
+
+func _clean_node_array(array: Array[Node]) -> void:
+	for index: int in range(array.size() - 1, -1, -1):
+		var node: Node = array[index]
+		if node == null or not is_instance_valid(node):
+			array.remove_at(index)
+
+
+func _effect_cap(
+	low_cap: int,
+	balanced_cap: int,
+	high_cap: int
+) -> int:
+	var preset: int = _preset()
+	if preset == 0:
+		return low_cap
+	if preset == 2:
+		return high_cap
+	return balanced_cap
+
+
+func _can_spawn_transient(
+	array: Array[Node],
+	low_cap: int,
+	balanced_cap: int,
+	high_cap: int
+) -> bool:
+	_clean_node_array(array)
+	return array.size() < _effect_cap(
+		low_cap,
+		balanced_cap,
+		high_cap
+	)
+
+
+func _trim_transient_array(
+	array: Array[Node],
+	low_cap: int,
+	balanced_cap: int,
+	high_cap: int
+) -> void:
+	_clean_node_array(array)
+
+	var cap: int = _effect_cap(
+		low_cap,
+		balanced_cap,
+		high_cap
+	)
+
+	while array.size() > cap:
+		var oldest: Node = array.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
+
+
+func _maintain_effect_budget() -> void:
+	_trim_transient_array(active_tracers, 10, 20, 32)
+	_trim_transient_array(active_impacts, 8, 18, 28)
+	_trim_transient_array(active_flashes, 4, 8, 12)
+
+	for index: int in range(active_effects.size() - 1, -1, -1):
+		var effect: Node3D = active_effects[index]
+		if effect == null or not is_instance_valid(effect):
+			active_effects.remove_at(index)
+
+	var active_cap: int = _effect_cap(8, 14, 20)
+	while active_effects.size() > active_cap:
+		var oldest_effect: Node3D = active_effects.pop_front()
+		if (
+			oldest_effect != null
+			and is_instance_valid(oldest_effect)
+		):
+			oldest_effect.queue_free()
+
+
+func _process(delta: float) -> void:
+	maintenance_accumulator += delta
+	if maintenance_accumulator < 0.50:
+		return
+
+	maintenance_accumulator = 0.0
+	_maintain_effect_budget()
 
 
 func spawn_explosion(
@@ -16,7 +135,15 @@ func spawn_explosion(
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	if not _effect_distance_allowed(
+		position,
+		55.0,
+		78.0,
+		105.0
+	):
+		return
 
+	_maintain_effect_budget()
 	var preset := _preset()
 	var effect := Node3D.new()
 	effect.name = "ExplosionFX"
@@ -78,7 +205,15 @@ func spawn_fire(
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	if not _effect_distance_allowed(
+		position,
+		42.0,
+		65.0,
+		90.0
+	):
+		return
 
+	_maintain_effect_budget()
 	var preset := _preset()
 	if preset == 0:
 		lifetime = minf(lifetime, 4.0)
@@ -186,6 +321,20 @@ func spawn_vehicle_muzzle_flash(
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	if not _effect_distance_allowed(
+		position,
+		38.0,
+		62.0,
+		90.0
+	):
+		return
+	if not _can_spawn_transient(
+		active_flashes,
+		4,
+		8,
+		12
+	):
+		return
 
 	var flash := MeshInstance3D.new()
 	var mesh := SphereMesh.new()
@@ -200,6 +349,7 @@ func spawn_vehicle_muzzle_flash(
 	material.emission = Color(1.0, 0.25, 0.03)
 	flash.material_override = material
 	add_child(flash)
+	active_flashes.append(flash)
 
 	get_tree().create_timer(0.055).timeout.connect(
 		func() -> void:
@@ -224,6 +374,22 @@ func spawn_tracer(
 	if preset == 0 and distance < 12.0:
 		return
 
+	var midpoint: Vector3 = (start + end) * 0.5
+	if not _effect_distance_allowed(
+		midpoint,
+		45.0,
+		78.0,
+		115.0
+	):
+		return
+	if not _can_spawn_transient(
+		active_tracers,
+		10,
+		20,
+		32
+	):
+		return
+
 	var tracer := MeshInstance3D.new()
 	tracer.name = "Tracer"
 
@@ -239,11 +405,12 @@ func spawn_tracer(
 	material.emission = Color(1.0, 0.28, 0.035)
 	tracer.material_override = material
 
-	tracer.global_position = (start + end) * 0.5
+	tracer.global_position = midpoint
 	if (end - start).length_squared() > 0.00001:
 		tracer.look_at(end, Vector3.UP)
 
 	add_child(tracer)
+	active_tracers.append(tracer)
 
 	var lifetime := 0.045 if preset == 0 else 0.065 if preset == 1 else 0.085
 	get_tree().create_timer(lifetime).timeout.connect(
@@ -260,12 +427,27 @@ func spawn_bullet_impact(
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
+	if not _effect_distance_allowed(
+		position,
+		34.0,
+		58.0,
+		82.0
+	):
+		return
+	if not _can_spawn_transient(
+		active_impacts,
+		8,
+		18,
+		28
+	):
+		return
 
 	var preset := _preset()
 	var holder := Node3D.new()
 	holder.name = "BulletImpact"
 	holder.global_position = position + normal * 0.025
 	add_child(holder)
+	active_impacts.append(holder)
 
 	var particles := GPUParticles3D.new()
 	particles.one_shot = true
@@ -308,6 +490,14 @@ func spawn_ambient_smoke_column(
 		return null
 
 	var preset := _preset()
+	if not _effect_distance_allowed(
+		position,
+		38.0,
+		62.0,
+		88.0
+	):
+		return null
+
 	var holder := Node3D.new()
 	holder.name = "AmbientBattlefieldSmoke"
 	holder.global_position = position
@@ -339,6 +529,13 @@ func spawn_ambient_smoke_column(
 
 func spawn_ambient_fire_pocket(position: Vector3) -> Node3D:
 	if DisplayServer.get_name() == "headless":
+		return null
+	if not _effect_distance_allowed(
+		position,
+		34.0,
+		56.0,
+		80.0
+	):
 		return null
 
 	var holder := Node3D.new()

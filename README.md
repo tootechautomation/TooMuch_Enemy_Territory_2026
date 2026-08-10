@@ -1,71 +1,84 @@
-FRONTLINE: OBJECTIVE v9.20.0
-SPAWN SAFETY + ANTI-STUCK RECOVERY
+FRONTLINE: OBJECTIVE v9.21.0
+EFFECT BUDGET + DISTANCE CULLING + LONG-MATCH PERFORMANCE
 
-EXISTING SPAWN VALIDATION PRESERVED
-The project already had a strong server-side spawn candidate validator:
-- floor raycast
-- slope validation
-- player capsule overlap test
-- separation from living players
-- enemy staging exclusion
-- rally-point validation
+WHY
+The game now has substantially more combat and atmosphere effects than the
+early builds. During sustained firefights, transient visual nodes can become a
+larger cost than the underlying hitscan gameplay.
 
-v9.20 builds on that system rather than replacing it.
+v9.21 adds local visual budgets. Gameplay damage/network authority is unchanged.
 
-MANUAL UNSTUCK
-On foot:
-U = request safe position recovery.
+HARD TRANSIENT CAPS
 
-Server rules:
-- player must be alive
-- cannot be downed
-- cannot be inside a vehicle
-- must be nearly stationary
-- 15 second cooldown
-- server chooses the destination
+LOW / LAPTOP
+- up to 10 active tracers
+- up to 8 active bullet impacts
+- up to 4 muzzle flashes
+- up to 8 larger explosion/fire effects
 
-The server searches:
-1. current position
-2. four nearby 1.5m offsets
-3. four nearby 2.5m offsets
-4. diagonal nearby offsets
-5. normal validated team spawn as final fallback
+BALANCED
+- 20 tracers
+- 18 impacts
+- 8 muzzle flashes
+- 14 larger effects
 
-Every candidate uses the existing authoritative spawn validator.
+HIGH
+- 32 tracers
+- 28 impacts
+- 12 muzzle flashes
+- 20 larger effects
 
-AUTOMATIC BELOW-MAP RECOVERY
-If a living on-foot player:
-- falls below Y = -8
-- or somehow receives a non-finite position
+When a budget is exceeded, the oldest purely visual effect is removed first.
 
-the server automatically invokes the same recovery system.
+DISTANCE CULLING
+Effects outside useful viewing distance are not created locally.
 
-RECOVERY SAFETY
-After recovery:
-- velocity resets
-- interpolation target resets
-- collision is re-enabled
-- input vector resets
-- short spawn protection refreshes
-- client receives the authoritative recovery position
+Approximate Low/Laptop limits:
+- tracers ~45m
+- bullet impacts ~34m
+- vehicle muzzle flashes ~38m
+- explosions ~55m
+- ambient fire ~34m
+- ambient smoke ~38m
 
-ANTI-ABUSE
-Manual U cannot be used while moving faster than 2.5 m/s and has a 15 second
-server cooldown.
+Balanced/High progressively extend these ranges.
 
-VEHICLES
-Vehicle occupants are intentionally excluded. Vehicle exit/ejection already
-uses the dedicated safe-exit system from earlier builds.
+MAINTENANCE PASS
+Every 0.5 seconds the BattlefieldEffectsManager:
+- removes invalid/stale effect references
+- trims arrays to the active quality budget
+- removes oldest visual-only effects if necessary
+
+This prevents stale references from building up during long matches.
+
+IMPORTANT
+This is VISUAL culling only.
+The server still resolves:
+- hitscan
+- damage
+- explosions
+- vehicle weapons
+- objective damage
+- destruction
+
+A distant effect not being rendered does not change gameplay.
+
+PERFORMANCE
+No additional network traffic.
+No additional physics.
+No extra collision.
+The effect-budget maintenance pass runs only twice per second.
 
 PRESERVED
-- v9.19 visibility/lighting/route readability
+- v9.20 spawn safety / U unstuck / below-map recovery
+- v9.19 visibility and route readability
 - v9.18.1 parser-safe environment pass
-- v9.17 first-person visibility fixes
+- first-person fixes
 - HUD/combat feedback
 - destructible streets
-- all vehicle/aircraft systems
+- all vehicles and aircraft
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.20.0
+Build: 9.21.0
 Protocol: 341
