@@ -54,6 +54,39 @@ const PeriodInterfaceFidelityScript = preload(
 const VisualQualityManagerScript = preload(
 	"res://scripts/visuals/visual_quality_manager.gd"
 )
+const ClientPerformanceGovernorScript = preload(
+	"res://scripts/visuals/client_performance_governor.gd"
+)
+const MemoryAssetScalabilityScript = preload(
+	"res://scripts/visuals/memory_asset_scalability.gd"
+)
+const RemotePlayerPresentationLODScript = preload(
+	"res://scripts/visuals/remote_player_presentation_lod.gd"
+)
+const ObjectiveMatchflowHUDScript = preload(
+	"res://scripts/visuals/objective_matchflow_hud.gd"
+)
+const StructuralCollisionGuardScript = preload(
+	"res://scripts/gameplay/structural_collision_guard.gd"
+)
+const ReinforcementStatusHUDScript = preload(
+	"res://scripts/visuals/reinforcement_status_hud.gd"
+)
+const DrivableVehicleScript = preload(
+	"res://scripts/gameplay/drivable_vehicle.gd"
+)
+const VehicleDestructibleBarrierScript = preload(
+	"res://scripts/gameplay/destructible_vehicle_barrier.gd"
+)
+const VehicleMapExpansionScript = preload(
+	"res://scripts/gameplay/vehicle_map_expansion.gd"
+)
+const LowCostVisualClarityScript = preload(
+	"res://scripts/visuals/low_cost_visual_clarity.gd"
+)
+const BattlefieldEffectsManagerScript = preload(
+	"res://scripts/visuals/battlefield_effects_manager.gd"
+)
 const BattlefieldSurfaceFidelityScript = preload(
 	"res://scripts/visuals/battlefield_surface_fidelity.gd"
 )
@@ -62,6 +95,114 @@ const ConceptArtRealismPassScript = preload(
 )
 const ConceptArtRealismPass2Script = preload(
 	"res://scripts/visuals/concept_art_realism_pass2.gd"
+)
+const StructuralDepthReconstructionScript = preload(
+	"res://scripts/visuals/structural_depth_reconstruction.gd"
+)
+const HeroLocationReconstructionScript = preload(
+	"res://scripts/visuals/hero_location_reconstruction.gd"
+)
+const TerrainArchitectureReconstructionScript = preload(
+	"res://scripts/visuals/terrain_architecture_reconstruction.gd"
+)
+const BattlefieldEnvironmentPassScript = preload(
+	"res://scripts/visuals/battlefield_environment_pass.gd"
+)
+const FPSPresentationPassScript = preload(
+	"res://scripts/visuals/fps_presentation_pass.gd"
+)
+const CombatFeedbackPassScript = preload(
+	"res://scripts/visuals/combat_feedback_pass.gd"
+)
+const WeatheringMicrodetailPassScript = preload(
+	"res://scripts/visuals/weathering_microdetail_pass.gd"
+)
+const EnvironmentMaterialUpgradePassScript = preload(
+	"res://scripts/visuals/environment_material_upgrade_pass.gd"
+)
+const WWIIEnvironmentCohesionPassScript = preload(
+	"res://scripts/visuals/wwii_environment_cohesion_pass.gd"
+)
+const VisibilityRouteReadabilityPassScript = preload(
+	"res://scripts/visuals/visibility_route_readability_pass.gd"
+)
+const SceneCompositionUpgradePassScript = preload(
+	"res://scripts/visuals/scene_composition_upgrade_pass.gd"
+)
+const WorldDetailDensityPassScript = preload(
+	"res://scripts/visuals/world_detail_density_pass.gd"
+)
+const CombatReadabilityPassScript = preload(
+	"res://scripts/visuals/combat_readability_pass.gd"
+)
+const ObjectiveAtmospherePassScript = preload(
+	"res://scripts/visuals/objective_atmosphere_pass.gd"
+)
+const SurfaceDepthBreakupPassScript = preload(
+	"res://scripts/visuals/surface_depth_breakup_pass.gd"
+)
+const HeroEnvironmentDetailPassScript = preload(
+	"res://scripts/visuals/hero_environment_detail_pass.gd"
+)
+const ArchitecturalRealismPassScript = preload(
+	"res://scripts/visuals/architectural_realism_pass.gd"
+)
+const InteriorBattlefieldPropsPassScript = preload(
+	"res://scripts/visuals/interior_battlefield_props_pass.gd"
+)
+const BattlefieldLifePassScript = preload(
+	"res://scripts/visuals/battlefield_life_pass.gd"
+)
+const MaterialWeatheringPassScript = preload(
+	"res://scripts/visuals/material_weathering_pass.gd"
+)
+const TerrainVegetationPassScript = preload(
+	"res://scripts/visuals/terrain_vegetation_pass.gd"
+)
+const ObjectiveIdentityPassScript = preload(
+	"res://scripts/visuals/objective_identity_pass.gd"
+)
+const CombatAtmospherePassScript = preload(
+	"res://scripts/visuals/combat_atmosphere_pass.gd"
+)
+const RooflineVerticalityPassScript = preload(
+	"res://scripts/visuals/roofline_verticality_pass.gd"
+)
+const RoadStreetDetailPassScript = preload(
+	"res://scripts/visuals/road_street_detail_pass.gd"
+)
+const CoverMicrodetailPassScript = preload(
+	"res://scripts/visuals/cover_microdetail_pass.gd"
+)
+const InteriorStorytellingPassScript = preload(
+	"res://scripts/visuals/interior_storytelling_pass.gd"
+)
+const EnvironmentalAnimationPassScript = preload(
+	"res://scripts/visuals/environmental_animation_pass.gd"
+)
+const RainInteractionPassScript = preload(
+	"res://scripts/visuals/rain_interaction_pass.gd"
+)
+const FacadeStreetDressingPassScript = preload(
+	"res://scripts/visuals/facade_street_dressing_pass.gd"
+)
+const LightingPostProcessRefinementPassScript = preload(
+	"res://scripts/visuals/lighting_postprocess_refinement_pass.gd"
+)
+const BattleDamageDetailPassScript = preload(
+	"res://scripts/visuals/battle_damage_detail_pass.gd"
+)
+const PerformanceLODPassScript = preload(
+	"res://scripts/visuals/performance_lod_pass.gd"
+)
+const BattlefieldPickupScript = preload(
+	"res://scripts/gameplay/battlefield_pickup.gd"
+)
+const ResupplyStationScript = preload(
+	"res://scripts/gameplay/resupply_station.gd"
+)
+const CasualtyMarkerScript = preload(
+	"res://scripts/gameplay/casualty_marker.gd"
 )
 
 const ExternalAssetRegistryScript = preload(
@@ -96,7 +237,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "8.44.0"
+const BUILD_VERSION := "9.27.2"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -210,6 +351,11 @@ var constructibles: Dictionary = {}
 var next_constructible_id := 1
 var engineer_constructibles: Dictionary = {}
 var smoke_clouds: Dictionary = {}
+var battlefield_pickups: Dictionary = {}
+var next_battlefield_pickup_id: int = 1
+var resupply_stations: Array[Node3D] = []
+var casualty_markers: Dictionary = {}
+var next_casualty_id: int = 1
 var next_smoke_id := 1
 var station_accumulator := 0.0
 var command_health_station: MeshInstance3D
@@ -255,6 +401,8 @@ var dynamite_armed := false
 var dynamite_remaining := 0.0
 var match_time_remaining := MATCH_LENGTH_SECONDS
 var spawn_wave_remaining := SPAWN_WAVE_SECONDS
+var attacker_spawn_wave_remaining := SPAWN_WAVE_SECONDS
+var defender_spawn_wave_remaining := SPAWN_WAVE_SECONDS
 var match_over := false
 var status_label: Label
 var connection_panel: PanelContainer
@@ -326,6 +474,36 @@ var dynamic_weather_system: Node3D
 var wet_surface_response: Node
 var period_interface_fidelity: Node
 var visual_quality_manager: Node
+var client_performance_governor: Node
+var memory_asset_scalability: Node
+var remote_player_presentation_lod: Node
+var objective_matchflow_hud: CanvasLayer
+var structural_collision_guard: Node
+var reinforcement_status_hud: CanvasLayer
+var vehicles: Dictionary = {}
+var vehicle_destructible_barriers: Dictionary = {}
+var next_vehicle_id: int = 1
+var vehicle_map_expansion: Node
+var vehicle_snapshot_accumulator := 0.0
+var vehicle_next_fire_ms: Dictionary = {}
+var vehicle_respawn_at_ms: Dictionary = {}
+var vehicle_damage_smoke_nodes: Dictionary = {}
+var ambient_battlefield_effects: Array[Node3D] = []
+var active_world_audio: Array[Node] = []
+var world_audio_cleanup_accumulator := 0.0
+var vehicle_service_accumulator := 0.0
+var player_unstuck_next_ms: Dictionary = {}
+const PLAYER_UNSTUCK_COOLDOWN_MS := 15000
+const PLAYER_WORLD_FALL_Y := -8.0
+const VEHICLE_SERVICE_INTERVAL := 1.0
+const VEHICLE_SERVICE_RADIUS := 8.0
+const VEHICLE_SERVICE_REPAIR := 35
+const VEHICLE_SERVICE_AMMO := 40
+const ALLIED_SERVICE_POSITION := Vector3(-48.0, 0.0, -10.0)
+const AXIS_SERVICE_POSITION := Vector3(48.0, 0.0, 10.0)
+var low_cost_visual_clarity: Node
+var battlefield_effects_manager: Node3D
+var local_cinema_mode_enabled := false
 var battlefield_surface_fidelity: Node3D
 var battlefield_sun: DirectionalLight3D
 var atmosphere_elapsed := 0.0
@@ -345,6 +523,10 @@ var supply_depot_progress_label: Label3D
 var supply_depot_light: OmniLight3D
 var mission_banner_text := ""
 var mission_banner_until_ms := 0
+var active_squad_ping_markers: Array[Node] = []
+var last_team_callout_key := ""
+var last_team_callout_ms := 0
+const TEAM_CALLOUT_COOLDOWN_MS := 3500
 var sector_positions: Dictionary = {
 	"Village": Vector3(-28.0, 0.0, 1.0),
 	"Rail Yard": Vector3(25.0, 0.0, -20.0),
@@ -495,14 +677,38 @@ func _ready() -> void:
 		visual_prop_cluster_scene = _load_optional_scene("res://assets/models/crate_barrel_cluster.glb")
 
 	_build_world()
+	_initialize_vehicle_map_and_spawns()
+	_build_resupply_stations()
 	_initialize_external_lod()
 	_build_external_asset_overlay()
 	_spawn_external_environment_assets()
 	_update_external_asset_overlay()
-	_apply_high_visual_quality()
+	# v8.89: quality manager now owns AA/post-processing/scalability.
 	_build_concept_art_realism_pass()
 	_build_concept_art_realism_pass2()
+	_build_structural_depth_reconstruction()
+	_build_hero_location_reconstruction()
+	_build_terrain_architecture_reconstruction()
+	_build_battlefield_environment_pass()
+	_build_fps_presentation_pass()
+	_build_combat_feedback_pass()
+	_build_weathering_microdetail_pass()
+	_build_environment_material_upgrade_pass()
+	_build_scene_composition_upgrade_pass()
+	_build_world_detail_density_pass()
+	_build_combat_readability_pass()
+	_build_objective_atmosphere_pass()
+	_build_surface_depth_breakup_pass()
+	_build_hero_environment_detail_pass()
+	_build_architectural_realism_pass()
+	_build_interior_battlefield_props_pass()
+	_build_battlefield_life_pass()
+	_build_material_weathering_pass()
+	_build_terrain_vegetation_pass()
+	_build_objective_identity_pass()
 	_initialize_visual_quality_manager()
+	_build_wwii_environment_cohesion_pass()
+	_build_visibility_route_readability_pass()
 	_build_round_results_ui()
 	_initialize_period_interface_fidelity()
 	_update_objective_visuals()
@@ -538,15 +744,313 @@ func _build_concept_art_realism_pass2() -> void:
 	add_child(realism_pass2)
 	realism_pass2.call("build", self)
 
+func _build_structural_depth_reconstruction() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	StructuralDepthReconstructionScript.apply(self)
+
+func _build_hero_location_reconstruction() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	HeroLocationReconstructionScript.apply(self)
+
+func _build_terrain_architecture_reconstruction() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	TerrainArchitectureReconstructionScript.apply(self)
+
+func _build_battlefield_environment_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	BattlefieldEnvironmentPassScript.apply(self)
+
+func _build_fps_presentation_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var fps_pass: Node = FPSPresentationPassScript.new()
+	fps_pass.name = "FPSPresentationPass"
+	add_child(fps_pass)
+	fps_pass.call("initialize", self)
+
+func _build_combat_feedback_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var combat_pass: Node = CombatFeedbackPassScript.new()
+	combat_pass.name = "CombatFeedbackPass"
+	add_child(combat_pass)
+	combat_pass.call("initialize", self)
+
+func _build_weathering_microdetail_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	WeatheringMicrodetailPassScript.apply(self)
+
+func _build_environment_material_upgrade_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	EnvironmentMaterialUpgradePassScript.apply(self)
+
+
+func _build_wwii_environment_cohesion_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	WWIIEnvironmentCohesionPassScript.apply(self)
+
+
+func _build_visibility_route_readability_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	VisibilityRouteReadabilityPassScript.apply(self)
+
+
+func _build_scene_composition_upgrade_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	SceneCompositionUpgradePassScript.apply(self)
+
+
+func _build_world_detail_density_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	WorldDetailDensityPassScript.apply(self)
+
+
+func _build_combat_readability_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	CombatReadabilityPassScript.apply(self)
+
+
+func _build_objective_atmosphere_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	ObjectiveAtmospherePassScript.apply(self)
+
+
+func _build_surface_depth_breakup_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	SurfaceDepthBreakupPassScript.apply(self)
+
+
+func _build_hero_environment_detail_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	HeroEnvironmentDetailPassScript.apply(self)
+
+
+func _build_architectural_realism_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	ArchitecturalRealismPassScript.apply(self)
+
+
+func _build_interior_battlefield_props_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	InteriorBattlefieldPropsPassScript.apply(self)
+
+
+func _build_battlefield_life_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	BattlefieldLifePassScript.apply(self)
+
+
+func _build_material_weathering_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	MaterialWeatheringPassScript.apply(self)
+
+
+func _build_terrain_vegetation_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	TerrainVegetationPassScript.apply(self)
+
+
+func _build_objective_identity_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	ObjectiveIdentityPassScript.apply(self)
+
+
+func _build_roofline_verticality_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	RooflineVerticalityPassScript.apply(self)
+
+
+func _build_road_street_detail_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	RoadStreetDetailPassScript.apply(self)
+
+
+func _build_cover_microdetail_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	CoverMicrodetailPassScript.apply(self)
+
+
+func _build_interior_storytelling_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	InteriorStorytellingPassScript.apply(self)
+
+
+func _build_environmental_animation_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	EnvironmentalAnimationPassScript.apply(self)
+
+
+func _build_rain_interaction_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	RainInteractionPassScript.apply(self)
+
+
+func _build_facade_street_dressing_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	FacadeStreetDressingPassScript.apply(self)
+
+
+func _build_lighting_postprocess_refinement_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	LightingPostProcessRefinementPassScript.apply(self)
+
+
+func _build_battle_damage_detail_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	BattleDamageDetailPassScript.apply(self)
+
+
+func _build_performance_lod_pass() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	PerformanceLODPassScript.apply(self)
+
+
 func _initialize_visual_quality_manager() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	if visual_quality_manager != null:
 		return
+
 	visual_quality_manager = VisualQualityManagerScript.new()
 	visual_quality_manager.name = "VisualQualityManager"
 	add_child(visual_quality_manager)
 	visual_quality_manager.call("initialize", self)
+
+	client_performance_governor = ClientPerformanceGovernorScript.new()
+	client_performance_governor.name = "ClientPerformanceGovernor"
+	add_child(client_performance_governor)
+	client_performance_governor.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+
+	visual_quality_manager.quality_changed.connect(
+		client_performance_governor.on_quality_changed
+	)
+
+	memory_asset_scalability = MemoryAssetScalabilityScript.new()
+	memory_asset_scalability.name = "MemoryAssetScalability"
+	add_child(memory_asset_scalability)
+	memory_asset_scalability.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+	visual_quality_manager.quality_changed.connect(
+		memory_asset_scalability.on_quality_changed
+	)
+
+	remote_player_presentation_lod = RemotePlayerPresentationLODScript.new()
+	remote_player_presentation_lod.name = "RemotePlayerPresentationLOD"
+	add_child(remote_player_presentation_lod)
+	remote_player_presentation_lod.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+	visual_quality_manager.quality_changed.connect(
+		remote_player_presentation_lod.on_quality_changed
+	)
+
+	objective_matchflow_hud = ObjectiveMatchflowHUDScript.new()
+	objective_matchflow_hud.name = "ObjectiveMatchflowHUD"
+	add_child(objective_matchflow_hud)
+	objective_matchflow_hud.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+
+	structural_collision_guard = StructuralCollisionGuardScript.new()
+	structural_collision_guard.name = "StructuralCollisionGuard"
+	add_child(structural_collision_guard)
+	structural_collision_guard.call("initialize", self)
+
+	reinforcement_status_hud = ReinforcementStatusHUDScript.new()
+	reinforcement_status_hud.name = "ReinforcementStatusHUD"
+	add_child(reinforcement_status_hud)
+	reinforcement_status_hud.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+
+	low_cost_visual_clarity = LowCostVisualClarityScript.new()
+	low_cost_visual_clarity.name = "LowCostVisualClarity"
+	add_child(low_cost_visual_clarity)
+	low_cost_visual_clarity.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+	visual_quality_manager.quality_changed.connect(
+		low_cost_visual_clarity.on_quality_changed
+	)
+
+	battlefield_effects_manager = BattlefieldEffectsManagerScript.new()
+	battlefield_effects_manager.name = "BattlefieldEffectsManager"
+	add_child(battlefield_effects_manager)
+	battlefield_effects_manager.call(
+		"initialize",
+		self,
+		visual_quality_manager
+	)
+	call_deferred("_initialize_ambient_battlefield_fx")
+
+func set_local_cinema_mode(enabled: bool) -> void:
+	local_cinema_mode_enabled = enabled
+
+	if objective_matchflow_hud != null:
+		objective_matchflow_hud.call(
+			"set_cinema_suppressed",
+			enabled
+		)
+
+	if reinforcement_status_hud != null:
+		reinforcement_status_hud.call(
+			"set_cinema_suppressed",
+			enabled
+		)
+
+	# Hide the quality indicator while capturing cinematic screenshots/video.
+	if visual_quality_manager != null:
+		var overlay := visual_quality_manager.get_node_or_null(
+			"VisualQualityOverlay"
+		) as CanvasLayer
+		if overlay != null:
+			overlay.visible = not enabled
+
 
 func _initialize_period_interface_fidelity() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -572,6 +1076,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			if key_event.physical_keycode != 0
 			else key_event.keycode
 		)
+		if key_code == KEY_F8 and visual_quality_manager != null:
+			visual_quality_manager.call("cycle_quality")
+			return
 		if not profile_waiting_for_action.is_empty():
 			if key_code == KEY_ESCAPE:
 				profile_waiting_for_action = ""
@@ -603,7 +1110,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func _process(delta: float) -> void:
+	if multiplayer.is_server():
+		vehicle_snapshot_accumulator += delta
+		if vehicle_snapshot_accumulator >= 0.10:
+			vehicle_snapshot_accumulator = 0.0
+			_broadcast_vehicle_snapshots()
+		_update_vehicle_respawns()
+
+		vehicle_service_accumulator += delta
+		if vehicle_service_accumulator >= VEHICLE_SERVICE_INTERVAL:
+			vehicle_service_accumulator = 0.0
+			_update_vehicle_service_zones()
+
 	_update_adaptive_music()
+	_update_vehicle_damage_smoke()
 	atmosphere_elapsed += delta
 	_update_immersive_visuals()
 	_update_objective_visuals()
@@ -675,16 +1195,7 @@ func _process(delta: float) -> void:
 			match_time_remaining - delta
 		)
 
-	spawn_wave_remaining -= delta
-	if spawn_wave_remaining <= 0.0:
-		var wave_interval := SPAWN_WAVE_SECONDS
-		if command_post_control >= 0:
-			wave_interval = maxf(
-				5.0,
-				SPAWN_WAVE_SECONDS - FORWARD_SPAWN_WAVE_BONUS
-			)
-		spawn_wave_remaining += wave_interval
-		_respawn_wave()
+	_update_team_reinforcement_waves(delta)
 
 	if dynamite_armed:
 		dynamite_remaining = maxf(0.0, dynamite_remaining - delta)
@@ -701,6 +1212,11 @@ func _process(delta: float) -> void:
 			if not overtime_active:
 				overtime_active = true
 				push_kill_feed.rpc("OVERTIME — objective remains active")
+				team_callout.rpc(
+					-1,
+					"OVERTIME · OBJECTIVE STILL ACTIVE",
+					"OVERTIME"
+				)
 		else:
 			overtime_active = false
 			_end_match("DEFENDERS WIN — objective secured")
@@ -3988,6 +4504,29 @@ func _reset_destructible_cover() -> void:
 		if cover != null and cover.has_method("reset_cover"):
 			cover.call("reset_cover")
 
+func destructible_cover_status_text() -> String:
+	var intact := 0
+	var damaged := 0
+	var destroyed_count := 0
+
+	for value: Variant in vehicle_destructible_barriers.values():
+		var barrier: Node = value as Node
+		if barrier == null:
+			continue
+		if bool(barrier.get("destroyed")):
+			destroyed_count += 1
+		elif int(barrier.get("health")) < int(barrier.get("max_health")):
+			damaged += 1
+		else:
+			intact += 1
+
+	return "COVER I:%d D:%d X:%d" % [
+		intact,
+		damaged,
+		destroyed_count
+	]
+
+
 func emplacement_status_text() -> String:
 	if command_post_control < 0:
 		return "AUTO-GUNS OFFLINE"
@@ -4804,25 +5343,77 @@ func _update_battlefield_atmosphere() -> void:
 	)
 
 func _parse_command_line() -> void:
-	var args := OS.get_cmdline_user_args()
-	var is_server := "--server" in args or DisplayServer.get_name() == "headless"
-	var port := PORT_DEFAULT
-	var connect_address := ""
-	var bots_argument_seen := false
+	# Read both complete and user argument arrays so custom dedicated-server
+	# flags work whether or not the launcher uses Godot's "--" separator.
+	var args: PackedStringArray = OS.get_cmdline_args()
+	var user_args: PackedStringArray = OS.get_cmdline_user_args()
 
-	for i in args.size():
-		if args[i] == "--port" and i + 1 < args.size():
+	for user_arg: String in user_args:
+		if user_arg not in args:
+			args.append(user_arg)
+
+	var is_server: bool = (
+		"--server" in args
+		or DisplayServer.get_name() == "headless"
+	)
+	var port: int = PORT_DEFAULT
+	var connect_address: String = ""
+	var bots_argument_seen: bool = false
+
+	var i: int = 0
+	while i < args.size():
+		var argument: String = args[i]
+
+		if argument == "--port" and i + 1 < args.size():
 			port = int(args[i + 1])
-		elif args[i] == "--connect" and i + 1 < args.size():
+			i += 2
+			continue
+
+		if argument == "--connect" and i + 1 < args.size():
 			connect_address = args[i + 1]
-		elif args[i] == "--bots" and i + 1 < args.size():
+			i += 2
+			continue
+
+		if argument == "--bots" and i + 1 < args.size():
 			desired_bot_count = clampi(int(args[i + 1]), 0, 16)
 			bots_argument_seen = true
-		elif args[i] == "--bot-skill" and i + 1 < args.size():
+			i += 2
+			continue
+
+		if argument.begins_with("--bots="):
+			desired_bot_count = clampi(
+				int(argument.trim_prefix("--bots=")),
+				0,
+				16
+			)
+			bots_argument_seen = true
+			i += 1
+			continue
+
+		if argument == "--no-bots":
+			desired_bot_count = 0
+			bots_argument_seen = true
+			i += 1
+			continue
+
+		if argument == "--bot-skill" and i + 1 < args.size():
 			bot_skill = clampf(float(args[i + 1]), 0.5, 2.0)
+			i += 2
+			continue
+
+		i += 1
+
+	if bots_argument_seen:
+		print(
+			"Bot command-line override detected: %d"
+			% desired_bot_count
+		)
 
 	if is_server:
-		if DisplayServer.get_name() != "headless" and not bots_argument_seen:
+		if (
+			DisplayServer.get_name() != "headless"
+			and not bots_argument_seen
+		):
 			desired_bot_count = 0
 		start_server(port)
 	elif connect_address != "":
@@ -4850,8 +5441,11 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 	print("Requested bot count: %d" % desired_bot_count)
 	print("Bot skill multiplier: %.2f" % bot_skill)
 
-	for index in range(desired_bot_count):
-		_spawn_bot(index)
+	if desired_bot_count <= 0:
+		print("Bots disabled for this server session.")
+	else:
+		for index in range(desired_bot_count):
+			_spawn_bot(index)
 
 	print(
 		"Server roster ready: %d total actors, %d bots" % [
@@ -5633,6 +6227,7 @@ func _on_peer_connected(id: int) -> void:
 	spawn_player.rpc(id, team, player_names[id], _get_spawn(team, id))
 
 func _on_peer_disconnected(id: int) -> void:
+	player_unstuck_next_ms.erase(id)
 	if not multiplayer.is_server(): return
 	remove_player.rpc(id)
 	player_teams.erase(id)
@@ -5760,6 +6355,103 @@ func submit_player_input(
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	receive_input_ack.rpc_id(sender_id, sequence)
 
+func _local_team_id() -> int:
+	var local_id: int = multiplayer.get_unique_id()
+	if not players.has(local_id):
+		return -1
+
+	var local_player: Node = players[local_id] as Node
+	if local_player == null:
+		return -1
+
+	return int(local_player.get("team"))
+
+
+func _local_player_position() -> Vector3:
+	var local_id: int = multiplayer.get_unique_id()
+	if players.has(local_id):
+		var local_player: Node3D = players[local_id] as Node3D
+		if local_player != null:
+			return local_player.global_position
+
+	var viewport: Viewport = get_viewport()
+	if viewport != null:
+		var camera: Camera3D = viewport.get_camera_3d()
+		if camera != null:
+			return camera.global_position
+
+	return Vector3.ZERO
+
+
+func _squad_ping_cap() -> int:
+	if visual_quality_manager == null:
+		return 4
+
+	var preset: int = clampi(
+		int(visual_quality_manager.get("current_preset")),
+		0,
+		2
+	)
+	if preset == 0:
+		return 2
+	if preset == 2:
+		return 6
+	return 4
+
+
+func _cleanup_squad_pings() -> void:
+	for index: int in range(
+		active_squad_ping_markers.size() - 1,
+		-1,
+		-1
+	):
+		var marker: Node = active_squad_ping_markers[index]
+		if marker == null or not is_instance_valid(marker):
+			active_squad_ping_markers.remove_at(index)
+
+	while active_squad_ping_markers.size() > _squad_ping_cap():
+		var oldest: Node = active_squad_ping_markers.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
+
+
+func _show_team_callout(
+	callout_team: int,
+	message: String,
+	callout_key: String
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	if callout_team >= 0 and _local_team_id() != callout_team:
+		return
+
+	var now: int = Time.get_ticks_msec()
+	if (
+		callout_key == last_team_callout_key
+		and now - last_team_callout_ms < TEAM_CALLOUT_COOLDOWN_MS
+	):
+		return
+
+	last_team_callout_key = callout_key
+	last_team_callout_ms = now
+	mission_banner_text = message
+	mission_banner_until_ms = now + 2600
+
+
+@rpc("authority", "call_local", "reliable")
+func team_callout(
+	callout_team: int,
+	message: String,
+	callout_key: String
+) -> void:
+	_show_team_callout(
+		callout_team,
+		message,
+		callout_key
+	)
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func request_squad_ping(
 	requested_peer_id: int,
@@ -5811,32 +6503,69 @@ func show_squad_ping(
 	if DisplayServer.get_name() == "headless":
 		return
 
-	var local_id: int = multiplayer.get_unique_id()
-	if players.has(local_id):
-		var local_player: Node = players[local_id] as Node
-		if local_player != null:
-			if int(local_player.get("team")) != ping_team:
-				return
+	if _local_team_id() != ping_team:
+		return
+
+	var local_position: Vector3 = _local_player_position()
+	var distance: float = local_position.distance_to(
+		ping_position
+	)
+
+	var max_distance := 62.0
+	if visual_quality_manager != null:
+		var preset := clampi(
+			int(visual_quality_manager.get("current_preset")),
+			0,
+			2
+		)
+		if preset == 0:
+			max_distance = 42.0
+		elif preset == 2:
+			max_distance = 78.0
+
+	if distance > max_distance:
+		return
+
+	_cleanup_squad_pings()
+	if active_squad_ping_markers.size() >= _squad_ping_cap():
+		var oldest: Node = active_squad_ping_markers.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
 
 	var marker := Label3D.new()
 	marker.name = "SquadPing"
-	marker.text = "▲  %s" % sender_name
+	marker.text = "▲ %s · %dm" % [
+		sender_name,
+		int(round(distance))
+	]
 	marker.position = ping_position + Vector3.UP * 0.45
-	marker.font_size = 30
-	marker.outline_size = 10
+	marker.font_size = 24
+	marker.outline_size = 8
 	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	marker.fixed_size = false
 	marker.modulate = Color(0.22, 0.88, 1.0)
 	add_child(marker)
+	active_squad_ping_markers.append(marker)
 
 	var timer := Timer.new()
 	timer.one_shot = true
-	timer.wait_time = 5.0
-	timer.timeout.connect(marker.queue_free)
+	timer.wait_time = 3.8
+	timer.timeout.connect(
+		func() -> void:
+			active_squad_ping_markers.erase(marker)
+			if is_instance_valid(marker):
+				marker.queue_free()
+	)
 	marker.add_child(timer)
 	timer.start()
 
-	push_kill_feed.rpc("%s marked a squad target" % sender_name)
+	_show_team_callout(
+		ping_team,
+		"SQUAD MARK · %dm" % int(round(distance)),
+		"PING_%s" % sender_name
+	)
+
+
 
 func server_call_artillery(caller: Node3D, target_position: Vector3) -> void:
 	if not multiplayer.is_server() or caller == null:
@@ -6537,6 +7266,165 @@ func server_recover_stuck_player(
 func _spawn_enemy_staging_position(team_id: int) -> Vector3:
 	return Vector3(56.0,0.0,10.0) if team_id == 0 else Vector3(-56.0,0.0,-10.0)
 
+func _nearby_safe_recovery_position(
+	player: Node3D,
+	peer_id: int
+) -> Variant:
+	if player == null:
+		return null
+
+	var origin: Vector3 = player.global_position
+	var offsets: Array[Vector3] = [
+		Vector3(0.0, 0.5, 0.0),
+		Vector3(1.5, 0.5, 0.0),
+		Vector3(-1.5, 0.5, 0.0),
+		Vector3(0.0, 0.5, 1.5),
+		Vector3(0.0, 0.5, -1.5),
+		Vector3(2.5, 0.5, 0.0),
+		Vector3(-2.5, 0.5, 0.0),
+		Vector3(0.0, 0.5, 2.5),
+		Vector3(0.0, 0.5, -2.5),
+		Vector3(1.8, 0.5, 1.8),
+		Vector3(-1.8, 0.5, 1.8),
+		Vector3(1.8, 0.5, -1.8),
+		Vector3(-1.8, 0.5, -1.8)
+	]
+
+	for offset: Vector3 in offsets:
+		var result: Dictionary = _validate_spawn_candidate(
+			origin + offset,
+			peer_id
+		)
+		if bool(result.get("valid", false)):
+			return Vector3(
+				result.get(
+					"position",
+					origin + offset
+				)
+			)
+
+	return null
+
+
+func _server_recover_player_position(
+	player: Node3D,
+	reason: String = "UNSTUCK"
+) -> bool:
+	if not multiplayer.is_server():
+		return false
+	if player == null:
+		return false
+
+	var peer_id: int = int(player.get("peer_id"))
+	if peer_id <= 0:
+		return false
+
+	# Never move seated players; vehicle exit has its own safe-position system.
+	if int(player.get("current_vehicle_id")) >= 0:
+		return false
+
+	var recovered_position: Variant = _nearby_safe_recovery_position(
+		player,
+		peer_id
+	)
+
+	if recovered_position == null:
+		var team_id: int = clampi(
+			int(player.get("team")),
+			0,
+			1
+		)
+		recovered_position = _get_spawn(
+			team_id,
+			peer_id
+		)
+
+	if not recovered_position is Vector3:
+		return false
+
+	var safe_position: Vector3 = recovered_position
+	if not _vector3_is_finite(safe_position):
+		return false
+
+	player.global_position = safe_position
+	player.set("target_position", safe_position)
+	player.set("velocity", Vector3.ZERO)
+
+	if player.has_method("server_position_recovered"):
+		player.call(
+			"server_position_recovered",
+			safe_position,
+			reason
+		)
+
+	return true
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_player_unstuck() -> void:
+	if not multiplayer.is_server():
+		return
+
+	var peer_id: int = multiplayer.get_remote_sender_id()
+	if peer_id <= 0:
+		return
+	if not players.has(peer_id):
+		return
+
+	var player: Node3D = players[peer_id] as Node3D
+	if player == null:
+		return
+	if not bool(player.get("alive")):
+		return
+	if bool(player.get("downed")):
+		return
+	if int(player.get("current_vehicle_id")) >= 0:
+		return
+
+	var now: int = Time.get_ticks_msec()
+	var next_allowed: int = int(
+		player_unstuck_next_ms.get(peer_id, 0)
+	)
+	if now < next_allowed:
+		if player.has_method("unstuck_feedback"):
+			player.call(
+				"unstuck_feedback",
+				false,
+				"UNSTUCK COOLDOWN %.0fs" % (
+					float(next_allowed - now) / 1000.0
+				)
+			)
+		return
+
+	# Manual unstuck is intended for wedged players, not instant combat escape.
+	# Moving quickly means the player is clearly not hard-stuck.
+	var player_velocity: Vector3 = Vector3(
+		player.get("velocity")
+	)
+	if player_velocity.length() > 2.5:
+		if player.has_method("unstuck_feedback"):
+			player.call(
+				"unstuck_feedback",
+				false,
+				"STOP MOVING BEFORE UNSTUCK"
+			)
+		return
+
+	if _server_recover_player_position(
+		player,
+		"MANUAL UNSTUCK"
+	):
+		player_unstuck_next_ms[peer_id] = (
+			now + PLAYER_UNSTUCK_COOLDOWN_MS
+		)
+		if player.has_method("unstuck_feedback"):
+			player.call(
+				"unstuck_feedback",
+				true,
+				"POSITION RECOVERED"
+			)
+
+
 func _validate_spawn_candidate(
 	base_candidate: Vector3,
 	peer_id: int
@@ -6677,20 +7565,103 @@ func _validate_spawn_candidate(
 		"position": spawn_position
 	}
 
-func _respawn_wave() -> void:
-	for peer_id_value in players:
+func _team_wave_interval(team_id: int) -> float:
+	var interval := SPAWN_WAVE_SECONDS
+
+	# Command Post reinforcement bonus belongs ONLY to the team that controls
+	# it. The opposing team keeps its normal reinforcement cadence.
+	if command_post_control == team_id:
+		interval = maxf(
+			5.0,
+			SPAWN_WAVE_SECONDS - FORWARD_SPAWN_WAVE_BONUS
+		)
+
+	return interval
+
+
+func _update_team_reinforcement_waves(delta: float) -> void:
+	attacker_spawn_wave_remaining -= delta
+	defender_spawn_wave_remaining -= delta
+
+	if attacker_spawn_wave_remaining <= 0.0:
+		attacker_spawn_wave_remaining += _team_wave_interval(0)
+		_respawn_team_wave(0)
+
+	if defender_spawn_wave_remaining <= 0.0:
+		defender_spawn_wave_remaining += _team_wave_interval(1)
+		_respawn_team_wave(1)
+
+	# Compatibility value used by older HUD/status code. On the server this is
+	# the next reinforcement event of either side. Clients overwrite it with
+	# their local team's timer in broadcast_reinforcement_state().
+	spawn_wave_remaining = minf(
+		attacker_spawn_wave_remaining,
+		defender_spawn_wave_remaining
+	)
+
+	broadcast_reinforcement_state.rpc(
+		attacker_spawn_wave_remaining,
+		defender_spawn_wave_remaining
+	)
+
+
+func _respawn_team_wave(team_id: int) -> void:
+	for peer_id_value: Variant in players:
 		var peer_id: int = int(peer_id_value)
 		var player: Node3D = players[peer_id] as Node3D
 		if player == null:
 			continue
-		if not bool(player.get("alive")):
-			var player_team: int = int(player.get("team"))
-			if _ticket_value(player_team) <= 0:
-				continue
-			player.call(
-				"server_respawn",
-				_get_spawn(player_team, peer_id)
-			)
+		if bool(player.get("alive")):
+			continue
+		if int(player.get("team")) != team_id:
+			continue
+		if _ticket_value(team_id) <= 0:
+			continue
+
+		player.call(
+			"server_respawn",
+			_get_spawn(team_id, peer_id)
+		)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func broadcast_reinforcement_state(
+	attacker_remaining: float,
+	defender_remaining: float
+) -> void:
+	attacker_spawn_wave_remaining = maxf(0.0, attacker_remaining)
+	defender_spawn_wave_remaining = maxf(0.0, defender_remaining)
+
+	var local_team := -1
+	var local_id := multiplayer.get_unique_id()
+	if players.has(local_id):
+		var local_player: Node3D = players[local_id] as Node3D
+		if local_player != null:
+			local_team = int(local_player.get("team"))
+
+	if local_team == 0:
+		spawn_wave_remaining = attacker_spawn_wave_remaining
+	elif local_team == 1:
+		spawn_wave_remaining = defender_spawn_wave_remaining
+	else:
+		spawn_wave_remaining = minf(
+			attacker_spawn_wave_remaining,
+			defender_spawn_wave_remaining
+		)
+
+
+func team_spawn_wave_remaining(team_id: int) -> float:
+	return (
+		attacker_spawn_wave_remaining
+		if team_id == 0
+		else defender_spawn_wave_remaining
+	)
+
+
+func _respawn_wave() -> void:
+	# Compatibility helper for older calls/debug tools.
+	_respawn_team_wave(0)
+	_respawn_team_wave(1)
 
 func server_engineer_interact(engineer: Node3D) -> bool:
 	if not multiplayer.is_server() or match_over:
@@ -6702,11 +7673,37 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 	if objective_stage == 0:
 		var build_site := get_node_or_null("BridgeBuildSite")
 		if engineer_team == 0 and build_site and engineer.global_position.distance_to(build_site.global_position) <= 3.5:
-			bridge_progress = mini(bridge_required, bridge_progress + 1)
+			var vehicle_bonus := allied_vehicle_objective_support_bonus(
+				build_site.global_position,
+				14.0
+			)
+			var build_amount := 1
+			if vehicle_bonus >= 0.08:
+				build_amount += 1
+
+			bridge_progress = mini(
+				bridge_required,
+				bridge_progress + build_amount
+			)
 			engineer.add_xp(5, "construction")
+
+			if build_amount > 1:
+				push_kill_feed.rpc(
+					"Allied vehicle support accelerated bridge construction"
+				)
 			_update_objective_visuals()
 			if bridge_progress >= bridge_required:
 				objective_stage = 1
+				team_callout.rpc(
+					0,
+					"BRIDGE COMPLETE · ADVANCE ON BUNKER",
+					"BRIDGE_COMPLETE_ATK"
+				)
+				team_callout.rpc(
+					1,
+					"BRIDGE LOST · DEFEND THE BUNKER",
+					"BRIDGE_COMPLETE_DEF"
+				)
 				var bridge: Node = get_node_or_null("ConstructedBridge")
 				if bridge:
 					bridge.visible = true
@@ -6743,6 +7740,16 @@ func arm_dynamite(engineer_id: int) -> bool:
 		return false
 	dynamite_armed = true
 	dynamite_remaining = DYNAMITE_FUSE_SECONDS
+	team_callout.rpc(
+		0,
+		"CHARGE ARMED · HOLD THE BUNKER",
+		"CHARGE_ARMED_ATK"
+	)
+	team_callout.rpc(
+		1,
+		"CHARGE ARMED · DEFUSE NOW",
+		"CHARGE_ARMED_DEF"
+	)
 	defuse_progress = 0
 	_update_objective_visuals()
 	push_kill_feed.rpc("%s armed the bunker charge" % player_names.get(engineer_id, "Engineer"))
@@ -6754,6 +7761,394 @@ func damage_objective(amount: int, attacker_team: int) -> void:
 	if not multiplayer.is_server() or match_over or attacker_team != 0: return
 	objective_health = maxi(0, objective_health - amount)
 	if objective_health <= 0: _end_match("ATTACKERS WIN — objective destroyed")
+
+func _build_resupply_stations() -> void:
+	resupply_stations.clear()
+
+	var station_data: Array[Dictionary] = [
+		{
+			"name": "BUNKER AMMO",
+			"position": Vector3(10.6, 0.05, 1.7)
+		},
+		{
+			"name": "DEPOT SUPPLIES",
+			"position": Vector3(-2.1, 0.05, 7.2)
+		},
+		{
+			"name": "COMMAND SUPPLY",
+			"position": Vector3(2.0, 0.05, -7.1)
+		}
+	]
+
+	for index: int in range(station_data.size()):
+		var data: Dictionary = station_data[index]
+		var station: Node3D = ResupplyStationScript.new()
+		station.name = "ResupplyStation_%d" % index
+		add_child(station)
+		station.call(
+			"configure",
+			index,
+			str(data["name"]),
+			Vector3(data["position"])
+		)
+		resupply_stations.append(station)
+
+
+func server_try_resupply_station(player: Node3D) -> bool:
+	if not multiplayer.is_server() or player == null:
+		return false
+	if not bool(player.get("alive")) or bool(player.get("downed")):
+		return false
+
+	var closest_distance: float = 2.45
+	var closest_station: Node3D = null
+
+	for station: Node3D in resupply_stations:
+		if station == null or not is_instance_valid(station):
+			continue
+
+		var distance: float = player.global_position.distance_to(
+			station.global_position
+		)
+		if distance < closest_distance:
+			closest_distance = distance
+			closest_station = station
+
+	if closest_station == null:
+		return false
+
+	return bool(player.call("server_receive_resupply"))
+
+
+func _server_create_casualty_marker(
+	team_id: int,
+	position: Vector3,
+	body_yaw: float
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var casualty_id: int = next_casualty_id
+	next_casualty_id += 1
+
+	var safe_position := position
+	safe_position.y = maxf(safe_position.y, 0.03)
+
+	spawn_casualty_marker.rpc(
+		casualty_id,
+		clampi(team_id, 0, 1),
+		safe_position,
+		body_yaw,
+		28.0
+	)
+
+	get_tree().create_timer(28.0).timeout.connect(
+		func() -> void:
+			if multiplayer.is_server():
+				server_remove_casualty_marker(casualty_id)
+	)
+
+
+@rpc("authority", "call_local", "reliable")
+func spawn_casualty_marker(
+	casualty_id: int,
+	team_id: int,
+	position: Vector3,
+	body_yaw: float,
+	duration_seconds: float
+) -> void:
+	if casualty_markers.has(casualty_id):
+		return
+
+	var casualty: Node3D = CasualtyMarkerScript.new()
+	casualty.name = "Casualty_%d" % casualty_id
+	add_child(casualty)
+	casualty.call(
+		"configure",
+		casualty_id,
+		team_id,
+		position,
+		body_yaw,
+		duration_seconds
+	)
+	casualty_markers[casualty_id] = casualty
+
+
+func server_remove_casualty_marker(casualty_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	if not casualty_markers.has(casualty_id):
+		return
+	remove_casualty_marker.rpc(casualty_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func remove_casualty_marker(casualty_id: int) -> void:
+	if not casualty_markers.has(casualty_id):
+		return
+
+	var casualty: Node3D = casualty_markers.get(casualty_id) as Node3D
+	casualty_markers.erase(casualty_id)
+
+	if casualty != null and is_instance_valid(casualty):
+		casualty.queue_free()
+
+
+func server_spawn_player_death_drops(victim: Node3D) -> void:
+	if not multiplayer.is_server() or victim == null:
+		return
+
+	# v8.85: preserve a temporary casualty silhouette at the exact death
+	# location before the live player node is hidden/respawned.
+	_server_create_casualty_marker(
+		int(victim.get("team")),
+		victim.global_position,
+		victim.rotation.y
+	)
+
+	var slots_variant: Variant = victim.get("weapon_slots")
+	var mags_variant: Variant = victim.get("weapon_magazines")
+	var reserves_variant: Variant = victim.get("weapon_reserves")
+	var teams_variant: Variant = victim.get("weapon_slot_teams")
+
+	if not slots_variant is Array:
+		return
+
+	var slots: Array = slots_variant
+	var mags: Array = mags_variant if mags_variant is Array else []
+	var reserves: Array = reserves_variant if reserves_variant is Array else []
+	var slot_teams: Array = teams_variant if teams_variant is Array else []
+
+	# v8.83: ONLY the weapon that was actually in the victim's hands drops.
+	var active_slot: int = clampi(
+		int(victim.get("current_weapon_index")),
+		0,
+		maxi(0, slots.size() - 1)
+	)
+	if active_slot >= slots.size():
+		return
+
+	var active_weapon: Resource = slots[active_slot] as Resource
+	var death_position: Vector3 = victim.global_position
+	death_position.y = maxf(death_position.y, 0.08)
+
+	if (
+		active_weapon != null
+		and not active_weapon.resource_path.is_empty()
+	):
+		var source_team: int = (
+			int(slot_teams[active_slot])
+			if active_slot < slot_teams.size()
+			else int(victim.get("team"))
+		)
+		var mag: int = (
+			int(mags[active_slot])
+			if active_slot < mags.size()
+			else 0
+		)
+		var reserve: int = (
+			int(reserves[active_slot])
+			if active_slot < reserves.size()
+			else 0
+		)
+
+		_server_create_battlefield_pickup(
+			"weapon",
+			active_slot,
+			source_team,
+			active_weapon.resource_path,
+			mag,
+			reserve,
+			0,
+			death_position + (
+				Vector3(0.62, 0.10, 0.34)
+				if active_slot == 0
+				else Vector3(0.48, 0.10, 0.22)
+			)
+		)
+
+	# A small loose-ammo pouch still drops independently. This represents
+	# magazines/ammunition carried on the body rather than a second gun.
+	var ammo_total: int = 0
+	for reserve_value: Variant in reserves:
+		ammo_total += maxi(0, int(reserve_value))
+
+	var pouch_amount: int = clampi(
+		int(round(float(ammo_total) * 0.16)),
+		15,
+		45
+	)
+
+	_server_create_battlefield_pickup(
+		"ammo",
+		-1,
+		int(victim.get("team")),
+		"",
+		0,
+		0,
+		pouch_amount,
+		death_position + Vector3(-0.48, 0.08, 0.40)
+	)
+
+
+
+func _server_create_battlefield_pickup(
+	kind: String,
+	slot_index: int,
+	source_team: int,
+	resource_path: String,
+	magazine: int,
+	reserve: int,
+	ammo_amount: int,
+	position: Vector3
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var drop_id: int = next_battlefield_pickup_id
+	next_battlefield_pickup_id += 1
+
+	spawn_battlefield_pickup.rpc(
+		drop_id,
+		kind,
+		slot_index,
+		source_team,
+		resource_path,
+		magazine,
+		reserve,
+		ammo_amount,
+		position
+	)
+
+	# Prevent long-running rounds from accumulating old dropped equipment.
+	get_tree().create_timer(55.0).timeout.connect(
+		func() -> void:
+			if multiplayer.is_server():
+				server_remove_battlefield_pickup(drop_id)
+	)
+
+
+@rpc("authority", "call_local", "reliable")
+func spawn_battlefield_pickup(
+	drop_id: int,
+	kind: String,
+	slot_index: int,
+	source_team: int,
+	resource_path: String,
+	magazine: int,
+	reserve: int,
+	ammo_amount: int,
+	position: Vector3
+) -> void:
+	if battlefield_pickups.has(drop_id):
+		return
+
+	var pickup: Node3D = BattlefieldPickupScript.new()
+	pickup.name = "BattlefieldPickup_%d" % drop_id
+	add_child(pickup)
+	pickup.call(
+		"configure",
+		drop_id,
+		kind,
+		slot_index,
+		source_team,
+		resource_path,
+		magazine,
+		reserve,
+		ammo_amount,
+		position
+	)
+	battlefield_pickups[drop_id] = pickup
+
+
+func server_try_battlefield_pickup(player: Node3D) -> bool:
+	if not multiplayer.is_server() or player == null:
+		return false
+	if not bool(player.get("alive")) or bool(player.get("downed")):
+		return false
+
+	var closest_id: int = -1
+	var closest: Node3D = null
+	var closest_distance: float = 2.35
+
+	for drop_id_value: Variant in battlefield_pickups:
+		var drop_id: int = int(drop_id_value)
+		var candidate: Node3D = battlefield_pickups.get(drop_id) as Node3D
+		if candidate == null or not is_instance_valid(candidate):
+			continue
+
+		var distance: float = player.global_position.distance_to(
+			candidate.global_position
+		)
+		if distance < closest_distance:
+			closest_distance = distance
+			closest_id = drop_id
+			closest = candidate
+
+	if closest == null:
+		return false
+
+	var kind: String = str(closest.get("pickup_kind"))
+	if kind == "ammo":
+		var amount: int = int(closest.get("ammo_amount"))
+		if bool(player.call("server_add_battlefield_ammo", amount)):
+			server_remove_battlefield_pickup(closest_id)
+			return true
+		return false
+
+	var slot_index: int = int(closest.get("slot_index"))
+	var resource_path: String = str(closest.get("weapon_resource_path"))
+	var source_team: int = int(closest.get("source_team"))
+	var magazine: int = int(closest.get("magazine_ammo"))
+	var reserve: int = int(closest.get("reserve_ammo"))
+
+	# If the player already owns this exact weapon in the correct slot,
+	# interacting scavenges the dropped gun's remaining ammunition instead
+	# of pointlessly replacing an identical weapon.
+	if bool(player.call(
+		"server_absorb_matching_dropped_weapon",
+		slot_index,
+		resource_path,
+		magazine,
+		reserve
+	)):
+		server_remove_battlefield_pickup(closest_id)
+		return true
+
+	# Different weapon in the same category: swap it into that slot.
+	if bool(player.call(
+		"server_equip_battlefield_weapon",
+		slot_index,
+		resource_path,
+		source_team,
+		magazine,
+		reserve
+	)):
+		server_remove_battlefield_pickup(closest_id)
+		return true
+
+	return false
+
+
+func server_remove_battlefield_pickup(drop_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	if not battlefield_pickups.has(drop_id):
+		return
+	remove_battlefield_pickup.rpc(drop_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func remove_battlefield_pickup(drop_id: int) -> void:
+	if not battlefield_pickups.has(drop_id):
+		return
+
+	var pickup: Node3D = battlefield_pickups.get(drop_id) as Node3D
+	battlefield_pickups.erase(drop_id)
+
+	if pickup != null and is_instance_valid(pickup):
+		pickup.queue_free()
+
 
 func register_elimination(victim_id: int, attacker_id: int) -> void:
 	var victim: Node3D = players.get(victim_id) as Node3D
@@ -6993,6 +8388,80 @@ func server_explode_grenade(
 			var grenade_owner: Node3D = players[owner_id] as Node3D
 			if grenade_owner != null:
 				grenade_owner.call("server_confirm_hit")
+
+
+	# Explosives also damage vehicles. Damage is intentionally reduced versus
+	# infantry so ordinary grenades threaten armor without replacing tank guns.
+	for vehicle_value: Variant in vehicles.values():
+		var target_vehicle: Node3D = vehicle_value as Node3D
+		if target_vehicle == null:
+			continue
+		if bool(target_vehicle.get("destroyed")):
+			continue
+		if int(target_vehicle.get("team_id")) == owner_team:
+			continue
+
+		var vehicle_distance := explosion_position.distance_to(
+			target_vehicle.global_position
+		)
+		var vehicle_radius := radius * 1.20
+		if vehicle_distance > vehicle_radius:
+			continue
+
+		var vehicle_scale := 1.0 - clampf(
+			vehicle_distance / vehicle_radius,
+			0.0,
+			1.0
+		)
+		var vehicle_damage := maxi(
+			1,
+			int(round(
+				float(maximum_damage)
+				* 0.55
+				* vehicle_scale
+			))
+		)
+
+		var destroyed_now := bool(
+			target_vehicle.call(
+				"server_apply_damage",
+				vehicle_damage
+			)
+		)
+		if destroyed_now:
+			_server_handle_vehicle_destroyed(target_vehicle)
+
+	# Grenades can clear the lightweight battlefield barriers too.
+	for barrier_value: Variant in vehicle_destructible_barriers.values():
+		var barrier: Node3D = barrier_value as Node3D
+		if barrier == null or bool(barrier.get("destroyed")):
+			continue
+
+		var barrier_distance := explosion_position.distance_to(
+			barrier.global_position
+		)
+		if barrier_distance > radius * 1.35:
+			continue
+
+		var barrier_scale := 1.0 - clampf(
+			barrier_distance / (radius * 1.35),
+			0.0,
+			1.0
+		)
+		var barrier_damage := maxi(
+			1,
+			int(round(
+				float(maximum_damage)
+				* 0.85
+				* barrier_scale
+			))
+		)
+
+		if bool(barrier.call("server_apply_damage", barrier_damage)):
+			set_vehicle_barrier_destroyed.rpc(
+				int(barrier.get("barrier_id")),
+				barrier.global_position
+			)
 
 	explode_grenade.rpc(grenade_id, explosion_position)
 
@@ -7322,6 +8791,106 @@ func _notify_world_shot_recoil(start_position: Vector3) -> void:
 	if closest_player != null and closest_player.has_method("register_world_shot_recoil"):
 		closest_player.call("register_world_shot_recoil")
 
+func _world_audio_cap() -> int:
+	if visual_quality_manager == null:
+		return 12
+
+	var preset := clampi(
+		int(visual_quality_manager.get("current_preset")),
+		0,
+		2
+	)
+	if preset == 0:
+		return 6
+	if preset == 2:
+		return 18
+	return 12
+
+
+func _cleanup_world_audio() -> void:
+	for index: int in range(
+		active_world_audio.size() - 1,
+		-1,
+		-1
+	):
+		var node: Node = active_world_audio[index]
+		if node == null or not is_instance_valid(node):
+			active_world_audio.remove_at(index)
+
+	while active_world_audio.size() > _world_audio_cap():
+		var oldest: Node = active_world_audio.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
+
+
+func _play_world_gunshot(position: Vector3) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var viewport: Viewport = get_viewport()
+	if viewport == null:
+		return
+
+	var camera: Camera3D = viewport.get_camera_3d()
+	if camera == null:
+		return
+
+	var distance := camera.global_position.distance_to(position)
+
+	# The shooter's local 2D weapon sound already handles very close fire.
+	if distance < 2.5:
+		return
+
+	var max_distance := 62.0
+	if visual_quality_manager != null:
+		var preset := clampi(
+			int(visual_quality_manager.get("current_preset")),
+			0,
+			2
+		)
+		if preset == 0:
+			max_distance = 38.0
+		elif preset == 2:
+			max_distance = 82.0
+
+	if distance > max_distance:
+		return
+
+	_cleanup_world_audio()
+	if active_world_audio.size() >= _world_audio_cap():
+		return
+
+	var path := "res://audio/world_gunshot.wav"
+	if not ResourceLoader.exists(path):
+		return
+
+	var resource: Resource = load(path)
+	if not resource is AudioStream:
+		return
+
+	var audio := AudioStreamPlayer3D.new()
+	audio.name = "WorldGunshotAudio"
+	audio.stream = resource as AudioStream
+	audio.bus = "SFX"
+	audio.global_position = position
+	audio.max_distance = max_distance
+	audio.unit_size = 3.0
+	audio.attenuation_filter_cutoff_hz = 5200.0
+	audio.attenuation_filter_db = -14.0
+	audio.volume_db = -7.0
+	audio.pitch_scale = randf_range(0.94, 1.06)
+
+	add_child(audio)
+	active_world_audio.append(audio)
+	audio.finished.connect(
+		func() -> void:
+			active_world_audio.erase(audio)
+			if is_instance_valid(audio):
+				audio.queue_free()
+	)
+	audio.play()
+
+
 @rpc("authority", "call_local", "unreliable")
 func show_shot_effect(
 	start_position: Vector3,
@@ -7333,6 +8902,7 @@ func show_shot_effect(
 		return
 	_notify_world_shot_recoil(start_position)
 	_spawn_world_muzzle_effect(start_position, end_position)
+	_play_world_gunshot(start_position)
 
 	var effect_root := Node3D.new()
 	effect_root.name = "ShotEffect"
@@ -7801,6 +9371,14 @@ func _update_objective_visuals() -> void:
 			dynamite_light.light_energy = pulse
 
 func interaction_prompt_for(player: Node3D) -> String:
+	if player != null:
+		var vehicle_prompt := nearest_vehicle_prompt(
+			player.global_position,
+			int(player.get("current_vehicle_id"))
+		)
+		if not vehicle_prompt.is_empty():
+			return vehicle_prompt
+
 	if player == null or not bool(player.get("alive")):
 		return ""
 
@@ -7857,36 +9435,45 @@ func interaction_prompt_for(player: Node3D) -> String:
 
 func objective_status_text() -> String:
 	if match_over:
-		return "Round restarts in %.1fs" % round_restart_remaining
+		return "Round restart %.1fs" % round_restart_remaining
 
 	var overtime_text := " · OVERTIME" if overtime_active else ""
-	var guns_text: String = emplacement_status_text()
 	var post_text := (
-		"Neutral"
+		"NEUTRAL"
 		if command_post_control < 0
 		else (
-			"Attackers"
+			"ATK"
 			if command_post_control == 0
-			else "Defenders"
+			else "DEF"
 		)
 	)
 
 	if objective_stage == 0:
+		var support_text := ""
+		var build_site := get_node_or_null("BridgeBuildSite") as Node3D
+		if build_site != null:
+			var vehicle_bonus := allied_vehicle_objective_support_bonus(
+				build_site.global_position,
+				14.0
+			)
+			if vehicle_bonus >= 0.08:
+				support_text = " · VEHICLE SUPPORT"
+
 		return (
-			"Stage 1: Build bridge %d/%d · Tickets %d-%d · %s%s"
+			"BRIDGE %d/%d · TICKETS %d-%d%s%s"
 			% [
 				bridge_progress,
 				bridge_required,
 				attacker_tickets,
 				defender_tickets,
-				guns_text + " · " + sector_status_text(),
+				support_text,
 				overtime_text
 			]
 		)
 
 	if dynamite_armed:
 		return (
-			"Charge %.1fs · Defuse %d/%d · CP %s · Tickets %d-%d · %s%s"
+			"CHARGE %.1fs · DEFUSE %d/%d · CP %s · TICKETS %d-%d%s"
 			% [
 				dynamite_remaining,
 				defuse_progress,
@@ -7894,22 +9481,30 @@ func objective_status_text() -> String:
 				post_text,
 				attacker_tickets,
 				defender_tickets,
-				guns_text,
 				overtime_text
 			]
 		)
 
 	return (
-		"Destroy bunker %d%% · CP %s · Tickets %d-%d · %s%s"
+		"BUNKER %d%% · CP %s · TICKETS %d-%d · TANK SUPPORT%s"
 		% [
 			objective_health,
 			post_text,
 			attacker_tickets,
 			defender_tickets,
-			guns_text,
 			overtime_text
 		]
 	)
+
+
+
+func extended_match_status_text() -> String:
+	return "%s · %s · %s" % [
+		emplacement_status_text(),
+		sector_status_text(),
+		destructible_cover_status_text()
+	]
+
 
 func round_awards_text() -> String:
 	if players.is_empty():
@@ -8137,6 +9732,10 @@ func scoreboard_text() -> String:
 
 func _spawn_bot(index: int) -> void:
 	if not multiplayer.is_server():
+		return
+	if desired_bot_count <= 0:
+		return
+	if index < 0 or index >= desired_bot_count:
 		return
 
 	var bot_id: int = next_bot_peer_id
@@ -8400,6 +9999,33 @@ func bot_cover_position(
 	)
 
 
+func bot_nearest_hostile_vehicle(bot: Node3D) -> Node3D:
+	if bot == null:
+		return null
+
+	var nearest: Node3D = null
+	var nearest_distance: float = INF
+	var bot_team: int = int(bot.get("team"))
+
+	for vehicle_value: Variant in vehicles.values():
+		var vehicle: Node3D = vehicle_value as Node3D
+		if vehicle == null:
+			continue
+		if bool(vehicle.get("destroyed")):
+			continue
+		if int(vehicle.get("team_id")) == bot_team:
+			continue
+
+		var distance: float = bot.global_position.distance_to(
+			vehicle.global_position
+		)
+		if distance < nearest_distance:
+			nearest = vehicle
+			nearest_distance = distance
+
+	return nearest
+
+
 func bot_goal_position(bot: Node3D) -> Vector3:
 	if bot == null:
 		return Vector3.ZERO
@@ -8515,6 +10141,8 @@ func _reset_round() -> void:
 	match_over = false
 	match_time_remaining = MATCH_LENGTH_SECONDS
 	spawn_wave_remaining = SPAWN_WAVE_SECONDS
+	attacker_spawn_wave_remaining = SPAWN_WAVE_SECONDS
+	defender_spawn_wave_remaining = SPAWN_WAVE_SECONDS
 	objective_health = 100
 	attacker_tickets = INITIAL_TEAM_TICKETS
 	defender_tickets = INITIAL_TEAM_TICKETS
@@ -8584,6 +10212,7 @@ func _reset_round() -> void:
 			beacon_node.queue_free()
 	pending_artillery.clear()
 	_reset_destructible_cover()
+	_reset_vehicle_destructible_barriers()
 
 	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
@@ -8638,6 +10267,1325 @@ func structure_collision_status_text() -> String:
 		int(structure_collision_report.get("box_fallbacks", 0)),
 		int(structure_collision_report.get("failed", 0))
 	]
+
+func _initialize_vehicle_map_and_spawns() -> void:
+	vehicle_map_expansion = VehicleMapExpansionScript.new()
+	vehicle_map_expansion.name = "VehicleMapExpansion"
+	add_child(vehicle_map_expansion)
+	vehicle_map_expansion.call("initialize", self)
+	_initialize_vehicle_destructible_barriers()
+
+	if not multiplayer.is_server():
+		return
+
+	# v8.99.2: stage ground vehicles inside the normal infantry perimeter.
+	# Allied infantry spawns around x=-58..-50.
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.JEEP,
+		0, Vector3(-46.0, 0.15, -18.0), -PI * 0.5
+	)
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.TANK,
+		0, Vector3(-43.0, 0.15, -6.0), -PI * 0.5
+	)
+
+	# Axis infantry spawns around x=50..58.
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.JEEP,
+		1, Vector3(46.0, 0.15, 18.0), PI * 0.5
+	)
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.TANK,
+		1, Vector3(43.0, 0.15, 6.0), PI * 0.5
+	)
+
+	# Aircraft are placed on reachable southern ground near the original map.
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.AIRCRAFT,
+		0, Vector3(-8.0, 0.95, 43.0), PI
+	)
+	_server_create_vehicle(
+		DrivableVehicleScript.VehicleType.AIRCRAFT,
+		1, Vector3(8.0, 0.95, 43.0), PI
+	)
+
+
+func _initialize_vehicle_destructible_barriers() -> void:
+	if not vehicle_destructible_barriers.is_empty():
+		return
+
+	# These are intentionally simple collision/mesh objects. The visual phase
+	# can later replace them with imported wall/sandbag assets without changing
+	# the destruction/networking rules.
+	var data: Array[Dictionary] = [
+		# Western approach — brick wall sections
+		{
+			"id": 1,
+			"position": Vector3(-22.0, 1.05, -8.5),
+			"yaw": 0.05,
+			"size": Vector3(5.4, 2.1, 0.65),
+			"health": 280,
+			"kind": "BRICK"
+		},
+		{
+			"id": 2,
+			"position": Vector3(-21.0, 1.05, 8.8),
+			"yaw": -0.05,
+			"size": Vector3(5.0, 2.1, 0.65),
+			"health": 280,
+			"kind": "BRICK"
+		},
+
+		# Central roadblocks — wood
+		{
+			"id": 3,
+			"position": Vector3(-9.5, 0.85, -12.0),
+			"yaw": 0.22,
+			"size": Vector3(4.6, 1.7, 0.70),
+			"health": 175,
+			"kind": "WOOD"
+		},
+		{
+			"id": 4,
+			"position": Vector3(10.0, 0.85, 11.8),
+			"yaw": -0.20,
+			"size": Vector3(4.6, 1.7, 0.70),
+			"health": 175,
+			"kind": "WOOD"
+		},
+
+		# Sandbag defensive pockets
+		{
+			"id": 5,
+			"position": Vector3(-4.0, 0.65, -17.0),
+			"yaw": 0.0,
+			"size": Vector3(6.2, 1.3, 1.10),
+			"health": 220,
+			"kind": "SANDBAG"
+		},
+		{
+			"id": 6,
+			"position": Vector3(4.0, 0.65, 17.0),
+			"yaw": PI,
+			"size": Vector3(6.2, 1.3, 1.10),
+			"health": 220,
+			"kind": "SANDBAG"
+		},
+
+		# Eastern approach — brick wall sections
+		{
+			"id": 7,
+			"position": Vector3(22.0, 1.05, -8.8),
+			"yaw": 0.05,
+			"size": Vector3(5.0, 2.1, 0.65),
+			"health": 280,
+			"kind": "BRICK"
+		},
+		{
+			"id": 8,
+			"position": Vector3(23.0, 1.05, 8.5),
+			"yaw": -0.05,
+			"size": Vector3(5.4, 2.1, 0.65),
+			"health": 280,
+			"kind": "BRICK"
+		},
+
+		# Concrete anti-vehicle chokes
+		{
+			"id": 9,
+			"position": Vector3(-31.0, 0.75, 2.5),
+			"yaw": 0.0,
+			"size": Vector3(2.8, 1.5, 1.6),
+			"health": 360,
+			"kind": "CONCRETE"
+		},
+		{
+			"id": 10,
+			"position": Vector3(31.0, 0.75, -2.5),
+			"yaw": 0.0,
+			"size": Vector3(2.8, 1.5, 1.6),
+			"health": 360,
+			"kind": "CONCRETE"
+		}
+	]
+
+	for entry: Dictionary in data:
+		var id := int(entry["id"])
+		var barrier: StaticBody3D = VehicleDestructibleBarrierScript.new()
+		barrier.name = "VehicleBarrier_%d" % id
+		add_child(barrier)
+		barrier.call(
+			"configure",
+			id,
+			Vector3(entry["position"]),
+			float(entry["yaw"]),
+			Vector3(entry["size"]),
+			int(entry["health"]),
+			str(entry["kind"])
+		)
+		vehicle_destructible_barriers[id] = barrier
+
+
+
+func _reset_vehicle_destructible_barriers() -> void:
+	for barrier_value: Variant in vehicle_destructible_barriers.values():
+		var barrier: Node = barrier_value as Node
+		if barrier != null and barrier.has_method("reset_barrier"):
+			barrier.call("reset_barrier")
+
+
+@rpc("authority", "call_local", "reliable")
+func set_vehicle_barrier_destroyed(
+	barrier_id: int,
+	impact_position: Vector3
+) -> void:
+	if vehicle_destructible_barriers.has(barrier_id):
+		var barrier: Node = vehicle_destructible_barriers[barrier_id] as Node
+		if barrier != null:
+			barrier.call("set_destroyed_visual")
+
+	if (
+		DisplayServer.get_name() != "headless"
+		and battlefield_effects_manager != null
+	):
+		battlefield_effects_manager.call(
+			"spawn_explosion",
+			impact_position,
+			0.75
+		)
+
+
+func _server_create_vehicle(
+	type_id: int,
+	team_id: int,
+	position: Vector3,
+	yaw: float
+) -> void:
+	if not multiplayer.is_server():
+		return
+	var id := next_vehicle_id
+	next_vehicle_id += 1
+	spawn_vehicle.rpc(id, type_id, team_id, position, yaw)
+
+
+@rpc("authority", "call_local", "reliable")
+func spawn_vehicle(
+	id: int,
+	type_id: int,
+	team_id: int,
+	position: Vector3,
+	yaw: float
+) -> void:
+	if vehicles.has(id):
+		return
+	var vehicle: Node3D = DrivableVehicleScript.new()
+	vehicle.name = "Vehicle_%d" % id
+	add_child(vehicle)
+	vehicle.call("configure", id, type_id, team_id, position, yaw)
+	vehicles[id] = vehicle
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func submit_vehicle_input(
+	peer_id: int,
+	vehicle_id: int,
+	throttle: float,
+	steering: float,
+	pitch_value: float,
+	fire_pressed: bool
+) -> void:
+	if not multiplayer.is_server():
+		return
+	if multiplayer.get_remote_sender_id() != peer_id:
+		return
+	if not vehicles.has(vehicle_id):
+		return
+	var vehicle: Node = vehicles.get(vehicle_id) as Node
+	if vehicle == null:
+		return
+	vehicle.call(
+		"server_set_input",
+		peer_id,
+		throttle,
+		steering,
+		pitch_value,
+		fire_pressed
+	)
+
+	if fire_pressed:
+		_server_vehicle_fire(vehicle_id, peer_id)
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func submit_vehicle_gunner_input(
+	vehicle_id: int,
+	yaw_delta: float,
+	fire_pressed: bool
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var peer_id := multiplayer.get_remote_sender_id()
+	if peer_id <= 0 or not vehicles.has(vehicle_id):
+		return
+
+	var vehicle: Node = vehicles.get(vehicle_id) as Node
+	if vehicle == null:
+		return
+
+	vehicle.call(
+		"server_set_gunner_input",
+		peer_id,
+		yaw_delta,
+		fire_pressed
+	)
+
+	if fire_pressed:
+		_server_vehicle_fire(vehicle_id, peer_id)
+
+
+func _update_vehicle_respawns() -> void:
+	if not multiplayer.is_server():
+		return
+
+	var now := Time.get_ticks_msec()
+	var ready: Array[int] = []
+
+	for id_value: Variant in vehicle_respawn_at_ms:
+		var id := int(id_value)
+		var respawn_time := int(vehicle_respawn_at_ms[id])
+		if now >= respawn_time:
+			ready.append(id)
+
+	for id: int in ready:
+		if vehicles.has(id):
+			var vehicle: Node = vehicles.get(id) as Node
+			if vehicle != null:
+				vehicle.call("reset_for_respawn")
+				show_vehicle_respawn.rpc(
+					id,
+					Vector3((vehicle as Node3D).global_position),
+					float((vehicle as Node3D).rotation.y)
+				)
+		vehicle_respawn_at_ms.erase(id)
+
+
+@rpc("authority", "call_local", "reliable")
+func show_vehicle_respawn(
+	vehicle_id: int,
+	position: Vector3,
+	yaw: float
+) -> void:
+	if not vehicles.has(vehicle_id):
+		return
+
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if vehicle == null:
+		return
+
+	vehicle.global_position = position
+	vehicle.rotation.y = yaw
+	vehicle.call("reset_for_respawn")
+
+
+func allied_vehicle_objective_support_bonus(
+	objective_position: Vector3,
+	radius: float = 14.0
+) -> float:
+	if not multiplayer.is_server():
+		return 0.0
+
+	var bonus := 0.0
+	for id_value: Variant in vehicles:
+		var vehicle: Node3D = vehicles.get(int(id_value)) as Node3D
+		if vehicle == null:
+			continue
+		if int(vehicle.get("team_id")) != 0:
+			continue
+		if bool(vehicle.get("destroyed")):
+			continue
+		if int(vehicle.get("driver_peer_id")) == 0:
+			continue
+		if vehicle.global_position.distance_to(objective_position) <= radius:
+			bonus += 0.08
+
+	return minf(bonus, 0.24)
+
+
+func _vector3_is_finite(value: Vector3) -> bool:
+	return not (
+		is_nan(value.x) or is_inf(value.x)
+		or is_nan(value.y) or is_inf(value.y)
+		or is_nan(value.z) or is_inf(value.z)
+	)
+
+
+func _float_is_finite(value: float) -> bool:
+	return not is_nan(value) and not is_inf(value)
+
+
+func _server_damage_vehicle_barrier_from_bullet(
+	collider: Object,
+	damage: int,
+	impact_position: Vector3
+) -> bool:
+	if not multiplayer.is_server() or collider == null:
+		return false
+	if not collider.has_method("server_apply_damage"):
+		return false
+	if collider.get("barrier_id") == null:
+		return false
+
+	var barrier := collider as Node
+	var kind := str(barrier.get("barrier_kind"))
+
+	var scaled_damage := 0
+	match kind:
+		"WOOD":
+			scaled_damage = maxi(1, int(round(damage * 0.65)))
+		"SANDBAG":
+			scaled_damage = maxi(1, int(round(damage * 0.28)))
+		"BRICK":
+			scaled_damage = maxi(1, int(round(damage * 0.10)))
+		"CONCRETE":
+			scaled_damage = 0
+
+	if scaled_damage <= 0:
+		return true
+
+	if bool(barrier.call("server_apply_damage", scaled_damage)):
+		set_vehicle_barrier_destroyed.rpc(
+			int(barrier.get("barrier_id")),
+			impact_position
+		)
+
+	return true
+
+
+func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
+	if not multiplayer.is_server() or not vehicles.has(vehicle_id):
+		return
+
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if vehicle == null:
+		return
+	if bool(vehicle.get("destroyed")):
+		return
+	if int(vehicle.call("weapon_owner_peer")) != peer_id:
+		return
+
+	var damage := int(vehicle.call("weapon_damage"))
+	var weapon_range := float(vehicle.call("weapon_range"))
+	if damage <= 0 or weapon_range <= 0.0:
+		return
+
+	if not bool(vehicle.call("consume_weapon_round")):
+		return
+
+	var origin := Vector3(vehicle.call("weapon_origin"))
+	var direction := Vector3(vehicle.call("weapon_direction"))
+
+	if (
+		not _vector3_is_finite(origin)
+		or not _vector3_is_finite(direction)
+		or direction.length_squared() < 0.000001
+	):
+		return
+
+	direction = direction.normalized()
+	var end := origin + direction * weapon_range
+	if not _vector3_is_finite(end):
+		return
+
+	var query := PhysicsRayQueryParameters3D.create(origin, end)
+	query.exclude = [vehicle]
+	query.collision_mask = 1
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+
+	var vehicle_world: World3D = vehicle.get_world_3d()
+	if vehicle_world == null:
+		return
+	var hit := vehicle_world.direct_space_state.intersect_ray(query)
+	if not hit.is_empty():
+		end = Vector3(hit.get("position", end))
+		var collider: Object = hit.get("collider")
+
+		if (
+			collider != null
+			and collider.name == "Objective"
+			and objective_stage == 1
+			and int(vehicle.get("team_id")) == 0
+			and int(vehicle.get("vehicle_type")) == 1
+		):
+			# Tank shells can support the bunker assault, but dynamite remains
+			# substantially more efficient. Direct cannon hit = 12 integrity.
+			damage_objective(12, 0)
+
+		elif (
+			collider != null
+			and collider.has_method("server_apply_damage")
+			and collider.get("barrier_id") != null
+		):
+			var barrier := collider as Node
+			var barrier_destroyed := bool(
+				barrier.call("server_apply_damage", damage)
+			)
+			if barrier_destroyed:
+				set_vehicle_barrier_destroyed.rpc(
+					int(barrier.get("barrier_id")),
+					end
+				)
+
+		elif (
+			collider != null
+			and collider.has_method("server_apply_damage")
+			and collider.get("vehicle_id") != null
+		):
+			var target_vehicle := collider as Node
+			if int(target_vehicle.get("team_id")) != int(vehicle.get("team_id")):
+				var destroyed_now := bool(
+					target_vehicle.call("server_apply_damage", damage)
+				)
+				if destroyed_now:
+					_server_handle_vehicle_destroyed(target_vehicle)
+
+		elif collider != null and collider.has_method("server_take_damage"):
+			var target_team_value: Variant = collider.get("team")
+			var target_team := -1
+			if target_team_value != null:
+				target_team = int(target_team_value)
+			if target_team != int(vehicle.get("team_id")):
+				collider.call("server_take_damage", damage, peer_id)
+
+	show_vehicle_weapon_effect.rpc(
+		origin,
+		end,
+		float(vehicle.call("impact_scale"))
+	)
+	show_combat_tracer.rpc(origin, end, true)
+	show_combat_impact.rpc(end, Vector3.UP, true)
+	show_vehicle_muzzle_flash.rpc(
+		origin,
+		float(vehicle.call("impact_scale"))
+	)
+
+
+func _server_handle_vehicle_destroyed(vehicle: Node) -> void:
+	if not multiplayer.is_server() or vehicle == null:
+		return
+
+	var driver_id := int(vehicle.get("driver_peer_id"))
+	var gunner_id := int(vehicle.get("gunner_peer_id"))
+	var vehicle_id := int(vehicle.get("vehicle_id"))
+	var position := (vehicle as Node3D).global_position
+
+	vehicle.call("set_destroyed_visual")
+	show_vehicle_explosion.rpc(position, 2.1)
+	vehicle_respawn_at_ms[vehicle_id] = Time.get_ticks_msec() + 20000
+
+	if driver_id > 0 and players.has(driver_id):
+		var player: Node = players.get(driver_id) as Node
+		if player != null:
+			var exit_position := _safe_vehicle_exit_position(vehicle as Node3D, player as Node3D)
+			player.call("server_set_vehicle_state", -1, exit_position, -1)
+			vehicle_state_changed.rpc(driver_id, -1, exit_position, -1)
+
+	if gunner_id > 0 and players.has(gunner_id):
+		var gunner: Node = players.get(gunner_id) as Node
+		if gunner != null:
+			var gunner_exit := _safe_vehicle_exit_position(vehicle as Node3D, gunner as Node3D)
+			gunner.call("server_set_vehicle_state", -1, gunner_exit, -1)
+			vehicle_state_changed.rpc(gunner_id, -1, gunner_exit, -1)
+
+	vehicle_next_fire_ms.erase(vehicle_id)
+
+
+@rpc("authority", "call_local", "unreliable")
+func show_vehicle_muzzle_flash(
+	position: Vector3,
+	scale_factor: float
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager != null:
+		battlefield_effects_manager.call(
+			"spawn_vehicle_muzzle_flash",
+			position,
+			scale_factor
+		)
+
+
+@rpc("authority", "call_local", "unreliable")
+func show_vehicle_weapon_effect(
+	origin: Vector3,
+	end: Vector3,
+	impact_scale: float
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	if has_method("show_shot_effect"):
+		show_shot_effect(origin, end, false, false)
+
+	if battlefield_effects_manager != null:
+		battlefield_effects_manager.call(
+			"spawn_explosion",
+			end,
+			impact_scale
+		)
+
+
+@rpc("authority", "call_local", "reliable")
+func show_vehicle_explosion(
+	position: Vector3,
+	scale_factor: float
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager != null:
+		battlefield_effects_manager.call(
+			"spawn_explosion",
+			position,
+			scale_factor
+		)
+		battlefield_effects_manager.call(
+			"spawn_fire",
+			position,
+			10.0
+		)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_vehicle_repair(vehicle_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+
+	var peer_id := multiplayer.get_remote_sender_id()
+	if peer_id <= 0 or not players.has(peer_id):
+		return
+	if not vehicles.has(vehicle_id):
+		return
+
+	var player: Node3D = players.get(peer_id) as Node3D
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if player == null or vehicle == null:
+		return
+
+	if player.global_position.distance_to(vehicle.global_position) > 4.8:
+		return
+
+	# ENGINEER is class enum index 2 in the existing player class layout.
+	if int(player.get("player_class")) != 2:
+		return
+
+	var repaired := int(vehicle.call("server_repair", 85))
+	if repaired > 0:
+		vehicle_repair_feedback.rpc_id(
+			peer_id,
+			vehicle_id,
+			repaired
+		)
+
+
+@rpc("authority", "call_remote", "reliable")
+func vehicle_repair_feedback(
+	vehicle_id: int,
+	repaired_amount: int
+) -> void:
+	if not players.has(multiplayer.get_unique_id()):
+		return
+
+	var local_player: Node = players.get(
+		multiplayer.get_unique_id()
+	) as Node
+	if local_player != null:
+		local_player.call(
+			"show_vehicle_repair_feedback",
+			vehicle_id,
+			repaired_amount
+		)
+
+
+func vehicle_service_position(team_id: int) -> Vector3:
+	return ALLIED_SERVICE_POSITION if team_id == 0 else AXIS_SERVICE_POSITION
+
+
+func vehicle_in_service_zone(vehicle: Node3D) -> bool:
+	if vehicle == null:
+		return false
+	var service_position := vehicle_service_position(
+		int(vehicle.get("team_id"))
+	)
+	return (
+		vehicle.global_position.distance_to(service_position)
+		<= VEHICLE_SERVICE_RADIUS
+	)
+
+
+func _update_vehicle_service_zones() -> void:
+	if not multiplayer.is_server():
+		return
+
+	for id_value: Variant in vehicles:
+		var vehicle: Node3D = vehicles.get(int(id_value)) as Node3D
+		if vehicle == null:
+			continue
+		if bool(vehicle.get("destroyed")):
+			continue
+		if not vehicle_in_service_zone(vehicle):
+			continue
+
+		# Service areas work whether occupied or empty, but require the vehicle
+		# to be nearly stopped so they cannot be abused as drive-through healing.
+		if float(vehicle.call("current_speed_kph")) > 6.0:
+			continue
+
+		vehicle.call(
+			"server_repair",
+			VEHICLE_SERVICE_REPAIR
+		)
+		vehicle.call(
+			"server_resupply_vehicle",
+			VEHICLE_SERVICE_AMMO
+		)
+
+
+func vehicle_service_status(vehicle_id: int) -> String:
+	if not vehicles.has(vehicle_id):
+		return ""
+
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if vehicle == null:
+		return ""
+
+	if vehicle_in_service_zone(vehicle):
+		if float(vehicle.call("current_speed_kph")) <= 6.0:
+			return "SERVICE · REPAIR/REARM"
+		return "SERVICE · SLOW BELOW 6 KM/H"
+
+	return ""
+
+
+func vehicle_tactical_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+
+	for id_value: Variant in vehicles:
+		var id := int(id_value)
+		var vehicle: Node3D = vehicles.get(id) as Node3D
+		if vehicle == null:
+			continue
+
+		entries.append({
+			"id": id,
+			"name": str(vehicle.call("display_name")),
+			"position": vehicle.global_position,
+			"team": int(vehicle.get("team_id")),
+			"destroyed": bool(vehicle.get("destroyed")),
+			"driver": int(vehicle.get("driver_peer_id")),
+			"gunner": int(vehicle.get("gunner_peer_id")),
+			"health": int(vehicle.get("health")),
+			"max_health": int(vehicle.get("max_health"))
+		})
+
+	return entries
+
+
+func interaction_prompt_for_player(player: Node3D) -> String:
+	if player == null:
+		return ""
+	if not bool(player.get("alive")):
+		return ""
+	if bool(player.get("downed")):
+		return ""
+
+	var player_position: Vector3 = player.global_position
+	var current_vehicle: int = int(player.get("current_vehicle_id"))
+
+	# 1. VEHICLES — same highest priority as server_interact_request().
+	var vehicle_prompt: String = nearest_vehicle_prompt(
+		player_position,
+		current_vehicle
+	)
+	if not vehicle_prompt.is_empty():
+		return vehicle_prompt
+
+	# 2. DROPPED WEAPON / AMMO.
+	var nearest_pickup: Node3D = null
+	var pickup_distance: float = 2.55
+	for pickup_value: Variant in battlefield_pickups.values():
+		var pickup: Node3D = pickup_value as Node3D
+		if pickup == null or not is_instance_valid(pickup):
+			continue
+		var distance: float = player_position.distance_to(
+			pickup.global_position
+		)
+		if distance < pickup_distance:
+			pickup_distance = distance
+			nearest_pickup = pickup
+
+	if nearest_pickup != null:
+		var pickup_kind: String = str(
+			nearest_pickup.get("pickup_kind")
+		)
+		if pickup_kind == "ammo":
+			return "E · TAKE AMMO"
+
+		var pickup_slot: int = int(
+			nearest_pickup.get("slot_index")
+		)
+		return (
+			"E · SWAP %s WEAPON"
+			% (
+				"PRIMARY"
+				if pickup_slot == 0
+				else "SECONDARY"
+			)
+		)
+
+	# 3. FIXED RESUPPLY STATIONS.
+	for station: Node3D in resupply_stations:
+		if station == null or not is_instance_valid(station):
+			continue
+		if player_position.distance_to(station.global_position) <= 2.65:
+			return "E · RESUPPLY AMMO"
+
+	# 4. MEDIC REVIVE.
+	if int(player.get("player_class")) == 1:
+		var player_team: int = int(player.get("team"))
+		for candidate_value: Variant in players.values():
+			var candidate: Node3D = candidate_value as Node3D
+			if candidate == null or candidate == player:
+				continue
+			if int(candidate.get("team")) != player_team:
+				continue
+			if not bool(candidate.get("alive")):
+				continue
+			if not bool(candidate.get("downed")):
+				continue
+			if player_position.distance_to(
+				candidate.global_position
+			) <= 3.25:
+				var candidate_name: String = str(
+					candidate.get("player_name")
+				)
+				if candidate_name.is_empty():
+					candidate_name = "TEAMMATE"
+				return "E · REVIVE %s" % candidate_name
+
+	# 5. ENGINEER OBJECTIVE ACTION.
+	if int(player.get("player_class")) == 2:
+		var engineer_team: int = int(player.get("team"))
+
+		if objective_stage == 0:
+			var build_site: Node3D = (
+				get_node_or_null("BridgeBuildSite") as Node3D
+			)
+			if (
+				engineer_team == 0
+				and build_site != null
+				and player_position.distance_to(
+					build_site.global_position
+				) <= 4.0
+			):
+				return "E · BUILD BRIDGE · %d/%d" % [
+					bridge_progress,
+					bridge_required
+				]
+		else:
+			var objective: Node3D = (
+				get_node_or_null("Objective") as Node3D
+			)
+			if (
+				objective != null
+				and player_position.distance_to(
+					objective.global_position
+				) <= 4.0
+			):
+				if engineer_team == 0 and not dynamite_armed:
+					return "E · ARM DYNAMITE"
+
+				if engineer_team == 1 and dynamite_armed:
+					return "E · DEFUSE CHARGE · %d/%d" % [
+						defuse_progress,
+						defuse_required
+					]
+
+	return ""
+
+
+func nearest_vehicle_prompt(
+	player_position: Vector3,
+	current_vehicle_id: int
+) -> String:
+	if current_vehicle_id >= 0:
+		return "E · EXIT VEHICLE"
+
+	var nearest: Node3D = null
+	var nearest_distance := 5.5
+
+	for id_value: Variant in vehicles:
+		var id := int(id_value)
+		var vehicle: Node3D = vehicles.get(id) as Node3D
+		if vehicle == null:
+			continue
+		if int(vehicle.get("driver_peer_id")) != 0:
+			continue
+
+		var distance := player_position.distance_to(vehicle.global_position)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest = vehicle
+
+	if nearest == null:
+		return ""
+
+	var seat_id := int(nearest.call(
+		"available_seat_for",
+		multiplayer.get_unique_id()
+	))
+	var seat_name := "DRIVER" if seat_id == 0 else "GUNNER"
+	var damaged := (
+		int(nearest.get("health"))
+		< int(nearest.get("max_health"))
+	)
+	if damaged:
+		return "E · ENTER %s · %s · ENGINEER R REPAIR" % [
+			str(nearest.call("display_name")),
+			seat_name
+		]
+
+	return "E · ENTER %s · %s" % [
+		str(nearest.call("display_name")),
+		seat_name
+	]
+
+
+func vehicle_seat_position(vehicle_id: int) -> Vector3:
+	if not vehicles.has(vehicle_id):
+		return Vector3.ZERO
+	var vehicle: Node3D = vehicles.get(vehicle_id) as Node3D
+	if vehicle == null:
+		return Vector3.ZERO
+	return Vector3(vehicle.call("seat_position"))
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_vehicle_interact() -> void:
+	if not multiplayer.is_server():
+		return
+
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id <= 0 or not players.has(sender_id):
+		return
+
+	var player: Node3D = players.get(sender_id) as Node3D
+	if player == null:
+		return
+
+	server_try_vehicle_interact(player)
+
+
+func _safe_vehicle_exit_position(
+	vehicle: Node3D,
+	player: Node3D
+) -> Vector3:
+	if vehicle == null:
+		return (
+			player.global_position + Vector3.UP * 1.0
+			if player != null
+			else Vector3(0.0, 2.0, 0.0)
+		)
+
+	var candidates: Array[Vector3] = []
+	if vehicle.has_method("exit_position_candidates"):
+		candidates = vehicle.call(
+			"exit_position_candidates"
+		) as Array[Vector3]
+
+	if candidates.is_empty():
+		candidates.append(
+			Vector3(vehicle.call("exit_position"))
+		)
+
+	var world := vehicle.get_world_3d()
+	if world == null:
+		return candidates[0]
+
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.42
+	capsule.height = 1.65
+
+	var exclude_rids: Array[RID] = []
+	if vehicle is CollisionObject3D:
+		exclude_rids.append(
+			(vehicle as CollisionObject3D).get_rid()
+		)
+	if player != null and player is CollisionObject3D:
+		exclude_rids.append(
+			(player as CollisionObject3D).get_rid()
+		)
+
+	for candidate: Vector3 in candidates:
+		if not _vector3_is_finite(candidate):
+			continue
+
+		# First place the capsule where the player's body would occupy space.
+		var shape_query := PhysicsShapeQueryParameters3D.new()
+		shape_query.shape = capsule
+		shape_query.transform = Transform3D(
+			Basis.IDENTITY,
+			candidate + Vector3.UP * 0.78
+		)
+		shape_query.collision_mask = 1
+		shape_query.exclude = exclude_rids
+		shape_query.collide_with_bodies = true
+		shape_query.collide_with_areas = false
+
+		var overlaps := (
+			world.direct_space_state.intersect_shape(
+				shape_query,
+				2
+			)
+		)
+		if not overlaps.is_empty():
+			continue
+
+		# Snap candidate onto nearby ground when possible.
+		var ground_query := PhysicsRayQueryParameters3D.create(
+			candidate + Vector3.UP * 1.5,
+			candidate + Vector3.DOWN * 3.5
+		)
+		ground_query.exclude = exclude_rids
+		ground_query.collision_mask = 1
+		ground_query.collide_with_bodies = true
+		ground_query.collide_with_areas = false
+
+		var ground_hit := (
+			world.direct_space_state.intersect_ray(
+				ground_query
+			)
+		)
+		if not ground_hit.is_empty():
+			var ground_position := Vector3(
+				ground_hit.get(
+					"position",
+					candidate
+				)
+			)
+			return ground_position + Vector3.UP * 1.05
+
+		return candidate
+
+	# Emergency fallback: above the vehicle, where normal player physics can
+	# settle the character downward rather than placing them inside a wall.
+	return vehicle.global_position + Vector3.UP * 3.2
+
+
+func server_try_vehicle_interact(player: Node3D) -> bool:
+	if not multiplayer.is_server() or player == null:
+		return false
+
+	var peer_id := int(player.get("peer_id"))
+	var current_id := -1
+	var current_vehicle_value: Variant = player.get("current_vehicle_id")
+	if current_vehicle_value != null:
+		current_id = int(current_vehicle_value)
+
+	if current_id >= 0 and vehicles.has(current_id):
+		var occupied: Node3D = vehicles.get(current_id) as Node3D
+		if occupied != null and bool(occupied.call("server_exit", peer_id)):
+			var exit_position := _safe_vehicle_exit_position(
+				occupied,
+				player
+			)
+			player.call(
+				"server_set_vehicle_state",
+				-1,
+				exit_position,
+				-1
+			)
+			vehicle_state_changed.rpc(
+				peer_id,
+				-1,
+				exit_position,
+				-1
+			)
+			return true
+
+	var nearest_id := -1
+	var nearest_distance := 5.5
+	for id_value: Variant in vehicles:
+		var id := int(id_value)
+		var candidate: Node3D = vehicles.get(id) as Node3D
+		if candidate == null:
+			continue
+		var distance := player.global_position.distance_to(candidate.global_position)
+		if distance >= nearest_distance:
+			continue
+		if not bool(candidate.call("can_enter", peer_id, player.global_position)):
+			continue
+		nearest_id = id
+		nearest_distance = distance
+
+	if nearest_id < 0:
+		return false
+
+	var selected: Node3D = vehicles.get(nearest_id) as Node3D
+	if selected == null:
+		return false
+
+	var seat_id := int(selected.call("server_enter", peer_id))
+	if seat_id < 0:
+		return false
+
+	var seat_position := Vector3(selected.call("seat_position_for", peer_id))
+	player.call(
+		"server_set_vehicle_state",
+		nearest_id,
+		seat_position,
+		seat_id
+	)
+	vehicle_state_changed.rpc(
+		peer_id,
+		nearest_id,
+		seat_position,
+		seat_id
+	)
+	return true
+
+
+@rpc("authority", "call_local", "reliable")
+func vehicle_state_changed(
+	peer_id: int,
+	vehicle_id: int,
+	position: Vector3,
+	seat_id: int
+) -> void:
+	if not players.has(peer_id):
+		return
+	var player: Node = players.get(peer_id) as Node
+	if player != null:
+		player.call(
+			"client_set_vehicle_state",
+			vehicle_id,
+			position,
+			seat_id
+		)
+
+
+func _initialize_ambient_battlefield_fx() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager == null:
+		return
+	if not ambient_battlefield_effects.is_empty():
+		return
+
+	var smoke_positions: Array[Vector3] = [
+		Vector3(-28.0, 0.2, -18.0),
+		Vector3(27.0, 0.2, 16.0),
+		Vector3(-6.0, 0.2, 25.0),
+		Vector3(10.0, 0.2, -26.0)
+	]
+
+	for position: Vector3 in smoke_positions:
+		var smoke: Node3D = battlefield_effects_manager.call(
+			"spawn_ambient_smoke_column",
+			position,
+			0.85
+		)
+		if smoke != null:
+			ambient_battlefield_effects.append(smoke)
+
+	var fire_positions: Array[Vector3] = [
+		Vector3(-14.0, 0.15, 13.0),
+		Vector3(17.0, 0.15, -13.5)
+	]
+
+	for position: Vector3 in fire_positions:
+		var fire: Node3D = battlefield_effects_manager.call(
+			"spawn_ambient_fire_pocket",
+			position
+		)
+		if fire != null:
+			ambient_battlefield_effects.append(fire)
+
+
+@rpc("authority", "call_local", "unreliable")
+func show_combat_tracer(
+	start: Vector3,
+	end: Vector3,
+	heavy: bool = false
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager == null:
+		return
+	if not _vector3_is_finite(start) or not _vector3_is_finite(end):
+		return
+
+	battlefield_effects_manager.call(
+		"spawn_tracer",
+		start,
+		end,
+		heavy
+	)
+
+
+@rpc("authority", "call_local", "unreliable")
+func show_combat_impact(
+	position: Vector3,
+	normal: Vector3,
+	heavy: bool = false
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager == null:
+		return
+	if not _vector3_is_finite(position):
+		return
+
+	var safe_normal := normal
+	if not _vector3_is_finite(safe_normal) or safe_normal.length_squared() < 0.001:
+		safe_normal = Vector3.UP
+	else:
+		safe_normal = safe_normal.normalized()
+
+	battlefield_effects_manager.call(
+		"spawn_bullet_impact",
+		position,
+		safe_normal,
+		heavy
+	)
+
+
+func _update_vehicle_damage_smoke() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager == null:
+		return
+
+	for id_value: Variant in vehicles:
+		var id := int(id_value)
+		var vehicle: Node3D = vehicles.get(id) as Node3D
+		if vehicle == null:
+			continue
+
+		var ratio := float(vehicle.call("damage_ratio"))
+		var existing: Node = vehicle_damage_smoke_nodes.get(id) as Node
+
+		if ratio >= 0.45 and not bool(vehicle.get("destroyed")):
+			if existing == null or not is_instance_valid(existing):
+				var smoke: Node3D = battlefield_effects_manager.call(
+					"spawn_vehicle_damage_smoke",
+					vehicle,
+					ratio
+				)
+				if smoke != null:
+					vehicle_damage_smoke_nodes[id] = smoke
+		else:
+			if existing != null and is_instance_valid(existing):
+				existing.queue_free()
+			vehicle_damage_smoke_nodes.erase(id)
+
+
+func _broadcast_vehicle_snapshots() -> void:
+	if not multiplayer.is_server():
+		return
+	var payload: Array = []
+	for id_value: Variant in vehicles:
+		var id := int(id_value)
+		var vehicle: Node3D = vehicles.get(id) as Node3D
+		if vehicle == null:
+			continue
+		var snapshot_position := vehicle.global_position
+		var snapshot_yaw := vehicle.rotation.y
+		var snapshot_pitch := vehicle.rotation.x
+
+		if (
+			not _vector3_is_finite(snapshot_position)
+			or not _float_is_finite(snapshot_yaw)
+			or not _float_is_finite(snapshot_pitch)
+		):
+			# Do not replicate poisoned transforms. The vehicle script will
+			# recover it to a finite state on its next physics tick.
+			continue
+
+		payload.append({
+			"id": id,
+			"position": snapshot_position,
+			"yaw": snapshot_yaw,
+			"pitch": snapshot_pitch,
+			"health": int(vehicle.get("health")),
+			"max_health": int(vehicle.get("max_health")),
+			"driver": int(vehicle.get("driver_peer_id")),
+			"gunner": int(vehicle.get("gunner_peer_id")),
+			"turret_yaw": float(vehicle.get("turret_yaw")),
+			"ammo": int(vehicle.get("weapon_ammo")),
+			"ammo_max": int(vehicle.get("weapon_ammo_max")),
+			"last_fire_ms": int(vehicle.get("last_fire_ms")),
+			"destroyed": bool(vehicle.get("destroyed"))
+		})
+	receive_vehicle_snapshots.rpc(payload)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func receive_vehicle_snapshots(payload: Array) -> void:
+	for value: Variant in payload:
+		if not value is Dictionary:
+			continue
+		var item: Dictionary = value
+		var id := int(item.get("id", -1))
+		if id < 0 or not vehicles.has(id):
+			continue
+		var vehicle: Node = vehicles.get(id) as Node
+		if vehicle == null:
+			continue
+		var received_position := Vector3(
+			item.get("position", vehicle.global_position)
+		)
+		var received_yaw := float(
+			item.get("yaw", vehicle.rotation.y)
+		)
+		var received_pitch := float(
+			item.get("pitch", vehicle.rotation.x)
+		)
+
+		if (
+			not _vector3_is_finite(received_position)
+			or not _float_is_finite(received_yaw)
+			or not _float_is_finite(received_pitch)
+		):
+			continue
+
+		vehicle.call(
+			"apply_network_snapshot",
+			received_position,
+			received_yaw,
+			received_pitch,
+			int(item.get("health", 0)),
+			int(item.get("driver", 0))
+		)
+		vehicle.set(
+			"gunner_peer_id",
+			int(item.get("gunner", 0))
+		)
+		vehicle.set(
+			"turret_target_yaw",
+			float(item.get("turret_yaw", 0.0))
+		)
+		vehicle.set(
+			"weapon_ammo",
+			int(item.get("ammo", 0))
+		)
+		vehicle.set(
+			"weapon_ammo_max",
+			int(item.get("ammo_max", 0))
+		)
+		if bool(item.get("destroyed", false)):
+			vehicle.call("set_destroyed_visual")
+
 
 func _build_world() -> void:
 	var env := WorldEnvironment.new()
@@ -8800,6 +11748,16 @@ func _build_world() -> void:
 	_build_dynamic_weather_system()
 	_build_battlefield_dressing_pass()
 	_build_combat_atmosphere_pass()
+	_build_roofline_verticality_pass()
+	_build_road_street_detail_pass()
+	_build_cover_microdetail_pass()
+	_build_interior_storytelling_pass()
+	_build_environmental_animation_pass()
+	_build_rain_interaction_pass()
+	_build_facade_street_dressing_pass()
+	_build_lighting_postprocess_refinement_pass()
+	_build_battle_damage_detail_pass()
+	_build_performance_lod_pass()
 	_build_map_expansion_pass()
 	_build_expanded_ground_collision()
 	_build_structure_collision_pass()

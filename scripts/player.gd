@@ -101,9 +101,6 @@ var axis_character_scene: PackedScene
 var external_character_model: Node3D
 var external_character_animator: AnimationPlayer
 var external_character_animation: StringName = &""
-var external_character_base_position := Vector3.ZERO
-var external_character_base_rotation := Vector3.ZERO
-var external_character_unrigged := false
 var external_animation_controller
 var external_weapon_socket: Node3D
 var external_model_loaded := false
@@ -3793,9 +3790,6 @@ func _build_external_character_model() -> bool:
 			external_character_model
 		)
 	)
-	external_character_base_position = external_character_model.position
-	external_character_base_rotation = external_character_model.rotation
-	external_character_unrigged = external_character_animator == null
 	external_animation_controller = (
 		HumanoidAnimationControllerScript.new()
 	)
@@ -3909,47 +3903,13 @@ func _update_external_character_animation() -> void:
 		not _is_local_player()
 		and alive
 	)
+	if external_animation_controller == null:
+		return
 
 	var speed: float = Vector2(
 		velocity.x,
 		velocity.z
 	).length()
-
-	# The two v9.27.3 test soldiers are currently static GLBs. Give them a
-	# restrained transform-only movement fallback so bots/remote players do not
-	# look completely frozen. A future rigged GLB automatically bypasses this.
-	if external_character_unrigged:
-		var movement_amount: float = clampf(speed / 6.5, 0.0, 1.0)
-		var movement_phase: float = (
-			visual_animation_time * (5.5 + movement_amount * 2.5)
-		)
-
-		external_character_model.position = (
-			external_character_base_position
-			+ Vector3(
-				0.0,
-				absf(sin(movement_phase))
-				* 0.012
-				* movement_amount,
-				0.0
-			)
-		)
-		external_character_model.rotation = (
-			external_character_base_rotation
-		)
-		external_character_model.rotation.z += (
-			sin(movement_phase * 0.5)
-			* 0.012
-			* movement_amount
-		)
-
-		if is_crouching:
-			external_character_model.position.y -= 0.18
-		return
-
-	if external_animation_controller == null:
-		return
-
 	var animation_state: String = (
 		external_animation_controller.resolve_state(
 			alive,
