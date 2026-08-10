@@ -1,0 +1,59 @@
+{
+  "allied": {
+    "offset": [
+      0,
+      -1,
+      0
+    ],
+    "rotation_y": 0.0,
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  },
+  "axis": {
+    "offset": [
+      0,
+      -1,
+      0
+    ],
+    "rotation_y": 0.0,
+    "scale": [
+      1,
+      1,
+      1
+    ]
+  },
+  "weapon_sockets": [
+    "WeaponSocket",
+    "weapon_socket",
+    "RightHandSocket",
+    "hand_r"
+  ],
+  "animation_aliases": [
+    "idle",
+    "walk",
+    "run",
+    "crouch_idle",
+    "crouch_walk",
+    "fire",
+    "reload",
+    "death",
+    "revive",
+    "build"
+  ],
+  "modular_military_2": {
+    "supported_drop_in_names": [
+      "modular_military_2_allied.glb",
+      "modular_military_2_allied.fbx",
+      "modular_military_2_allied.blend",
+      "modular_military_2_axis.glb",
+      "modular_military_2_axis.fbx",
+      "modular_military_2_axis.blend"
+    ],
+    "required_character_state": "one assembled, rigged character per team",
+    "preferred_export": "GLB with embedded textures and animations",
+    "demo_archive_compatible": false
+  }
+}

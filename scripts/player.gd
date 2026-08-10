@@ -3909,44 +3909,54 @@ func _update_external_character_animation() -> void:
 		not _is_local_player()
 		and alive
 	)
+
 	var speed: float = Vector2(
 		velocity.x,
 		velocity.z
 	).length()
 
+	# The two v9.27.3 test soldiers are currently static GLBs. Give them a
+	# restrained transform-only movement fallback so bots/remote players do not
+	# look completely frozen. A future rigged GLB automatically bypasses this.
 	if external_character_unrigged:
-		var walk_amount := clampf(speed / 6.0, 0.0, 1.0)
-		var phase := visual_animation_time * (6.0 + walk_amount * 3.0)
+		var movement_amount: float = clampf(speed / 6.5, 0.0, 1.0)
+		var movement_phase: float = (
+			visual_animation_time * (5.5 + movement_amount * 2.5)
+		)
+
 		external_character_model.position = (
 			external_character_base_position
 			+ Vector3(
 				0.0,
-				absf(sin(phase)) * 0.018 * walk_amount,
+				absf(sin(movement_phase))
+				* 0.012
+				* movement_amount,
 				0.0
 			)
 		)
-		external_character_model.rotation = external_character_base_rotation
-		external_character_model.rotation.z += (
-			sin(phase * 0.5) * 0.018 * walk_amount
+		external_character_model.rotation = (
+			external_character_base_rotation
 		)
+		external_character_model.rotation.z += (
+			sin(movement_phase * 0.5)
+			* 0.012
+			* movement_amount
+		)
+
 		if is_crouching:
-			external_character_model.position.y -= 0.22
+			external_character_model.position.y -= 0.18
 		return
 
 	if external_animation_controller == null:
 		return
 
-	var speed_unused: float = Vector2(
-		velocity.x,
-		velocity.z
-	).length()
 	var animation_state: String = (
 		external_animation_controller.resolve_state(
 			alive,
 			downed,
 			is_reloading,
 			is_crouching,
-			speed_unused,
+			speed,
 			Time.get_ticks_msec() < muzzle_flash_until_ms,
 			player_class == PlayerClass.ENGINEER
 			and aim_requested

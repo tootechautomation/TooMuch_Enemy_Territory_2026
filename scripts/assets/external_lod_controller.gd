@@ -43,23 +43,13 @@ func _apply_lod(node: Node3D) -> void:
 		node.global_position
 	)
 
-	var node_far_distance: float = float(
-		node.get_meta("lod_far", far_distance)
-	)
-	var node_medium_distance: float = float(
-		node.get_meta("lod_medium", medium_distance)
-	)
-	var node_near_distance: float = float(
-		node.get_meta("lod_near", near_distance)
-	)
-
-	var visible_geometry := distance <= node_far_distance
+	var visible_geometry := distance <= far_distance
 	node.visible = visible_geometry
 	if not visible_geometry:
 		return
 
-	var medium_or_near := distance <= node_medium_distance
-	var near := distance <= node_near_distance
+	var medium_or_near := distance <= medium_distance
+	var near := distance <= near_distance
 
 	for child in node.find_children("*", "GeometryInstance3D", true):
 		var geometry := child as GeometryInstance3D
@@ -68,7 +58,7 @@ func _apply_lod(node: Node3D) -> void:
 			if medium_or_near
 			else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		)
-		geometry.visibility_range_end = node_far_distance
+		geometry.visibility_range_end = far_distance
 		geometry.visibility_range_fade_mode = (
 			GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		)

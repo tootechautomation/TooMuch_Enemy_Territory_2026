@@ -62,7 +62,12 @@ static func adapt_character(
 	report["valid"] = (
 		final_bounds.size.y >= 1.35
 		and final_bounds.size.y <= 2.30
-		and model.find_children("*", "MeshInstance3D", true, false).size() > 0
+		and model.find_children(
+			"*",
+			"MeshInstance3D",
+			true,
+			false
+		).size() > 0
 	)
 	return report
 

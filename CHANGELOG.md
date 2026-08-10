@@ -1,16 +1,3 @@
-## v8.42.0 — Survival textures + real Model 24 grenade
-- Added complete split Survival Character texture set (Body plus clothing/accessory textures) in the relative texture layout referenced by the FBX.
-- Added the supplied German_Handgrenade FBX as the preferred Axis Model 24 grenade mesh.
-- Retained the textured procedural Model 24 fallback if external import fails.
-- Multiplayer protocol remains 341; this is an asset/visual update.
-
-## 8.41.0
-- Bundled user-supplied MP40, Thompson M1A1, TT pistol, Walther P38, PMC character, and Survival Character FBX assets.
-- Bundled supplied PBR texture sets for weapons and PMC character.
-- Axis Model 24 now uses uploaded PBR maps on a stick-grenade fallback when the external grenade mesh is absent.
-- Retains automatic normalization and procedural fallback behavior.
-- Network protocol remains 341.
-
 # Changelog
 
 ## 8.40.0
