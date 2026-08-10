@@ -2783,7 +2783,11 @@ func _update_objective_compass() -> void:
 		var team_order := str(main_node.call("team_tactical_order_text", team))
 		if not team_order.is_empty():
 			tactical_suffix = " · ORDER %s" % team_order
-	elif main_node.has_method("battlefield_flow_text"):
+	if main_node.has_method("battlefield_operation_text"):
+		var operation_text := str(main_node.call("battlefield_operation_text", team))
+		if not operation_text.is_empty():
+			tactical_suffix += " · OP %s" % operation_text
+	elif tactical_suffix.is_empty() and main_node.has_method("battlefield_flow_text"):
 		var order_text := str(
 			main_node.call("battlefield_flow_text", team)
 		)

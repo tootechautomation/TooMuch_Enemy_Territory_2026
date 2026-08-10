@@ -243,8 +243,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "16.0.0"
-const NETWORK_PROTOCOL := 358
+const BUILD_VERSION := "17.0.0"
+const NETWORK_PROTOCOL := 359
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -542,6 +542,19 @@ const FORWARD_VEHICLE_SERVICE_REPAIR := 18
 const FORWARD_VEHICLE_SERVICE_AMMO := 20
 const ALLIED_SERVICE_POSITION := Vector3(-48.0, 0.0, -10.0)
 const AXIS_SERVICE_POSITION := Vector3(48.0, 0.0, 10.0)
+
+# v17 Battlefield Operations / Dynamic Team Missions. This is deliberately
+# state-only: no persistent world nodes, no map edits, and no spawn changes.
+var battlefield_operations: Dictionary = {}
+var battlefield_operation_display: Dictionary = {}
+var battlefield_operation_next_ms := 0
+var battlefield_operation_next_id := 1
+const BATTLEFIELD_OPERATION_FIRST_DELAY_MS := 15000
+const BATTLEFIELD_OPERATION_INTERVAL_MS := 50000
+const BATTLEFIELD_OPERATION_DURATION_MS := 32000
+const BATTLEFIELD_OPERATION_SUPPORT_RADIUS := 20.0
+const BATTLEFIELD_OPERATION_TICKET_REWARD := 2
+const BATTLEFIELD_OPERATION_XP_REWARD := 7
 var low_cost_visual_clarity: Node
 var battlefield_effects_manager: Node3D
 var local_cinema_mode_enabled := false
@@ -1335,6 +1348,7 @@ func _process(delta: float) -> void:
 	_update_sector_warfare(delta)
 	_update_class_warfare(delta)
 	_update_squad_command_system()
+	_update_battlefield_operations(delta)
 
 	station_accumulator += delta
 	if station_accumulator >= COMMAND_POST_STATION_INTERVAL:
@@ -6967,6 +6981,23 @@ func _on_peer_connected(id: int) -> void:
 			remaining_ms
 		)
 
+	# v17 late-join synchronization for active battlefield operations.
+	var operation_now := Time.get_ticks_msec()
+	for operation_team_value: Variant in battlefield_operations.keys():
+		var operation_team := int(operation_team_value)
+		var operation := Dictionary(battlefield_operations[operation_team])
+		var operation_remaining := int(operation.get("expires_ms", 0)) - operation_now
+		if operation_remaining <= 0:
+			continue
+		sync_battlefield_operation.rpc_id(
+			id,
+			operation_team,
+			int(operation.get("id", 0)),
+			str(operation.get("label", "OPERATION")),
+			str(operation.get("target_name", "FRONT")),
+			operation_remaining
+		)
+
 	# v16 late-join synchronization for active anti-vehicle designations.
 	var designation_now := Time.get_ticks_msec()
 	for designation_id_value: Variant in vehicle_designations.keys():
@@ -7590,6 +7621,205 @@ func team_tactical_order_text(team_id: int) -> String:
 		]
 	return text
 
+
+
+func _battlefield_operation_candidate(team_id: int) -> Dictionary:
+	# Contested ground has first priority, then enemy-held sectors, then the
+	# logistics depot, finally a hold order. This keeps operations grounded in
+	# the live Frontline Director state instead of random mission generation.
+	for sector_name_value: Variant in sector_positions.keys():
+		var sector_name := str(sector_name_value)
+		if bool(sector_contested.get(sector_name, false)):
+			return {
+				"type": "CONTEST",
+				"label": "FIGHT FOR",
+				"target_name": sector_name,
+				"position": Vector3(sector_positions.get(sector_name, Vector3.ZERO))
+			}
+	for sector_name_value: Variant in sector_positions.keys():
+		var sector_name := str(sector_name_value)
+		if int(sector_control.get(sector_name, -1)) != team_id:
+			return {
+				"type": "ASSAULT",
+				"label": "ASSAULT",
+				"target_name": sector_name,
+				"position": Vector3(sector_positions.get(sector_name, Vector3.ZERO))
+			}
+	if supply_depot_control != team_id:
+		var depot := _supply_depot_node()
+		if depot != null:
+			return {
+				"type": "LOGISTICS",
+				"label": "SECURE",
+				"target_name": "SUPPLY DEPOT",
+				"position": depot.global_position
+			}
+	# If the team owns the battlefield, ask it to hold the sector nearest the
+	# active frontline rather than inventing a new objective.
+	var hold_name := frontline_sector_name(team_id)
+	if hold_name.is_empty() or not sector_positions.has(hold_name):
+		hold_name = str(sector_positions.keys()[0])
+	return {
+		"type": "HOLD",
+		"label": "HOLD",
+		"target_name": hold_name,
+		"position": Vector3(sector_positions.get(hold_name, Vector3.ZERO))
+	}
+
+
+func _start_battlefield_operation(team_id: int) -> void:
+	if battlefield_operations.has(team_id):
+		return
+	var candidate := _battlefield_operation_candidate(team_id)
+	if candidate.is_empty():
+		return
+	var operation_id := battlefield_operation_next_id
+	battlefield_operation_next_id += 1
+	candidate["id"] = operation_id
+	candidate["team"] = team_id
+	candidate["expires_ms"] = Time.get_ticks_msec() + BATTLEFIELD_OPERATION_DURATION_MS
+	battlefield_operations[team_id] = candidate
+	sync_battlefield_operation.rpc(
+		team_id,
+		operation_id,
+		str(candidate.get("label", "OPERATION")),
+		str(candidate.get("target_name", "FRONT")),
+		BATTLEFIELD_OPERATION_DURATION_MS
+	)
+	team_callout.rpc(
+		team_id,
+		"OPERATION · %s %s" % [
+			str(candidate.get("label", "OPERATION")),
+			str(candidate.get("target_name", "FRONT")).to_upper()
+		],
+		"battlefield_operation_%d" % operation_id
+	)
+
+
+func _battlefield_operation_success(operation: Dictionary) -> bool:
+	var team_id := int(operation.get("team", -1))
+	var operation_type := str(operation.get("type", ""))
+	var target_name := str(operation.get("target_name", ""))
+	if operation_type == "LOGISTICS":
+		return supply_depot_control == team_id and not supply_depot_contested
+	if not sector_positions.has(target_name):
+		return false
+	var control := int(sector_control.get(target_name, -1))
+	if operation_type == "CONTEST":
+		return control == team_id and not bool(sector_contested.get(target_name, false))
+	if operation_type == "ASSAULT":
+		return control == team_id
+	if operation_type == "HOLD":
+		# HOLD is evaluated at expiration so simply owning the sector at mission
+		# start cannot instantly complete the operation.
+		return false
+	return false
+
+
+func _complete_battlefield_operation(team_id: int, operation: Dictionary) -> void:
+	var target_position := Vector3(operation.get("position", Vector3.ZERO))
+	var contributors := 0
+	for player_value: Variant in players.values():
+		var player := player_value as Node3D
+		if player == null or int(player.get("team")) != team_id:
+			continue
+		if not bool(player.get("alive")) or bool(player.get("downed")):
+			continue
+		if player.global_position.distance_to(target_position) > BATTLEFIELD_OPERATION_SUPPORT_RADIUS:
+			continue
+		player.call("add_xp", BATTLEFIELD_OPERATION_XP_REWARD, "battlefield operation")
+		contributors += 1
+	if team_id == 0:
+		attacker_tickets = mini(INITIAL_TEAM_TICKETS, attacker_tickets + BATTLEFIELD_OPERATION_TICKET_REWARD)
+	else:
+		defender_tickets = mini(INITIAL_TEAM_TICKETS, defender_tickets + BATTLEFIELD_OPERATION_TICKET_REWARD)
+	push_kill_feed.rpc(
+		"OPERATION COMPLETE — %s (+%d TICKETS)" % [
+			str(operation.get("target_name", "FRONT")).to_upper(),
+			BATTLEFIELD_OPERATION_TICKET_REWARD
+		]
+	)
+	team_callout.rpc(
+		team_id,
+		"OPERATION COMPLETE · %d FRONTLINE CONTRIBUTORS" % contributors,
+		"battlefield_operation_complete_%d" % int(operation.get("id", 0))
+	)
+
+
+func _update_battlefield_operations(_delta: float) -> void:
+	if not multiplayer.is_server() or match_over:
+		return
+	var now := Time.get_ticks_msec()
+	if battlefield_operation_next_ms <= 0:
+		battlefield_operation_next_ms = now + BATTLEFIELD_OPERATION_FIRST_DELAY_MS
+	var remove_teams: Array[int] = []
+	for team_value: Variant in battlefield_operations.keys():
+		var team_id := int(team_value)
+		var operation := Dictionary(battlefield_operations[team_id])
+		if _battlefield_operation_success(operation):
+			_complete_battlefield_operation(team_id, operation)
+			remove_teams.append(team_id)
+		elif now >= int(operation.get("expires_ms", 0)):
+			var operation_type := str(operation.get("type", ""))
+			var target_name := str(operation.get("target_name", ""))
+			var hold_succeeded := (
+				operation_type == "HOLD"
+				and sector_positions.has(target_name)
+				and int(sector_control.get(target_name, -1)) == team_id
+				and not bool(sector_contested.get(target_name, false))
+			)
+			if hold_succeeded:
+				_complete_battlefield_operation(team_id, operation)
+			else:
+				team_callout.rpc(
+					team_id,
+					"OPERATION EXPIRED · REASSESS THE FRONT",
+					"battlefield_operation_expired_%d" % int(operation.get("id", 0))
+				)
+			remove_teams.append(team_id)
+	for team_id: int in remove_teams:
+		var operation_id := int(Dictionary(battlefield_operations.get(team_id, {})).get("id", 0))
+		battlefield_operations.erase(team_id)
+		clear_battlefield_operation.rpc(team_id, operation_id)
+	if now < battlefield_operation_next_ms:
+		return
+	battlefield_operation_next_ms = now + BATTLEFIELD_OPERATION_INTERVAL_MS
+	for team_id in [0, 1]:
+		_start_battlefield_operation(team_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func sync_battlefield_operation(
+	team_id: int,
+	operation_id: int,
+	label: String,
+	target_name: String,
+	duration_ms: int
+) -> void:
+	battlefield_operation_display[team_id] = {
+		"id": operation_id,
+		"text": "%s %s" % [label, target_name.to_upper()],
+		"expires_ms": Time.get_ticks_msec() + maxi(0, duration_ms)
+	}
+
+
+@rpc("authority", "call_local", "reliable")
+func clear_battlefield_operation(team_id: int, operation_id: int) -> void:
+	if not battlefield_operation_display.has(team_id):
+		return
+	var current := Dictionary(battlefield_operation_display[team_id])
+	if int(current.get("id", -1)) == operation_id:
+		battlefield_operation_display.erase(team_id)
+
+
+func battlefield_operation_text(team_id: int) -> String:
+	if not battlefield_operation_display.has(team_id):
+		return ""
+	var operation := Dictionary(battlefield_operation_display[team_id])
+	if Time.get_ticks_msec() >= int(operation.get("expires_ms", 0)):
+		battlefield_operation_display.erase(team_id)
+		return ""
+	return str(operation.get("text", ""))
 
 func server_call_artillery(caller: Node3D, target_position: Vector3) -> void:
 	if not multiplayer.is_server() or caller == null:
@@ -11525,6 +11755,9 @@ func _reset_round() -> void:
 	squad_order_revision += 1
 	vehicle_designations.clear()
 	vehicle_frontline_reward_next_ms.clear()
+	battlefield_operations.clear()
+	battlefield_operation_display.clear()
+	battlefield_operation_next_ms = 0
 	bridge_progress = 0
 	defuse_progress = 0
 	dynamite_armed = false
