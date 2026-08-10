@@ -101,6 +101,9 @@ var axis_character_scene: PackedScene
 var external_character_model: Node3D
 var external_character_animator: AnimationPlayer
 var external_character_animation: StringName = &""
+var external_character_test_unrigged := false
+var external_character_test_base_position := Vector3.ZERO
+var external_character_test_base_rotation := Vector3.ZERO
 var external_animation_controller
 var external_weapon_socket: Node3D
 var external_model_loaded := false
@@ -3734,13 +3737,31 @@ func _class_short_name(class_id: int) -> String:
 func _build_external_character_model() -> bool:
 	if DisplayServer.get_name() == "headless":
 		return false
+
 	external_model_loaded = false
 	external_character_animator = null
 	external_animation_controller = null
+	external_character_test_unrigged = false
 
-	var scene: PackedScene = (
-		ExternalAssetRegistryScript.available_character(team)
+	var test_path: String = (
+		"res://assets/external/characters/ww2_allied_soldier.glb"
+		if team == 0
+		else "res://assets/external/characters/ww2_german_wehrmacht_soldier.glb"
 	)
+
+	var scene: PackedScene = null
+	var using_wwii_test_model := false
+
+	if ResourceLoader.exists(test_path):
+		var test_resource: Resource = load(test_path)
+		if test_resource is PackedScene:
+			scene = test_resource as PackedScene
+			using_wwii_test_model = true
+
+	# Preserve the exact existing character pipeline as the fallback.
+	if scene == null:
+		scene = ExternalAssetRegistryScript.available_character(team)
+
 	if scene == null:
 		return false
 
@@ -3751,17 +3772,38 @@ func _build_external_character_model() -> bool:
 	var model_config: Dictionary = (
 		ExternalAssetRegistryScript.character_config(team)
 	)
+
+	var spawn_offset: Vector3 = (
+		Vector3.ZERO
+		if using_wwii_test_model
+		else Vector3(
+			model_config.get(
+				"offset",
+				Vector3(0.0, -1.0, 0.0)
+			)
+		)
+	)
+	var spawn_rotation: float = (
+		deg_to_rad(180.0)
+		if using_wwii_test_model
+		else float(model_config.get("rotation_y", 0.0))
+	)
+	var spawn_scale: Vector3 = (
+		Vector3.ONE
+		if using_wwii_test_model
+		else Vector3(
+			model_config.get("scale", Vector3.ONE)
+		)
+	)
+
 	external_character_model = (
 		ExternalAssetLoaderScript.instantiate_scene(
 			self,
 			scene,
 			"ExternalCharacterModel",
-			Vector3(model_config.get(
-				"offset",
-				Vector3(0.0, -1.0, 0.0)
-			)),
-			float(model_config.get("rotation_y", 0.0)),
-			Vector3(model_config.get("scale", Vector3.ONE))
+			spawn_offset,
+			spawn_rotation,
+			spawn_scale
 		)
 	)
 	if external_character_model == null:
@@ -3773,7 +3815,23 @@ func _build_external_character_model() -> bool:
 			team
 		)
 	)
-	if not bool(asset_adaptation.get("valid", false)):
+
+	var test_mesh_count: int = (
+		external_character_model.find_children(
+			"*",
+			"MeshInstance3D",
+			true,
+			false
+		).size()
+	)
+
+	var accepted: bool = bool(
+		asset_adaptation.get("valid", false)
+	)
+	if using_wwii_test_model:
+		accepted = test_mesh_count > 0
+
+	if not accepted:
 		print(
 			"External character rejected peer=%d %s"
 			% [peer_id, asset_adaptation]
@@ -3790,6 +3848,18 @@ func _build_external_character_model() -> bool:
 			external_character_model
 		)
 	)
+
+	external_character_test_unrigged = (
+		using_wwii_test_model
+		and external_character_animator == null
+	)
+	external_character_test_base_position = (
+		external_character_model.position
+	)
+	external_character_test_base_rotation = (
+		external_character_model.rotation
+	)
+
 	external_animation_controller = (
 		HumanoidAnimationControllerScript.new()
 	)
@@ -3802,20 +3872,23 @@ func _build_external_character_model() -> bool:
 		)
 	)
 	external_model_loaded = true
+
 	var character_validation: Dictionary = (
 		ExternalAssetValidatorScript.validate_character(
 			external_character_model
 		)
 	)
 	print(
-		"External character peer=%d team=%d adaptation=%s validation=%s"
+		"External character peer=%d team=%d wwii_test=%s adaptation=%s validation=%s"
 		% [
 			peer_id,
 			team,
+			using_wwii_test_model,
 			asset_adaptation,
 			character_validation
 		]
 	)
+
 	var main_node: Node = get_parent()
 	if (
 		main_node != null
@@ -3829,6 +3902,7 @@ func _build_external_character_model() -> bool:
 				"register_external",
 				external_character_model
 			)
+
 	_refresh_external_weapon_model()
 
 	var fallback_body: Node3D = get_node_or_null("Body") as Node3D
@@ -3840,6 +3914,7 @@ func _build_external_character_model() -> bool:
 	if fallback_character != null:
 		fallback_character.visible = false
 	return true
+
 
 func _clear_external_weapon_model() -> void:
 	if external_weapon_model != null:
@@ -3903,13 +3978,48 @@ func _update_external_character_animation() -> void:
 		not _is_local_player()
 		and alive
 	)
-	if external_animation_controller == null:
-		return
 
 	var speed: float = Vector2(
 		velocity.x,
 		velocity.z
 	).length()
+
+	if external_character_test_unrigged:
+		var motion_amount: float = clampf(
+			speed / 7.0,
+			0.0,
+			1.0
+		)
+		var motion_phase: float = (
+			visual_animation_time
+			* (5.0 + 2.0 * motion_amount)
+		)
+
+		external_character_model.position = (
+			external_character_test_base_position
+		)
+		external_character_model.rotation = (
+			external_character_test_base_rotation
+		)
+
+		external_character_model.position.y += (
+			absf(sin(motion_phase))
+			* 0.010
+			* motion_amount
+		)
+		external_character_model.rotation.z += (
+			sin(motion_phase * 0.5)
+			* 0.010
+			* motion_amount
+		)
+
+		if is_crouching:
+			external_character_model.position.y -= 0.16
+		return
+
+	if external_animation_controller == null:
+		return
+
 	var animation_state: String = (
 		external_animation_controller.resolve_state(
 			alive,
@@ -3927,6 +4037,7 @@ func _update_external_character_animation() -> void:
 			animation_state
 		)
 	)
+
 
 func _build_identity_visuals() -> void:
 	if DisplayServer.get_name() == "headless":
