@@ -240,8 +240,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "10.1.1"
-const NETWORK_PROTOCOL := 344
+const BUILD_VERSION := "10.2.0"
+const NETWORK_PROTOCOL := 345
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -5031,8 +5031,18 @@ func _update_sector_warfare(delta: float) -> void:
 				1,
 				3
 			)
+			var capture_seconds: float = SECTOR_CAPTURE_SECONDS
+			if active_map_id == MAP_RUINED_CITY:
+				# Urban sectors change hands faster than open-field sectors,
+				# except the central square which is intentionally harder to hold.
+				capture_seconds = (
+					12.5
+					if sector_name == "Central Square"
+					else 10.0
+				)
+
 			var capture_rate: float = (
-				100.0 / SECTOR_CAPTURE_SECONDS
+				100.0 / capture_seconds
 			) * float(advantage)
 
 			if attackers > defenders:
@@ -5096,6 +5106,20 @@ func _update_sector_warfare(delta: float) -> void:
 				INITIAL_TEAM_TICKETS,
 				defender_tickets + 1
 			)
+
+		if active_map_id == MAP_RUINED_CITY:
+			# Holding all three city sectors exerts real pressure rather than
+			# merely adding a ticket. Capped at one ticket per sector interval.
+			if attacker_sectors == 3:
+				defender_tickets = maxi(
+					0,
+					defender_tickets - 1
+				)
+			elif defender_sectors == 3:
+				attacker_tickets = maxi(
+					0,
+					attacker_tickets - 1
+				)
 
 	sync_sector_state.rpc(
 		sector_control,
@@ -5162,13 +5186,22 @@ func _update_sector_visuals() -> void:
 			)
 
 func sector_status_text() -> String:
+	var ordered_sectors: Array[String] = (
+		[
+			"West Ruins",
+			"Central Square",
+			"Pillbox Ridge"
+		]
+		if active_map_id == MAP_RUINED_CITY
+		else [
+			"Village",
+			"Rail Yard",
+			"Fort"
+		]
+	)
+
 	var parts: Array[String] = []
-	for sector_name_value in [
-		"Village",
-		"Rail Yard",
-		"Fort"
-	]:
-		var sector_name: String = str(sector_name_value)
+	for sector_name: String in ordered_sectors:
 		var control: int = int(
 			sector_control.get(sector_name, -1)
 		)
@@ -5179,11 +5212,22 @@ func sector_status_text() -> String:
 			code = "A"
 		elif control == 1:
 			code = "D"
-		parts.append("%s:%s" % [
-			sector_name.substr(0, 1),
-			code
-		])
+
+		var short_name: String = sector_name.substr(0, 1)
+		if active_map_id == MAP_RUINED_CITY:
+			match sector_name:
+				"West Ruins":
+					short_name = "W"
+				"Central Square":
+					short_name = "C"
+				"Pillbox Ridge":
+					short_name = "P"
+
+		parts.append("%s:%s" % [short_name, code])
+
 	return " ".join(parts)
+
+
 
 func tactical_map_text() -> String:
 	if active_map_id == MAP_RUINED_CITY:
@@ -5393,30 +5437,72 @@ func sector_forward_spawn(
 	team_id: int
 ) -> Variant:
 	var priority: Array[String] = []
+
 	if active_map_id == MAP_RUINED_CITY:
-		priority = (
-			["Pillbox Ridge", "Central Square", "West Ruins"]
-			if team_id == 0
-			else ["West Ruins", "Central Square", "Pillbox Ridge"]
-		)
+		if objective_stage == 0:
+			priority = (
+				["Central Square", "West Ruins"]
+				if team_id == 0
+				else ["Central Square", "Pillbox Ridge"]
+			)
+		else:
+			priority = (
+				["Pillbox Ridge", "Central Square", "West Ruins"]
+				if team_id == 0
+				else ["West Ruins", "Central Square", "Pillbox Ridge"]
+			)
 	else:
 		priority = (
 			["Fort", "Rail Yard", "Village"]
 			if team_id == 0
 			else ["Village", "Rail Yard", "Fort"]
 		)
-	for sector_name in priority:
+
+	for sector_name: String in priority:
 		if int(sector_control.get(sector_name, -1)) != team_id:
 			continue
+
 		var center: Vector3 = Vector3(
-			sector_positions.get(sector_name, Vector3.ZERO)
+			sector_positions.get(
+				sector_name,
+				Vector3.ZERO
+			)
 		)
+
+		if active_map_id == MAP_RUINED_CITY:
+			var offset := Vector3.ZERO
+
+			match sector_name:
+				"West Ruins":
+					offset = (
+						Vector3(-4.0, 1.0, 5.0)
+						if team_id == 0
+						else Vector3(4.0, 1.0, -5.0)
+					)
+				"Central Square":
+					offset = (
+						Vector3(-5.5, 1.0, -5.0)
+						if team_id == 0
+						else Vector3(5.5, 1.0, 5.0)
+					)
+				"Pillbox Ridge":
+					offset = (
+						Vector3(-5.0, 1.0, -4.0)
+						if team_id == 0
+						else Vector3(5.0, 1.0, 4.0)
+					)
+
+			return center + offset
+
 		return center + Vector3(
 			-3.0 if team_id == 0 else 3.0,
 			1.0,
 			0.0
 		)
+
 	return null
+
+
 
 func _command_post_node() -> Node3D:
 	return get_node_or_null("CommandPost") as Node3D
@@ -10553,7 +10639,13 @@ func _reset_round() -> void:
 		)
 
 	push_kill_feed.rpc("New round started")
-	announce.rpc("ROUND START · Secure the bridge and command post")
+	announce.rpc(
+		(
+			"ROUND START · Open the crossing and seize the city"
+			if active_map_id == MAP_RUINED_CITY
+			else "ROUND START · Secure the bridge and command post"
+		)
+	)
 
 func _run_structure_collision_audit() -> void:
 	if DisplayServer.get_name() == "headless":

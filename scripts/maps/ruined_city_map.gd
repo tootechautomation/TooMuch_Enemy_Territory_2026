@@ -10,6 +10,7 @@ static func build(root: Node) -> void:
 	_build_environment(root)
 	_build_playable_geometry(root)
 	_build_objective_nodes(root)
+	_build_sector_visuals(root)
 	_build_visual_setpieces(root)
 
 
@@ -307,6 +308,84 @@ static func _build_objective_nodes(root: Node) -> void:
 	supply_light.light_energy = 0.85
 	supply.add_child(supply_light)
 	root.set("supply_depot_light", supply_light)
+
+
+static func _build_sector_visuals(root: Node) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var sector_positions_value: Variant = root.get("sector_positions")
+	if not sector_positions_value is Dictionary:
+		return
+
+	var markers: Dictionary = {}
+	var lights: Dictionary = {}
+
+	for sector_name_value: Variant in (
+		sector_positions_value as Dictionary
+	).keys():
+		var sector_name: String = str(sector_name_value)
+		var sector_position: Vector3 = Vector3(
+			(sector_positions_value as Dictionary).get(
+				sector_name,
+				Vector3.ZERO
+			)
+		)
+
+		var sector_root := Node3D.new()
+		sector_root.name = (
+			"RuinedCitySector_%s"
+			% sector_name.replace(" ", "_")
+		)
+		sector_root.position = sector_position
+		root.add_child(sector_root)
+
+		var ring := MeshInstance3D.new()
+		ring.name = "CaptureRing"
+		var ring_mesh := CylinderMesh.new()
+		ring_mesh.top_radius = 7.5
+		ring_mesh.bottom_radius = 7.5
+		ring_mesh.height = 0.06
+		ring.mesh = ring_mesh
+		ring.position.y = 0.07
+
+		var ring_material := StandardMaterial3D.new()
+		ring_material.transparency = (
+			BaseMaterial3D.TRANSPARENCY_ALPHA
+		)
+		ring_material.albedo_color = Color(
+			0.72,
+			0.72,
+			0.72,
+			0.14
+		)
+		ring_material.shading_mode = (
+			BaseMaterial3D.SHADING_MODE_UNSHADED
+		)
+		ring.material_override = ring_material
+		sector_root.add_child(ring)
+
+		var marker := Label3D.new()
+		marker.name = "SectorMarker"
+		marker.position = Vector3(0.0, 3.4, 0.0)
+		marker.font_size = 24
+		marker.outline_size = 9
+		marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		marker.text = "%s · NEUTRAL" % sector_name.to_upper()
+		sector_root.add_child(marker)
+		markers[sector_name] = marker
+
+		var light := OmniLight3D.new()
+		light.name = "SectorLight"
+		light.position = Vector3(0.0, 2.0, 0.0)
+		light.omni_range = 7.0
+		light.light_energy = 1.35
+		light.shadow_enabled = false
+		sector_root.add_child(light)
+		lights[sector_name] = light
+
+	root.set("sector_markers", markers)
+	root.set("sector_lights", lights)
 
 
 static func _instantiate_visual(
