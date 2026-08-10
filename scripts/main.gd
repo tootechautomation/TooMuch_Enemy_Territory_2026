@@ -240,8 +240,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "11.0.0"
-const NETWORK_PROTOCOL := 352
+const BUILD_VERSION := "12.0.0"
+const NETWORK_PROTOCOL := 353
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -10509,7 +10509,7 @@ func report_squad_enemy(
 	var key: String = _squad_key(team_id, squad_id)
 	squad_shared_targets[key] = {
 		"target_id": int(target.get("peer_id")),
-		"expires_ms": Time.get_ticks_msec() + 2800
+		"expires_ms": Time.get_ticks_msec() + 4200
 	}
 
 func bot_shared_enemy(observer: Node3D) -> Node3D:
@@ -10702,6 +10702,26 @@ func bot_nearest_hostile_vehicle(bot: Node3D) -> Node3D:
 			nearest_distance = distance
 
 	return nearest
+
+
+func bot_objective_urgency(bot: Node3D) -> float:
+	if bot == null:
+		return 0.0
+	var bot_team: int = int(bot.get("team"))
+	var urgency := 0.35
+	if overtime_active:
+		urgency = 1.0
+	elif dynamite_armed:
+		urgency = 0.92
+	elif command_post_contested:
+		urgency = 0.78
+	elif objective_stage >= 1:
+		urgency = 0.62
+	if bot_team == 0 and attacker_tickets <= 12:
+		urgency = maxf(urgency, 0.88)
+	elif bot_team == 1 and defender_tickets <= 12:
+		urgency = maxf(urgency, 0.82)
+	return urgency
 
 
 func bot_goal_position(bot: Node3D) -> Vector3:

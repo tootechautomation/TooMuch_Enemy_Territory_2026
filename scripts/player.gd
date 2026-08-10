@@ -2741,7 +2741,12 @@ func _update_objective_compass() -> void:
 		arrow = "▶" if rd > 0.0 else "◀"
 	elif fd < 0.0:
 		arrow = "▼"
-	compass_label.text = "%s OBJECTIVE %dm" % [arrow, distance]
+	var tactical_suffix := ""
+	if main_node.has_method("squad_order_text"):
+		var order_text := str(main_node.call("squad_order_text", team))
+		if not order_text.is_empty():
+			tactical_suffix = " · %s" % order_text
+	compass_label.text = "%s OBJECTIVE %dm%s" % [arrow, distance, tactical_suffix]
 
 func confirm_hit() -> void:
 	if not _is_local_player():
@@ -5017,6 +5022,9 @@ func _server_bot_tick(delta: float) -> void:
 		var enemy_distance: float = global_position.distance_to(
 			target_player.global_position
 		)
+		var objective_urgency := 0.35
+		if main.has_method("bot_objective_urgency"):
+			objective_urgency = float(main.call("bot_objective_urgency", self))
 		var combat_range: float = minf(
 			_weapon_range_meters(),
 			28.0 if player_class != PlayerClass.SCOUT else 42.0
@@ -5043,7 +5051,7 @@ func _server_bot_tick(delta: float) -> void:
 					target_player,
 					main
 				)
-				and randf() <= 0.14
+				and randf() <= lerpf(0.12, 0.24, objective_urgency)
 			):
 				bot_grenade_accumulator = 9.0
 				var grenade_direction: Vector3 = (
@@ -5064,6 +5072,7 @@ func _server_bot_tick(delta: float) -> void:
 					else 10.0
 				)
 			)
+			desired_spacing *= lerpf(1.0, 0.78, objective_urgency)
 
 			if enemy_distance < desired_spacing * 0.65:
 				var retreat: Vector3 = (
@@ -9219,6 +9228,17 @@ func _update_hud() -> void:
 		)
 		if bool(main.get("command_post_contested")):
 			post_state = "CONTESTED"
+		var battle_state := "ADVANCE"
+		if bool(main.get("overtime_active")):
+			battle_state = "OVERTIME"
+		elif bool(main.get("dynamite_armed")):
+			battle_state = "PROTECT CHARGE" if team == 0 else "DEFUSE CHARGE"
+		elif bool(main.get("command_post_contested")):
+			battle_state = "CONTESTED"
+		elif int(main.get("objective_stage")) == 0:
+			battle_state = "BUILD CROSSING" if team == 0 else "HOLD CROSSING"
+		else:
+			battle_state = "ATTACK OBJECTIVE" if team == 0 else "DEFEND OBJECTIVE"
 		var overtime_suffix := (
 			" · OVERTIME"
 			if bool(main.get("overtime_active"))
@@ -9242,8 +9262,9 @@ func _update_hud() -> void:
 			gun_status = "GUNS DEF"
 
 		operations_label.text = (
-			"ATK %d · CP %s · %s · %s · DEF %d%s"
+			"%s · ATK %d · CP %s · %s · %s · DEF %d%s"
 			% [
+				battle_state,
 				int(main.get("attacker_tickets")),
 				post_state,
 				gun_status,
