@@ -298,6 +298,9 @@ var vehicle_hud_label: Label
 var vehicle_gunsight: Label
 var vehicle_gunner_mouse_delta := 0.0
 var vehicle_marker_labels: Dictionary = {}
+var hud_update_accumulator := 0.0
+var tactical_marker_update_accumulator := 0.0
+var radar_update_accumulator := 0.0
 var direct_map_key_latched := false
 var et_hud_root: Control
 var et_status_label: Label
@@ -971,6 +974,46 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
+func _update_local_ui_throttled(delta: float) -> void:
+	# The expensive HUD text/marker/radar paths do not need to rebuild at the
+	# render frame rate. Critical hit/damage timers are still handled often
+	# enough to feel immediate.
+	var quality := _local_visual_quality_preset()
+
+	var hud_interval := 0.050
+	var marker_interval := 0.100
+	var radar_interval := 0.080
+
+	if quality == 0:
+		hud_interval = 0.085
+		marker_interval = 0.180
+		radar_interval = 0.140
+	elif quality == 2:
+		hud_interval = 0.035
+		marker_interval = 0.075
+		radar_interval = 0.055
+
+	hud_update_accumulator += delta
+	tactical_marker_update_accumulator += delta
+	radar_update_accumulator += delta
+
+	if hud_update_accumulator >= hud_interval:
+		hud_update_accumulator = 0.0
+		_update_hud()
+		_update_vehicle_hud()
+		_update_class_role_hud()
+		_update_reinforcement_death_panel()
+		_update_team_identity_hud()
+
+	if tactical_marker_update_accumulator >= marker_interval:
+		tactical_marker_update_accumulator = 0.0
+		_update_vehicle_tactical_markers()
+
+	if radar_update_accumulator >= radar_interval:
+		radar_update_accumulator = 0.0
+		_update_radar()
+
+
 func _physics_process(delta: float) -> void:
 	if multiplayer.is_server() and current_vehicle_id >= 0:
 		if _server_lock_to_vehicle():
@@ -993,21 +1036,15 @@ func _physics_process(delta: float) -> void:
 		_collect_and_send_input()
 		_update_spectator_camera()
 		_update_vehicle_camera()
-		_update_hud()
-		_update_vehicle_hud()
-		_update_vehicle_tactical_markers()
+		_update_local_ui_throttled(delta)
 		_enforce_vehicle_first_person_visibility()
-		_update_class_role_hud()
-		_update_reinforcement_death_panel()
 		_apply_cinema_mode_visibility()
 		_update_combat_camera_feedback(delta)
-		_update_team_identity_hud()
 		_apply_first_person_body_visibility()
 		_update_identity_visibility()
 		_update_footstep_audio(delta)
 		_update_first_person_animation(delta)
 		_update_world_character_animation(delta)
-		_update_radar()
 	elif not multiplayer.is_server():
 		var position_alpha: float = (
 			1.0 - exp(-SNAPSHOT_LERP_SPEED * delta)
@@ -2978,19 +3015,45 @@ func _update_vehicle_tactical_markers() -> void:
 		var team_id := int(entry.get("team", -1))
 		var friendly := team_id == team
 
+		var marker_range := 52
+		if _local_visual_quality_preset() == 0:
+			marker_range = 42
+
 		marker.visible = (
 			not cinema_mode_enabled
 			and not scoreboard.visible
-			and distance <= 55
+			and distance <= marker_range
 		)
 		if not marker.visible:
 			continue
 
-		marker.text = "%s %s · %dm" % [
-			"◆" if friendly else "◇",
-			"DESTROYED" if destroyed else str(entry.get("name", "VEHICLE")),
-			distance
-		]
+		var vehicle_name := str(entry.get("name", "VEHICLE"))
+		if destroyed:
+			vehicle_name = "WRECK"
+
+		# Far markers become intentionally terse to reduce HUD noise.
+		if distance > 32:
+			marker.text = "%s %dm" % [
+				"◆" if friendly else "◇",
+				distance
+			]
+		else:
+			marker.text = "%s %s · %dm" % [
+				"◆" if friendly else "◇",
+				vehicle_name,
+				distance
+			]
+
+		var fade_start := float(marker_range) * 0.62
+		var alpha := 1.0
+		if float(distance) > fade_start:
+			alpha = 1.0 - clampf(
+				(float(distance) - fade_start)
+				/ maxf(1.0, float(marker_range) - fade_start),
+				0.0,
+				0.58
+			)
+		marker.modulate.a = alpha
 
 		# Compact edge-style tactical marker rather than expensive 3D labels.
 		var horizontal := clampf(

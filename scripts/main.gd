@@ -231,7 +231,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.14.0"
+const BUILD_VERSION := "9.15.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -8986,17 +8986,16 @@ func interaction_prompt_for(player: Node3D) -> String:
 
 func objective_status_text() -> String:
 	if match_over:
-		return "Round restarts in %.1fs" % round_restart_remaining
+		return "Round restart %.1fs" % round_restart_remaining
 
 	var overtime_text := " · OVERTIME" if overtime_active else ""
-	var guns_text: String = emplacement_status_text()
 	var post_text := (
-		"Neutral"
+		"NEUTRAL"
 		if command_post_control < 0
 		else (
-			"Attackers"
+			"ATK"
 			if command_post_control == 0
-			else "Defenders"
+			else "DEF"
 		)
 	)
 
@@ -9012,13 +9011,12 @@ func objective_status_text() -> String:
 				support_text = " · VEHICLE SUPPORT"
 
 		return (
-			"Stage 1: Build bridge %d/%d · Tickets %d-%d · %s%s%s"
+			"BRIDGE %d/%d · TICKETS %d-%d%s%s"
 			% [
 				bridge_progress,
 				bridge_required,
 				attacker_tickets,
 				defender_tickets,
-				guns_text + " · " + sector_status_text() + " · " + destructible_cover_status_text(),
 				support_text,
 				overtime_text
 			]
@@ -9026,7 +9024,7 @@ func objective_status_text() -> String:
 
 	if dynamite_armed:
 		return (
-			"Charge %.1fs · Defuse %d/%d · CP %s · Tickets %d-%d · %s%s"
+			"CHARGE %.1fs · DEFUSE %d/%d · CP %s · TICKETS %d-%d%s"
 			% [
 				dynamite_remaining,
 				defuse_progress,
@@ -9034,22 +9032,30 @@ func objective_status_text() -> String:
 				post_text,
 				attacker_tickets,
 				defender_tickets,
-				guns_text,
 				overtime_text
 			]
 		)
 
 	return (
-		"Destroy bunker %d%% · CP %s · Tickets %d-%d · TANKS CAN DAMAGE BUNKER · %s%s"
+		"BUNKER %d%% · CP %s · TICKETS %d-%d · TANK SUPPORT%s"
 		% [
 			objective_health,
 			post_text,
 			attacker_tickets,
 			defender_tickets,
-			guns_text,
 			overtime_text
 		]
 	)
+
+
+
+func extended_match_status_text() -> String:
+	return "%s · %s · %s" % [
+		emplacement_status_text(),
+		sector_status_text(),
+		destructible_cover_status_text()
+	]
+
 
 func round_awards_text() -> String:
 	if players.is_empty():

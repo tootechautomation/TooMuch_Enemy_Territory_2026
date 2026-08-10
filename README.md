@@ -1,57 +1,67 @@
-FRONTLINE: OBJECTIVE v9.14.0
-INFANTRY COMBAT FEEL + DAMAGE FEEDBACK + EFFECT SCALING
+FRONTLINE: OBJECTIVE v9.15.0
+OBJECTIVE READABILITY + HUD CLEANUP + UI PERFORMANCE
 
-This phase improves systems already present in the infantry controller rather
-than adding another expensive subsystem.
+OBJECTIVE HUD CLEANUP
+The top match-status line has been shortened.
 
-HIT FEEDBACK
-- standard hit marker remains a clear X
-- headshot now gets a larger distinct star marker
-- headshot visibility lasts slightly longer
-- hit marker presentation resets safely after timeout
+Stage 1 example:
+BRIDGE 4/10 · TICKETS 78-76 · VEHICLE SUPPORT
 
-DIRECTIONAL DAMAGE
-Existing FRONT / REAR / LEFT / RIGHT indicators now scale with damage severity:
-- larger arrow for heavier damage
-- stronger opacity/color response
-- existing direction calculation remains unchanged
+Bunker example:
+BUNKER 64% · CP ATK · TICKETS 71-68 · TANK SUPPORT
 
-SUPPRESSION
-Existing suppression overlay now pulses subtly with remaining suppression time.
-First-person weapon presentation receives a very small visual-only tremor while
-suppressed.
+The detailed emplacement/sector/destructible-cover information remains
+available internally through extended_match_status_text(), but is no longer
+forced into the primary objective line every update.
 
-IMPORTANT:
-Suppression tremor does NOT alter authoritative bullet direction. This is visual
-feedback rather than hidden accuracy manipulation.
+TACTICAL VEHICLE MARKERS
+- Low/Laptop marker range reduced to ~42m
+- Balanced/High range ~52m
+- distant markers show symbol + distance only
+- close markers show vehicle type + distance
+- markers fade toward the edge of their visibility range
 
-QUALITY-SCALED FIRST-PERSON EFFECTS
-LOW/LAPTOP
-- no per-shot dynamic muzzle light
-- no local casing mesh
-- one short muzzle-smoke layer
+This reduces both clutter and unnecessary label rendering.
 
-BALANCED
-- muzzle light enabled
-- shorter-lived casing effect
-- one smoke layer
+UI PERFORMANCE THROTTLING
+Previously several UI systems updated every rendered physics frame:
+- HUD text
+- vehicle HUD
+- role HUD
+- reinforcement HUD
+- team identity HUD
+- vehicle tactical markers
+- radar
 
-HIGH
-- full existing casing duration
-- second hot-weapon smoke layer where appropriate
+v9.15 groups these into quality-aware update intervals.
 
-This reduces short-lived nodes and lights on low-end hardware during automatic
-fire.
+LOW/LAPTOP:
+- HUD ~12 updates/sec
+- tactical vehicle markers ~5.5 updates/sec
+- radar ~7 updates/sec
+
+BALANCED:
+- HUD ~20 updates/sec
+- markers ~10 updates/sec
+- radar ~12.5 updates/sec
+
+HIGH:
+- HUD ~28 updates/sec
+- markers ~13 updates/sec
+- radar ~18 updates/sec
+
+Camera, movement, weapon animation and combat feedback remain per-frame.
 
 PRESERVED
+- v9.14 infantry damage/suppression/effect scaling
 - v9.13.2 tracer scope fix
-- tracers / impact FX / battlefield smoke and fire
-- v9.12 camera collision / safe exits
+- battlefield tracers/impact FX/smoke/fire
+- vehicle camera collision and safe exits
 - destructible streets
-- all vehicle/aircraft systems
+- all vehicle and aircraft systems
 - real vehicle GLBs
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.14.0
+Build: 9.15.0
 Protocol: 341
