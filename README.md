@@ -1,54 +1,64 @@
-FRONTLINE: OBJECTIVE v10.5.0
-MAJOR FIX — AUTHORITATIVE ARCHITECTURE COLLISION
+FRONTLINE: OBJECTIVE v10.6.0
+MAJOR UPGRADE — TRUE INVISIBLE ARCHITECTURE COLLISION
 
-ROOT CAUSE
-The previous GLB collision pass ran inside the visual-instantiation function.
-That function exits on a dedicated/headless server.
+WHAT CHANGED
 
-Because multiplayer movement is server-authoritative, the server therefore had
-NO collision for the imported ruins/buildings. The gray authored StaticBody3D
-walls worked because they were created on the server.
+1. REMOVED THE LARGE TEMPORARY GRAY-BOX COVER PASS
+The v10.3/v10.5 Ruined City gray-box street/building cover geometry has been
+removed. The real imported buildings/ruins remain the visual architecture.
 
-FIX
-Ruined City now builds imported-architecture collision independently of
-rendering on BOTH dedicated servers and clients.
+2. TRUE COLLISION FROM THE ACTUAL IMPORTED MESHES
+v10.6 no longer creates world-AABB box proxies for imported buildings.
 
-For each imported environment GLB, v10.5:
-- loads the scene temporarily
-- applies the same scale, rotation, and position as the visible model
-- transforms substantial mesh bounds into WORLD SPACE
-- creates explicit StaticBody3D + BoxShape3D proxies on collision layer 1
-- removes the temporary source scene
-- then separately loads normal visual scenery on graphical clients
+Instead, on BOTH dedicated servers and clients:
+- each substantial MeshInstance3D is inspected
+- Mesh.create_trimesh_shape() creates an invisible ConcavePolygonShape3D
+- a StaticBody3D is created
+- its global transform is set to the exact imported MeshInstance3D transform
+- collision layer/mask are explicitly 1
+- the temporary source scene is removed
 
-This uses conservative box proxies rather than trimesh collision for better:
-- dedicated-server reliability
-- laptop performance
-- CharacterBody3D movement
-- vehicle movement
-- predictable collision
-- fewer tiny mesh snags
+This means collision follows actual walls/ruins instead of giant rectangular
+blockers.
 
-FILTERED OUT
-Ground, terrain, roads, floors, glass/windows, foliage, fire/smoke, wires,
-signs, lights, and tiny clutter do not receive proxy collision.
+3. LARGE BACKDROP/TERRAIN MESHES ARE SKIPPED
+Tiny decorative meshes and extremely large combined/background meshes are not
+turned into collision. This avoids turning the entire city backdrop into one
+enormous physics surface.
 
-SERVER DIAGNOSTICS
-When Ruined City starts, the server should now print:
-Ruined City proxy collision: RCProxy_WestRuins -> X blockers
-Ruined City proxy collision: RCProxy_City -> X blockers
-Ruined City proxy collision: RCProxy_Pillbox -> X blockers
-Ruined City authoritative architecture collision: X proxies
+4. OUTER MAP BOUNDARIES ARE NOW INVISIBLE
+The four perimeter safety walls retain collision but no longer render gray
+box meshes.
 
-TEST THE SAME BUILDINGS FROM THE SCREENSHOT
-You should no longer be able to simply walk through the imported architecture.
-If a specific doorway/opening becomes blocked, that can now be adjusted
-precisely because the proxies are deterministic.
+SERVER LOGS
+On Ruined City startup, look for:
+Ruined City true mesh collision: RCMesh_WestRuins -> X shapes
+Ruined City true mesh collision: RCMesh_City -> X shapes
+Ruined City true mesh collision: RCMesh_Pillbox -> X shapes
+Ruined City authoritative TRUE architecture collision: X shapes
 
-UNCHANGED
-Operation Black River, objectives, sectors, vehicles/aircraft, WWII soldiers,
-weapons/textures, Allied Mk 2 grenade, Axis grenade, bots, TAB, E interactions,
-F6/F8, and --bots 0 behavior remain intact.
+TEST
+Walk directly into:
+- house exterior walls
+- ruined masonry walls
+- the pillbox
+- large structural ruins
 
-Build: 10.5.0
-Protocol: 349
+Then test door/window/opening areas. Because this now follows actual mesh
+triangles, usable openings should behave much better than box proxies.
+
+PRESERVED
+- Operation Black River
+- Ruined City objectives/sectors
+- Jeeps/tanks/planes
+- WWII soldiers
+- Allied Mk 2 / Axis grenades
+- weapon textures/models
+- bot routes
+- map-aware HUD/scoreboard
+- contextual E
+- F6/F8
+- --bots 0
+
+Build: 10.6.0
+Protocol: 350

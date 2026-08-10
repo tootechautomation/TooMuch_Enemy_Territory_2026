@@ -118,22 +118,26 @@ static func _static_box(
 	name_value: String,
 	position_value: Vector3,
 	size_value: Vector3,
-	color_value: Color
+	color_value: Color,
+	show_mesh: bool = true
 ) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.name = name_value
 	body.position = position_value
+	body.collision_layer = 1
+	body.collision_mask = 1
 
-	var mesh_instance := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = size_value
-	mesh_instance.mesh = mesh
+	if show_mesh:
+		var mesh_instance := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = size_value
+		mesh_instance.mesh = mesh
 
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color_value
-	material.roughness = 0.94
-	mesh_instance.material_override = material
-	body.add_child(mesh_instance)
+		var material := StandardMaterial3D.new()
+		material.albedo_color = color_value
+		material.roughness = 0.94
+		mesh_instance.material_override = material
+		body.add_child(mesh_instance)
 
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
@@ -156,74 +160,14 @@ static func _build_playable_geometry(root: Node) -> void:
 	)
 
 	# Outer perimeter.
-	_static_box(root, "RC_NorthBoundary", Vector3(0, 2.0, -46), Vector3(132, 4, 1), Color(0.24,0.23,0.22))
-	_static_box(root, "RC_SouthBoundary", Vector3(0, 2.0, 46), Vector3(132, 4, 1), Color(0.24,0.23,0.22))
-	_static_box(root, "RC_WestBoundary", Vector3(-66, 2.0, 0), Vector3(1, 4, 92), Color(0.24,0.23,0.22))
-	_static_box(root, "RC_EastBoundary", Vector3(66, 2.0, 0), Vector3(1, 4, 92), Color(0.24,0.23,0.22))
+	_static_box(root, "RC_NorthBoundary", Vector3(0, 2.0, -46), Vector3(132, 4, 1), Color(0.24,0.23,0.22), false)
+	_static_box(root, "RC_SouthBoundary", Vector3(0, 2.0, 46), Vector3(132, 4, 1), Color(0.24,0.23,0.22), false)
+	_static_box(root, "RC_WestBoundary", Vector3(-66, 2.0, 0), Vector3(1, 4, 92), Color(0.24,0.23,0.22), false)
+	_static_box(root, "RC_EastBoundary", Vector3(66, 2.0, 0), Vector3(1, 4, 92), Color(0.24,0.23,0.22), false)
 
-	# Three route structure: north street, central square, south alley.
-	var cover_data: Array[Dictionary] = [
-		{"n":"RC_WestRuinA","p":Vector3(-37,2.4,-18),"s":Vector3(12,4.8,8)},
-		{"n":"RC_WestRuinB","p":Vector3(-31,1.8,15),"s":Vector3(9,3.6,12)},
-		{"n":"RC_CenterRuinA","p":Vector3(-10,2.0,-20),"s":Vector3(10,4,8)},
-		{"n":"RC_CenterRuinB","p":Vector3(10,2.0,20),"s":Vector3(10,4,8)},
-		{"n":"RC_EastRuinA","p":Vector3(32,2.4,16),"s":Vector3(12,4.8,8)},
-		{"n":"RC_EastRuinB","p":Vector3(38,1.8,-15),"s":Vector3(9,3.6,12)},
-		{"n":"RC_SquareCoverA","p":Vector3(-7,0.9,4),"s":Vector3(5,1.8,2)},
-		{"n":"RC_SquareCoverB","p":Vector3(7,0.9,-4),"s":Vector3(5,1.8,2)},
-		{"n":"RC_AlleyWallA","p":Vector3(-20,1.3,30),"s":Vector3(14,2.6,1)},
-		{"n":"RC_AlleyWallB","p":Vector3(20,1.3,-30),"s":Vector3(14,2.6,1)}
-	]
-
-	for entry: Dictionary in cover_data:
-		_static_box(
-			root,
-			str(entry["n"]),
-			Vector3(entry["p"]),
-			Vector3(entry["s"]),
-			Color(0.31, 0.29, 0.26)
-		)
-
-	# v10.3 urban warfare pass: broken building shells and street fighting cover.
-	# These are intentionally simple authored collision volumes so imported GLBs
-	# remain visual-only and cannot trap players in unpredictable mesh collision.
-	var urban_cover: Array[Dictionary] = [
-		{"n":"RC_WestFacadeNorth","p":Vector3(-48,3.0,-31),"s":Vector3(20,6,2)},
-		{"n":"RC_WestFacadeSouth","p":Vector3(-48,3.0,31),"s":Vector3(20,6,2)},
-		{"n":"RC_EastFacadeNorth","p":Vector3(48,3.0,-31),"s":Vector3(20,6,2)},
-		{"n":"RC_EastFacadeSouth","p":Vector3(48,3.0,31),"s":Vector3(20,6,2)},
-		{"n":"RC_NorthRubbleA","p":Vector3(-22,0.8,-34),"s":Vector3(8,1.6,4)},
-		{"n":"RC_NorthRubbleB","p":Vector3(18,0.65,-35),"s":Vector3(6,1.3,5)},
-		{"n":"RC_SouthRubbleA","p":Vector3(-18,0.7,35),"s":Vector3(7,1.4,5)},
-		{"n":"RC_SouthRubbleB","p":Vector3(24,0.85,34),"s":Vector3(9,1.7,4)},
-		{"n":"RC_CenterBarricadeN","p":Vector3(0,0.75,-12),"s":Vector3(8,1.5,1.2)},
-		{"n":"RC_CenterBarricadeS","p":Vector3(0,0.75,12),"s":Vector3(8,1.5,1.2)},
-		{"n":"RC_WestStreetCover","p":Vector3(-22,0.8,0),"s":Vector3(2,1.6,7)},
-		{"n":"RC_EastStreetCover","p":Vector3(22,0.8,0),"s":Vector3(2,1.6,7)}
-	]
-	for entry: Dictionary in urban_cover:
-		_static_box(
-			root,
-			str(entry["n"]),
-			Vector3(entry["p"]),
-			Vector3(entry["s"]),
-			Color(0.28, 0.27, 0.25)
-		)
-
-	# Burned-out vehicle-sized wreck silhouettes provide readable street cover.
-	var wrecks: Array[Dictionary] = [
-		{"n":"RC_WreckWest","p":Vector3(-16,0.7,-8),"s":Vector3(4.8,1.4,2.2)},
-		{"n":"RC_WreckCenter","p":Vector3(6,0.65,7),"s":Vector3(4.4,1.3,2.1)},
-		{"n":"RC_WreckEast","p":Vector3(24,0.7,-10),"s":Vector3(4.8,1.4,2.2)}
-	]
-	for entry: Dictionary in wrecks:
-		_static_box(
-			root,
-			str(entry["n"]),
-			Vector3(entry["p"]),
-			Vector3(entry["s"]),
-			Color(0.12, 0.115, 0.105)
-		)
+	# v10.6: the large temporary gray-box cover pass has been removed.
+	# Imported ruins/buildings now provide the visible architecture and their
+	# collision is generated from the real render meshes below.
 
 
 static func _objective_label(
@@ -498,13 +442,14 @@ static func _instantiate_visual(
 	# Collision is built separately by the server-safe proxy pass below.
 
 
-static func _architecture_proxy_skip(name_value: String) -> bool:
+static func _architecture_collision_skip(name_value: String) -> bool:
 	var lower_name := name_value.to_lower()
 	var skip_words: Array[String] = [
 		"ground", "terrain", "road", "street", "floor", "plane",
 		"decal", "glass", "window", "leaf", "leaves", "grass",
 		"smoke", "fire", "flame", "particle", "water", "sky",
-		"light", "lamp", "sign", "wire", "cable"
+		"light", "lamp", "sign", "wire", "cable", "curtain",
+		"cloth", "flag"
 	]
 	for word: String in skip_words:
 		if lower_name.contains(word):
@@ -512,60 +457,27 @@ static func _architecture_proxy_skip(name_value: String) -> bool:
 	return false
 
 
-static func _proxy_box_from_world_aabb(
-	root: Node,
-	name_value: String,
-	world_bounds: AABB
-) -> void:
-	var size := world_bounds.size.abs()
-	if (
-		not is_finite(size.x)
-		or not is_finite(size.y)
-		or not is_finite(size.z)
-	):
-		return
-
-	var longest := maxf(size.x, maxf(size.y, size.z))
-	var volume := size.x * size.y * size.z
-	if longest < 1.20 or volume < 0.32:
-		return
-	if size.y < 0.38 and maxf(size.x, size.z) < 3.5:
-		return
-
-	var body := StaticBody3D.new()
-	body.name = name_value
-	body.collision_layer = 1
-	body.collision_mask = 1
-	body.position = world_bounds.get_center()
-
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(
-		maxf(0.30, size.x * 0.90),
-		maxf(0.45, size.y),
-		maxf(0.30, size.z * 0.90)
-	)
-	collision.shape = shape
-	body.add_child(collision)
-	root.add_child(body)
-
-
-static func _build_proxy_set_for_import(
+static func _build_trimesh_set_for_import(
 	root: Node,
 	path: String,
-	proxy_prefix: String,
+	collision_prefix: String,
 	position_value: Vector3,
 	rotation_y: float,
 	target_height: float,
-	max_proxies: int
+	max_collision_meshes: int
 ) -> int:
 	if not ResourceLoader.exists(path):
-		push_warning("Ruined City collision source missing: %s" % path)
+		push_warning(
+			"Ruined City collision source missing: %s" % path
+		)
 		return 0
 
 	var resource: Resource = load(path)
 	if not resource is PackedScene:
-		push_warning("Ruined City collision source is not PackedScene: %s" % path)
+		push_warning(
+			"Ruined City collision source is not PackedScene: %s"
+			% path
+		)
 		return 0
 
 	var instance: Node = (resource as PackedScene).instantiate()
@@ -574,9 +486,10 @@ static func _build_proxy_set_for_import(
 		return 0
 
 	var source := instance as Node3D
-	source.name = "%s_Source" % proxy_prefix
+	source.name = "%s_Source" % collision_prefix
 	root.add_child(source)
 
+	# Match the visible model's normalization exactly.
 	var has_bounds := false
 	var local_bounds := AABB()
 	for child: Node in source.find_children(
@@ -613,30 +526,29 @@ static func _build_proxy_set_for_import(
 	source.force_update_transform()
 
 	var generated := 0
+	var skipped_too_large := 0
+	var skipped_invalid := 0
+
 	for child: Node in source.find_children(
 		"*",
 		"MeshInstance3D",
 		true,
 		false
 	):
-		if generated >= max_proxies:
+		if generated >= max_collision_meshes:
 			break
 
 		var mesh_instance := child as MeshInstance3D
 		if mesh_instance.mesh == null:
 			continue
-		if _architecture_proxy_skip(mesh_instance.name):
+		if _architecture_collision_skip(mesh_instance.name):
 			continue
 
 		var local_aabb := mesh_instance.get_aabb()
-		if local_aabb.size.length_squared() <= 0.0001:
-			continue
-
 		var world_aabb: AABB = (
 			mesh_instance.global_transform
 			* local_aabb
 		)
-
 		var world_size := world_aabb.size.abs()
 		var longest := maxf(
 			world_size.x,
@@ -648,60 +560,102 @@ static func _build_proxy_set_for_import(
 			* world_size.z
 		)
 
-		if longest < 1.35 or volume < 0.40:
+		# Ignore small decorative props.
+		if longest < 1.10 or volume < 0.20:
 			continue
 
-		_proxy_box_from_world_aabb(
-			root,
-			"%s_%03d" % [proxy_prefix, generated],
-			world_aabb
+		# Avoid turning a single giant city/terrain mesh into one expensive
+		# collision shape. Those are usually backdrop/combined geometry.
+		if longest > 55.0:
+			skipped_too_large += 1
+			continue
+
+		var collision_shape_resource: ConcavePolygonShape3D = (
+			mesh_instance.mesh.create_trimesh_shape()
 		)
+		if collision_shape_resource == null:
+			skipped_invalid += 1
+			continue
+
+		var body := StaticBody3D.new()
+		body.name = "%s_%03d" % [
+			collision_prefix,
+			generated
+		]
+		body.collision_layer = 1
+		body.collision_mask = 1
+		root.add_child(body)
+
+		# IMPORTANT: body transform matches the actual imported MeshInstance3D,
+		# so doorways, wall angles and ruined silhouettes remain aligned.
+		body.global_transform = mesh_instance.global_transform
+
+		var collision := CollisionShape3D.new()
+		collision.name = "CollisionShape3D"
+		collision.shape = collision_shape_resource
+		body.add_child(collision)
+
 		generated += 1
 
+	# Source exists only long enough to derive collision resources/transforms.
 	source.queue_free()
 
 	print(
-		"Ruined City proxy collision: %s -> %d blockers"
-		% [proxy_prefix, generated]
+		"Ruined City true mesh collision: %s -> %d shapes"
+		% [collision_prefix, generated]
 	)
+	if skipped_too_large > 0:
+		print(
+			"Ruined City collision skipped %d giant backdrop meshes for %s"
+			% [skipped_too_large, collision_prefix]
+		)
+	if skipped_invalid > 0:
+		print(
+			"Ruined City collision skipped %d unsupported meshes for %s"
+			% [skipped_invalid, collision_prefix]
+		)
+
 	return generated
 
 
 static func _build_imported_architecture_proxies(root: Node) -> void:
+	# Name retained for compatibility with the v10 map builder, but the
+	# implementation is now true invisible trimesh collision rather than
+	# box proxies.
 	var total := 0
 
-	total += _build_proxy_set_for_import(
+	total += _build_trimesh_set_for_import(
 		root,
 		"res://assets/maps/ruined_city/city_ruins_environment.glb",
-		"RCProxy_WestRuins",
+		"RCMesh_WestRuins",
 		Vector3(-35.0, 0.0, -5.0),
 		deg_to_rad(12.0),
 		11.0,
-		96
+		90
 	)
 
-	total += _build_proxy_set_for_import(
+	total += _build_trimesh_set_for_import(
 		root,
 		"res://assets/maps/ruined_city/ww2_low_poly_city_scene.glb",
-		"RCProxy_City",
+		"RCMesh_City",
 		Vector3(22.0, 0.0, -4.0),
 		deg_to_rad(-8.0),
 		16.0,
-		128
+		120
 	)
 
-	total += _build_proxy_set_for_import(
+	total += _build_trimesh_set_for_import(
 		root,
 		"res://assets/maps/ruined_city/mothecombe_pillbox.glb",
-		"RCProxy_Pillbox",
+		"RCMesh_Pillbox",
 		Vector3(38.0, 0.0, 8.0),
 		deg_to_rad(180.0),
 		5.2,
-		48
+		40
 	)
 
 	print(
-		"Ruined City authoritative architecture collision: %d proxies"
+		"Ruined City authoritative TRUE architecture collision: %d shapes"
 		% total
 	)
 
