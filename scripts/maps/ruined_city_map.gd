@@ -180,6 +180,47 @@ static func _build_playable_geometry(root: Node) -> void:
 			Color(0.31, 0.29, 0.26)
 		)
 
+	# v10.3 urban warfare pass: broken building shells and street fighting cover.
+	# These are intentionally simple authored collision volumes so imported GLBs
+	# remain visual-only and cannot trap players in unpredictable mesh collision.
+	var urban_cover: Array[Dictionary] = [
+		{"n":"RC_WestFacadeNorth","p":Vector3(-48,3.0,-31),"s":Vector3(20,6,2)},
+		{"n":"RC_WestFacadeSouth","p":Vector3(-48,3.0,31),"s":Vector3(20,6,2)},
+		{"n":"RC_EastFacadeNorth","p":Vector3(48,3.0,-31),"s":Vector3(20,6,2)},
+		{"n":"RC_EastFacadeSouth","p":Vector3(48,3.0,31),"s":Vector3(20,6,2)},
+		{"n":"RC_NorthRubbleA","p":Vector3(-22,0.8,-34),"s":Vector3(8,1.6,4)},
+		{"n":"RC_NorthRubbleB","p":Vector3(18,0.65,-35),"s":Vector3(6,1.3,5)},
+		{"n":"RC_SouthRubbleA","p":Vector3(-18,0.7,35),"s":Vector3(7,1.4,5)},
+		{"n":"RC_SouthRubbleB","p":Vector3(24,0.85,34),"s":Vector3(9,1.7,4)},
+		{"n":"RC_CenterBarricadeN","p":Vector3(0,0.75,-12),"s":Vector3(8,1.5,1.2)},
+		{"n":"RC_CenterBarricadeS","p":Vector3(0,0.75,12),"s":Vector3(8,1.5,1.2)},
+		{"n":"RC_WestStreetCover","p":Vector3(-22,0.8,0),"s":Vector3(2,1.6,7)},
+		{"n":"RC_EastStreetCover","p":Vector3(22,0.8,0),"s":Vector3(2,1.6,7)}
+	]
+	for entry: Dictionary in urban_cover:
+		_static_box(
+			root,
+			str(entry["n"]),
+			Vector3(entry["p"]),
+			Vector3(entry["s"]),
+			Color(0.28, 0.27, 0.25)
+		)
+
+	# Burned-out vehicle-sized wreck silhouettes provide readable street cover.
+	var wrecks: Array[Dictionary] = [
+		{"n":"RC_WreckWest","p":Vector3(-16,0.7,-8),"s":Vector3(4.8,1.4,2.2)},
+		{"n":"RC_WreckCenter","p":Vector3(6,0.65,7),"s":Vector3(4.4,1.3,2.1)},
+		{"n":"RC_WreckEast","p":Vector3(24,0.7,-10),"s":Vector3(4.8,1.4,2.2)}
+	]
+	for entry: Dictionary in wrecks:
+		_static_box(
+			root,
+			str(entry["n"]),
+			Vector3(entry["p"]),
+			Vector3(entry["s"]),
+			Color(0.12, 0.115, 0.105)
+		)
+
 
 static func _objective_label(
 	parent: Node3D,
@@ -451,6 +492,41 @@ static func _instantiate_visual(
 
 
 static func _build_visual_setpieces(root: Node) -> void:
+	# Lightweight battlefield fires establish landmarks and route readability.
+	if DisplayServer.get_name() != "headless":
+		var fire_positions: Array[Vector3] = [
+			Vector3(-28.0, 0.35, 7.0),
+			Vector3(3.0, 0.35, -17.0),
+			Vector3(29.0, 0.35, -4.0),
+			Vector3(42.0, 0.35, 22.0)
+		]
+		for index: int in range(fire_positions.size()):
+			var fire_root := Node3D.new()
+			fire_root.name = "RuinedCityFire_%d" % index
+			fire_root.position = fire_positions[index]
+			root.add_child(fire_root)
+
+			var ember := MeshInstance3D.new()
+			var ember_mesh := SphereMesh.new()
+			ember_mesh.radius = 0.38
+			ember_mesh.height = 0.75
+			ember.mesh = ember_mesh
+			var ember_material := StandardMaterial3D.new()
+			ember_material.albedo_color = Color(0.92, 0.25, 0.035)
+			ember_material.emission_enabled = true
+			ember_material.emission = Color(1.0, 0.18, 0.02)
+			ember_material.emission_energy_multiplier = 2.2
+			ember.material_override = ember_material
+			fire_root.add_child(ember)
+
+			var fire_light := OmniLight3D.new()
+			fire_light.position = Vector3(0.0, 1.0, 0.0)
+			fire_light.omni_range = 8.0
+			fire_light.light_color = Color(1.0, 0.38, 0.08)
+			fire_light.light_energy = 1.6
+			fire_light.shadow_enabled = false
+			fire_root.add_child(fire_light)
+
 	# These assets belong ONLY to this map.
 	_instantiate_visual(
 		root,
