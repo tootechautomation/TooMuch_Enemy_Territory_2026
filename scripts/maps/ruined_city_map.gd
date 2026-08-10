@@ -436,7 +436,8 @@ static func _instantiate_visual(
 	position_value: Vector3,
 	rotation_y: float,
 	target_height: float,
-	max_range: float
+	max_range: float,
+	build_collision: bool = true
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -489,6 +490,55 @@ static func _instantiate_visual(
 		geometry.cast_shadow = (
 			GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		)
+
+	# v10.4: imported scenery is no longer ghost geometry. Generate accurate
+	# static trimesh collision for substantial architectural meshes only.
+	# Tiny props, particles, decals and obvious terrain/ground meshes stay
+	# visual-only to avoid snagging the player on battlefield clutter.
+	if build_collision:
+		_build_imported_architecture_collision(model)
+
+
+static func _build_imported_architecture_collision(model: Node3D) -> void:
+	var generated: int = 0
+	const MAX_COLLISION_MESHES := 220
+	var skip_words: Array[String] = [
+		"ground", "terrain", "road", "street", "floor", "plane",
+		"decal", "glass", "window", "leaf", "leaves", "grass",
+		"smoke", "fire", "flame", "particle", "water", "sky"
+	]
+
+	for child: Node in model.find_children("*", "MeshInstance3D", true, false):
+		if generated >= MAX_COLLISION_MESHES:
+			break
+		var mesh_instance := child as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+
+		var lower_name := mesh_instance.name.to_lower()
+		var skip_mesh := false
+		for word: String in skip_words:
+			if lower_name.contains(word):
+				skip_mesh = true
+				break
+		if skip_mesh:
+			continue
+
+		var bounds := mesh_instance.get_aabb()
+		var scaled_size := bounds.size * mesh_instance.global_transform.basis.get_scale()
+		var longest := maxf(scaled_size.x, maxf(scaled_size.y, scaled_size.z))
+		var volume := absf(scaled_size.x * scaled_size.y * scaled_size.z)
+
+		# Ignore tiny rubble/props. Anything roughly wall, wreck, bunker or
+		# building sized receives exact static collision from its render mesh.
+		if longest < 1.15 or volume < 0.22:
+			continue
+
+		mesh_instance.create_trimesh_collision()
+		generated += 1
+
+	if generated > 0:
+		print("Ruined City imported collision: %d architecture meshes protected" % generated)
 
 
 static func _build_visual_setpieces(root: Node) -> void:
