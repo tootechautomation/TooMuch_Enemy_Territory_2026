@@ -240,11 +240,13 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "10.0.0"
-const NETWORK_PROTOCOL := 342
+const BUILD_VERSION := "10.0.1"
+const NETWORK_PROTOCOL := 343
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
+var playable_world_initialized := false
+var playable_world_initializing := false
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
@@ -671,6 +673,31 @@ func _build_selected_map_visual_stack() -> void:
 	_initialize_period_interface_fidelity()
 
 
+func _ensure_playable_world_initialized() -> void:
+	if playable_world_initialized or playable_world_initializing:
+		return
+
+	playable_world_initializing = true
+	print(
+		"Initializing playable world: %s [%s]"
+		% [active_map_display_name(), active_map_id]
+	)
+
+	_build_selected_map()
+	_initialize_vehicle_map_and_spawns()
+	_build_resupply_stations()
+	_build_selected_map_visual_stack()
+	_update_objective_visuals()
+
+	playable_world_initialized = true
+	playable_world_initializing = false
+
+	print(
+		"Playable world ready: %s [%s]"
+		% [active_map_display_name(), active_map_id]
+	)
+
+
 func _ready() -> void:
 	_parse_map_selection_early()
 	print(
@@ -790,11 +817,11 @@ func _ready() -> void:
 		visual_field_gun_scene = _load_optional_scene("res://assets/models/field_artillery.glb")
 		visual_prop_cluster_scene = _load_optional_scene("res://assets/models/crate_barrel_cluster.glb")
 
-	_build_selected_map()
-	_initialize_vehicle_map_and_spawns()
-	_build_resupply_stations()
-	_build_selected_map_visual_stack()
-	_update_objective_visuals()
+	# v10.0.1: graphical clients deliberately do NOT construct a playable map
+	# yet. The authoritative server map arrives during protocol handshake.
+	if DisplayServer.get_name() == "headless":
+		_ensure_playable_world_initialized()
+
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -5505,6 +5532,9 @@ func _parse_command_line() -> void:
 		_show_connection_menu()
 
 func start_server(port: int = PORT_DEFAULT) -> void:
+	# Server owns map selection. Build its world before accepting players.
+	_ensure_playable_world_initialized()
+
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, MAX_CLIENTS)
 	if err != OK:
@@ -5523,6 +5553,10 @@ func start_server(port: int = PORT_DEFAULT) -> void:
 	)
 	print("Requested bot count: %d" % desired_bot_count)
 	print("Bot skill multiplier: %.2f" % bot_skill)
+	print(
+		"Active map: %s [%s]"
+		% [active_map_display_name(), active_map_id]
+	)
 
 	if desired_bot_count <= 0:
 		print("Bots disabled for this server session.")
@@ -6224,7 +6258,10 @@ func _show_connection_menu() -> void:
 	box.add_child(settings_button)
 
 	status_label = Label.new()
-	status_label.text = "WASD · Mouse · E interact · Q ability · Tab scoreboard"
+	status_label.text = (
+		"Ready to connect · server selects map · "
+		+ "WASD · Mouse · E interact · Q ability · Tab scoreboard"
+	)
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(status_label)
 
@@ -6262,7 +6299,8 @@ func _on_peer_connected(id: int) -> void:
 	receive_server_protocol.rpc_id(
 		id,
 		NETWORK_PROTOCOL,
-		BUILD_VERSION
+		BUILD_VERSION,
+		active_map_id
 	)
 
 	var team := next_team
@@ -6320,7 +6358,8 @@ func _on_peer_disconnected(id: int) -> void:
 @rpc("authority", "call_remote", "reliable")
 func receive_server_protocol(
 	server_protocol: int,
-	server_version: String
+	server_version: String,
+	server_map_id: String
 ) -> void:
 	if multiplayer.is_server():
 		return
@@ -6341,12 +6380,24 @@ func receive_server_protocol(
 			status_label.text = protocol_message
 		return
 
+	# The server is authoritative for the map. Clients build no playable
+	# world until this reliable handshake arrives.
+	_set_requested_map(server_map_id)
+	_ensure_playable_world_initialized()
+
 	protocol_verified = true
-	protocol_message = "Connected: v%s protocol %d" % [
-		server_version,
-		server_protocol
-	]
+	protocol_message = (
+		"Connected: v%s protocol %d · map %s"
+		% [
+			server_version,
+			server_protocol,
+			active_map_display_name()
+		]
+	)
 	print(protocol_message)
+	if status_label != null:
+		status_label.text = protocol_message
+
 	client_protocol_ack.rpc_id(
 		1,
 		NETWORK_PROTOCOL,
