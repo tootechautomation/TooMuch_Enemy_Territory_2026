@@ -237,7 +237,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.26.0"
+const BUILD_VERSION := "9.27.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -10989,6 +10989,129 @@ func vehicle_tactical_entries() -> Array[Dictionary]:
 		})
 
 	return entries
+
+
+func interaction_prompt_for_player(player: Node3D) -> String:
+	if player == null:
+		return ""
+	if not bool(player.get("alive")):
+		return ""
+	if bool(player.get("downed")):
+		return ""
+
+	var player_position: Vector3 = player.global_position
+	var current_vehicle: int = int(player.get("current_vehicle_id"))
+
+	# 1. VEHICLES — same highest priority as server_interact_request().
+	var vehicle_prompt: String = nearest_vehicle_prompt(
+		player_position,
+		current_vehicle
+	)
+	if not vehicle_prompt.is_empty():
+		return vehicle_prompt
+
+	# 2. DROPPED WEAPON / AMMO.
+	var nearest_pickup: Node3D = null
+	var pickup_distance: float = 2.55
+	for pickup_value: Variant in battlefield_pickups.values():
+		var pickup: Node3D = pickup_value as Node3D
+		if pickup == null or not is_instance_valid(pickup):
+			continue
+		var distance: float = player_position.distance_to(
+			pickup.global_position
+		)
+		if distance < pickup_distance:
+			pickup_distance = distance
+			nearest_pickup = pickup
+
+	if nearest_pickup != null:
+		var pickup_kind: String = str(
+			nearest_pickup.get("pickup_kind")
+		)
+		if pickup_kind == "ammo":
+			return "E · TAKE AMMO"
+
+		var pickup_slot: int = int(
+			nearest_pickup.get("slot_index")
+		)
+		return (
+			"E · SWAP %s WEAPON"
+			% (
+				"PRIMARY"
+				if pickup_slot == 0
+				else "SECONDARY"
+			)
+		)
+
+	# 3. FIXED RESUPPLY STATIONS.
+	for station: Node3D in resupply_stations:
+		if station == null or not is_instance_valid(station):
+			continue
+		if player_position.distance_to(station.global_position) <= 2.65:
+			return "E · RESUPPLY AMMO"
+
+	# 4. MEDIC REVIVE.
+	if int(player.get("player_class")) == 1:
+		var player_team: int = int(player.get("team"))
+		for candidate_value: Variant in players.values():
+			var candidate: Node3D = candidate_value as Node3D
+			if candidate == null or candidate == player:
+				continue
+			if int(candidate.get("team")) != player_team:
+				continue
+			if not bool(candidate.get("alive")):
+				continue
+			if not bool(candidate.get("downed")):
+				continue
+			if player_position.distance_to(
+				candidate.global_position
+			) <= 3.25:
+				var candidate_name: String = str(
+					candidate.get("player_name")
+				)
+				if candidate_name.is_empty():
+					candidate_name = "TEAMMATE"
+				return "E · REVIVE %s" % candidate_name
+
+	# 5. ENGINEER OBJECTIVE ACTION.
+	if int(player.get("player_class")) == 2:
+		var engineer_team: int = int(player.get("team"))
+
+		if objective_stage == 0:
+			var build_site: Node3D = (
+				get_node_or_null("BridgeBuildSite") as Node3D
+			)
+			if (
+				engineer_team == 0
+				and build_site != null
+				and player_position.distance_to(
+					build_site.global_position
+				) <= 4.0
+			):
+				return "E · BUILD BRIDGE · %d/%d" % [
+					bridge_progress,
+					bridge_required
+				]
+		else:
+			var objective: Node3D = (
+				get_node_or_null("Objective") as Node3D
+			)
+			if (
+				objective != null
+				and player_position.distance_to(
+					objective.global_position
+				) <= 4.0
+			):
+				if engineer_team == 0 and not dynamite_armed:
+					return "E · ARM DYNAMITE"
+
+				if engineer_team == 1 and dynamite_armed:
+					return "E · DEFUSE CHARGE · %d/%d" % [
+						defuse_progress,
+						defuse_required
+					]
+
+	return ""
 
 
 func nearest_vehicle_prompt(

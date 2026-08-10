@@ -849,20 +849,24 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	# Dedicated vehicle E interaction. This bypasses the generic interaction
-	# hold timer, which made vehicle entry unreliable when UI/gameplay focus
-	# changed. The server still validates range and seat availability.
+	# Dedicated E press uses the unified server interaction resolver.
+	# Priority is: vehicle -> dropped equipment -> resupply -> revive ->
+	# engineer objective. This keeps E reliable without competing handlers.
 	if (
 		key_code == KEY_E
 		and key_event.pressed
 		and not key_event.echo
+		and alive
 	):
 		var main_node: Node = get_parent()
 		if (
 			main_node != null
-			and main_node.has_method("request_vehicle_interact")
+			and main_node.has_method("request_player_interact")
 		):
-			main_node.request_vehicle_interact.rpc_id(1)
+			main_node.request_player_interact.rpc_id(
+				1,
+				multiplayer.get_unique_id()
+			)
 			get_viewport().set_input_as_handled()
 			return
 
@@ -1066,6 +1070,7 @@ func _update_local_ui_throttled(delta: float) -> void:
 		_update_class_role_hud()
 		_update_reinforcement_death_panel()
 		_update_team_identity_hud()
+		_update_interaction_prompt()
 
 	if tactical_marker_update_accumulator >= marker_interval:
 		tactical_marker_update_accumulator = 0.0
@@ -1425,7 +1430,7 @@ func _collect_and_send_input() -> void:
 
 	if Input.is_action_pressed("interact"):
 		interact_accumulator += get_physics_process_delta_time()
-		if interact_accumulator >= 0.25:
+		if interact_accumulator >= 0.45:
 			interact_accumulator = 0.0
 			if main_node != null:
 				main_node.request_player_interact.rpc_id(1, local_peer_id)
@@ -7235,6 +7240,9 @@ func _apply_scoreboard_focus(show_scoreboard: bool) -> void:
 	if et_crosshair_ring != null and show_scoreboard:
 		et_crosshair_ring.visible = false
 
+	if interaction_prompt != null and show_scoreboard:
+		interaction_prompt.visible = false
+
 
 func _apply_cinema_mode_visibility() -> void:
 	# Scoreboard remains usable in cinema mode. Everything else in the regular
@@ -7289,6 +7297,24 @@ func _build_hud() -> void:
 	crosshair.position = Vector2(638, 350)
 	crosshair.add_theme_font_size_override("font_size", 24)
 	layer.add_child(crosshair)
+
+	interaction_prompt = Label.new()
+	interaction_prompt.name = "InteractionPrompt"
+	interaction_prompt.position = Vector2(440, 386)
+	interaction_prompt.size = Vector2(400, 34)
+	interaction_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	interaction_prompt.add_theme_font_size_override("font_size", 16)
+	interaction_prompt.add_theme_constant_override("outline_size", 5)
+	interaction_prompt.add_theme_color_override(
+		"font_color",
+		Color(0.94, 0.90, 0.72, 1.0)
+	)
+	interaction_prompt.add_theme_color_override(
+		"font_outline_color",
+		Color(0.02, 0.025, 0.02, 0.96)
+	)
+	interaction_prompt.visible = false
+	layer.add_child(interaction_prompt)
 
 	scope_overlay = Control.new()
 	scope_overlay.name = "ScoutScopeOverlay"
@@ -8637,6 +8663,51 @@ func _update_class_role_hud() -> void:
 
 	if class_role_prompt != null:
 		class_role_prompt.text = _class_role_prompt_text()
+
+
+func _update_interaction_prompt() -> void:
+	if interaction_prompt == null:
+		return
+
+	var scoreboard_active: bool = (
+		scoreboard_canvas_layer != null
+		and scoreboard_canvas_layer.visible
+	)
+
+	var can_show: bool = (
+		_is_local_player()
+		and alive
+		and not downed
+		and not cinema_mode_enabled
+		and not tactical_map_open
+		and not spawn_menu_open
+		and not scoreboard_active
+	)
+
+	if not can_show:
+		interaction_prompt.visible = false
+		interaction_prompt.text = ""
+		return
+
+	var main_node: Node = get_parent()
+	if (
+		main_node == null
+		or not main_node.has_method(
+			"interaction_prompt_for_player"
+		)
+	):
+		interaction_prompt.visible = false
+		return
+
+	var prompt_text: String = str(
+		main_node.call(
+			"interaction_prompt_for_player",
+			self
+		)
+	)
+
+	interaction_prompt.text = prompt_text
+	interaction_prompt.visible = not prompt_text.is_empty()
 
 
 func _update_hud() -> void:

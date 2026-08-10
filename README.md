@@ -1,70 +1,77 @@
-FRONTLINE: OBJECTIVE v9.26.0
-WEAPON HANDLING + RELOAD/SWAP RELIABILITY
+FRONTLINE: OBJECTIVE v9.27.0
+CONTEXTUAL INTERACTION + E-KEY RELIABILITY
 
-DIRECT WEAPON KEYS
-1 = primary slot
-2 = secondary slot
+CONTEXT PROMPT
+A small interaction prompt now appears below the crosshair only when an
+action is actually available.
 
-These are handled in the direct input path so focused UI Controls are less
-likely to swallow weapon selection during normal gameplay.
+Examples:
+E · EXIT VEHICLE
+E · ENTER M4 SHERMAN · DRIVER
+E · TAKE AMMO
+E · SWAP PRIMARY WEAPON
+E · RESUPPLY AMMO
+E · REVIVE PLAYERNAME
+E · BUILD BRIDGE · 4/10
+E · ARM DYNAMITE
+E · DEFUSE CHARGE · 2/5
 
-QUICK SWITCH
-The existing weapon_switch action (Q in the current control scheme) now
-prefers the actual previously equipped weapon instead of blindly advancing
-through the slot array.
+INTERACTION PRIORITY
+The prompt mirrors the server's actual interaction order:
 
-This matters if more weapon slots are added later.
+1. vehicle entry/exit
+2. battlefield weapon/ammo pickup
+3. fixed resupply station
+4. Medic revive
+5. Engineer objective action
 
-RESPONSIVE LOCAL PRESENTATION
-Weapon models switch immediately on the local client while the server remains
-authoritative and confirms/corrects the selected slot.
+This means the prompt describes the same action the server will attempt first.
 
-A short 110 ms debounce prevents duplicate key repeats/RPC spam.
+E KEY FIX
+Previously the dedicated physical E handler sent only
+request_vehicle_interact(). The generic interact path separately handled
+pickups/revive/objectives.
 
-RELOAD CANCELLATION
-Changing weapons cancels reload safely.
+Physical E now sends the unified request_player_interact() immediately.
 
-Firing during a tactical reload:
-- if the magazine still contains rounds, the reload is cancelled and fire is
-  allowed
-- if the magazine is empty, the reload cannot be bypassed
+The server still validates:
+- range
+- vehicle seat
+- player state
+- team/class
+- objective state
+- pickup/resupply availability
 
-No ammunition is granted/lost because ammo state is stored before switching.
+CONTROLLER / REMAPPED INPUT
+The existing held interact action remains available as a fallback. Its hold
+threshold is slightly longer to avoid a keyboard E tap producing duplicate
+RPCs.
 
-EMPTY-MAG AUTO RELOAD
-If the server receives a fire request with:
-- magazine = 0
-- reserve > 0
-
-it starts the normal reload automatically.
-
-This avoids repeated dry-fire requests when the player is already trying to
-continue firing.
-
-RELOAD AUDIO
-Reload audio now only begins when a reload is actually possible.
-Weapon switching or firing-to-cancel also stops the local reload audio.
-
-VEHICLES
-Infantry weapon switching is ignored while seated in a vehicle.
+HUD RESTRAINT
+The context prompt automatically hides during:
+- TAB scoreboard
+- cinema mode
+- tactical map
+- spawn/class menu
+- death/downed state
 
 PERFORMANCE
-No new rendering.
-No new physics.
-No continuous RPCs.
-Only tiny input-state/debounce logic.
+The prompt is evaluated only with the already-throttled HUD update, not every
+render frame.
+
+No new physics, collision, particles, or network stream.
 
 PRESERVED
+- v9.26 weapon handling
 - v9.25 TAB scoreboard priority
 - v9.24 bot combat intelligence
-- revive/team awareness
+- team/revive awareness
 - spatial audio
 - effect budgets
 - spawn safety
-- destructible environment
 - all vehicles/aircraft
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.26.0
+Build: 9.27.0
 Protocol: 341
