@@ -106,6 +106,10 @@ var external_character_test_base_position := Vector3.ZERO
 var external_character_test_base_rotation := Vector3.ZERO
 var external_character_quality_refresh_ms := 0
 var external_character_last_quality := -1
+var external_character_motion_blend := 0.0
+var external_character_crouch_blend := 0.0
+var external_character_downed_blend := 0.0
+var external_character_last_pose_ms := 0
 var external_animation_controller
 var external_weapon_socket: Node3D
 var external_model_loaded := false
@@ -3934,6 +3938,10 @@ func _build_external_character_model() -> bool:
 		using_wwii_test_model
 		and external_character_animator == null
 	)
+	external_character_motion_blend = 0.0
+	external_character_crouch_blend = 0.0
+	external_character_downed_blend = 0.0
+	external_character_last_pose_ms = 0
 	external_character_test_base_position = (
 		external_character_model.position
 	)
@@ -4063,6 +4071,8 @@ func _update_external_character_animation() -> void:
 		not _is_local_player()
 		and alive
 	)
+	if not alive:
+		return
 
 	var speed: float = Vector2(
 		velocity.x,
@@ -4070,14 +4080,44 @@ func _update_external_character_animation() -> void:
 	).length()
 
 	if external_character_test_unrigged:
-		var motion_amount: float = clampf(
+		var now_pose: int = Time.get_ticks_msec()
+		var pose_delta: float = 0.016
+		if external_character_last_pose_ms > 0:
+			pose_delta = clampf(
+				float(now_pose - external_character_last_pose_ms)
+				/ 1000.0,
+				0.0,
+				0.05
+			)
+		external_character_last_pose_ms = now_pose
+
+		var movement_target: float = clampf(
 			speed / 7.0,
 			0.0,
 			1.0
 		)
+		external_character_motion_blend = move_toward(
+			external_character_motion_blend,
+			movement_target,
+			pose_delta * 4.5
+		)
+		external_character_crouch_blend = move_toward(
+			external_character_crouch_blend,
+			1.0 if is_crouching else 0.0,
+			pose_delta * 5.5
+		)
+		external_character_downed_blend = move_toward(
+			external_character_downed_blend,
+			1.0 if downed else 0.0,
+			pose_delta * 6.5
+		)
+
 		var motion_phase: float = (
 			visual_animation_time
-			* (5.0 + 2.0 * motion_amount)
+			* (
+				4.8
+				+ 2.4 * external_character_motion_blend
+			)
 		)
 
 		external_character_model.position = (
@@ -4087,19 +4127,48 @@ func _update_external_character_animation() -> void:
 			external_character_test_base_rotation
 		)
 
+		# Small vertical cadence and body sway. Kept intentionally subtle because
+		# these are static GLBs and player collision/hitboxes remain unchanged.
 		external_character_model.position.y += (
 			absf(sin(motion_phase))
-			* 0.010
-			* motion_amount
+			* 0.012
+			* external_character_motion_blend
 		)
 		external_character_model.rotation.z += (
 			sin(motion_phase * 0.5)
-			* 0.010
-			* motion_amount
+			* 0.014
+			* external_character_motion_blend
+		)
+		external_character_model.rotation.x += (
+			sin(motion_phase)
+			* 0.006
+			* external_character_motion_blend
 		)
 
-		if is_crouching:
-			external_character_model.position.y -= 0.16
+		# Smooth crouch instead of snapping the whole model downward.
+		external_character_model.position.y -= (
+			0.17 * external_character_crouch_blend
+		)
+		external_character_model.rotation.x += (
+			deg_to_rad(4.0)
+			* external_character_crouch_blend
+		)
+
+		# Downed pose: turn the static soldier onto its side and lower it close
+		# to ground level. This is visual only.
+		if external_character_downed_blend > 0.001:
+			external_character_model.position.y -= (
+				0.55 * external_character_downed_blend
+			)
+			external_character_model.rotation.z += (
+				deg_to_rad(78.0)
+				* external_character_downed_blend
+			)
+			external_character_model.rotation.x += (
+				deg_to_rad(-8.0)
+				* external_character_downed_blend
+			)
+
 		return
 
 	if external_animation_controller == null:
