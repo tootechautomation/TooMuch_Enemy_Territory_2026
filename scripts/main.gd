@@ -237,7 +237,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.23.3"
+const BUILD_VERSION := "9.24.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -9997,6 +9997,33 @@ func bot_cover_position(
 		bot,
 		threat_position
 	)
+
+
+func bot_nearest_hostile_vehicle(bot: Node3D) -> Node3D:
+	if bot == null:
+		return null
+
+	var nearest: Node3D = null
+	var nearest_distance: float = INF
+	var bot_team: int = int(bot.get("team"))
+
+	for vehicle_value: Variant in vehicles.values():
+		var vehicle: Node3D = vehicle_value as Node3D
+		if vehicle == null:
+			continue
+		if bool(vehicle.get("destroyed")):
+			continue
+		if int(vehicle.get("team_id")) == bot_team:
+			continue
+
+		var distance: float = bot.global_position.distance_to(
+			vehicle.global_position
+		)
+		if distance < nearest_distance:
+			nearest = vehicle
+			nearest_distance = distance
+
+	return nearest
 
 
 func bot_goal_position(bot: Node3D) -> Vector3:

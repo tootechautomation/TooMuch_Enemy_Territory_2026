@@ -1,69 +1,58 @@
-FRONTLINE: OBJECTIVE v9.23.0
-TEAM AWARENESS + OBJECTIVE CALLOUTS + PING RESTRAINT
+FRONTLINE: OBJECTIVE v9.24.0
+BOT COMBAT INTELLIGENCE + COVER + VEHICLE AWARENESS
 
-SQUAD PINGS
-Existing squad pings are now quality/distance aware.
+VEHICLE AWARENESS
+Bots now periodically inspect active enemy vehicles.
+- enemy vehicles inside ~11m trigger an escape goal
+- tanks produce a larger retreat distance
+- destroyed/friendly vehicles are ignored
+- checks are cached for 650ms to keep server cost low
 
-LOW/LAPTOP:
-- max 2 simultaneous ping markers
-- visible to roughly 42m
+LOW-HEALTH COVER
+Bots at 42 HP or below attempt to use the existing server cover-position
+system when an enemy is present.
+- cover goal is cached for 1.8 seconds
+- avoids recalculating cover every frame
+- suppression cover still works
+- vehicle escape remains higher priority
 
-BALANCED:
-- max 4
-- roughly 62m
+GRENADE DISCIPLINE
+Bots now:
+- throw only from ~9–21m
+- check for friendly players within 6m of the intended impact point
+- use grenades slightly less frequently
+- wait longer before considering another throw
 
-HIGH:
-- max 6
-- roughly 78m
+This reduces obvious friendly-fire grenade behavior and grenade spam.
 
-Ping markers now show sender + approximate distance and expire after 3.8 sec.
+COMBAT MOVEMENT
+Emergency vehicle escape / suppression / low-health cover goals are no longer
+overwritten by normal strafe/spacing movement in the same bot tick.
 
-IMPORTANT FIX
-show_squad_ping() no longer tries to generate a new global kill-feed RPC from
-every receiving client. This removes redundant ping-related message/network
-noise.
+BOT ACCURACY
+Bot accuracy now receives small penalties while:
+- moving quickly
+- suppressed
 
-TEAM CALLOUTS
-Short mission-banner callouts are now generated for important events:
-- bridge complete / bunker defense begins
-- dynamite charge armed
-- overtime
-- teammate down
-- teammate revived
-- squad mark received
-
-Callouts are filtered by team where appropriate and duplicate keys are
-cooldown-limited.
-
-REVIVE AWARENESS
-Friendly downed-player markers now show:
-✚ REVIVE · XXm
-
-Distance culling:
-- Low ~20m
-- Balanced ~30m
-- High ~38m
-
-This reduces distant label clutter while preserving nearby Medic awareness.
+This makes firefights less robotic while retaining bot_skill scaling.
 
 PERFORMANCE
-- no new physics
-- no continuous network stream
-- ping count is hard capped
-- callouts are event-driven only
-- duplicate callout suppression
-- no new dynamic lighting/particles
+- vehicle checks only every ~650ms per bot
+- cover decisions cached ~1.8s
+- grenade safety scans happen only when a bot is actually considering a throw
+- no new pathfinding system
+- no physics bodies
+- no extra client networking
 
 PRESERVED
-- v9.22 spatial audio / surface footsteps / vehicle engines
-- v9.21 effect budgets
-- v9.20 spawn safety / U unstuck
-- visibility/environment work
-- first-person/HUD/combat systems
-- destructible streets
-- all vehicle and aircraft gameplay
-- F6/F8
 - --bots 0 / --bots=0 / --no-bots
+- v9.23.3 revive marker scope fix
+- team awareness/callouts
+- spatial audio
+- effect budgets
+- spawn safety
+- all vehicle/aircraft systems
+- F6/F8
 
-Build: 9.23.0
+Build: 9.24.0
 Protocol: 341

@@ -171,6 +171,9 @@ var bot_last_route_distance := INF
 var bot_route_stall_seconds := 0.0
 var bot_emergency_nudge_ms := 0
 var bot_grenade_accumulator := 2.0
+var bot_vehicle_avoid_refresh_ms := 0
+var bot_cached_vehicle_escape := Vector3.ZERO
+var bot_combat_cover_until_ms := 0
 var bot_squad_role := 0
 var bot_role_initialized := false
 var target_position := Vector3.ZERO
@@ -4198,6 +4201,126 @@ func _bot_class_tactical_goal(main: Node) -> Vector3:
 
 	return anchor
 
+func _bot_vehicle_escape_goal(main: Node) -> Variant:
+	if main == null:
+		return null
+
+	var vehicles_value: Variant = main.get("vehicles")
+	if not vehicles_value is Dictionary:
+		return null
+
+	var now: int = Time.get_ticks_msec()
+	if (
+		now < bot_vehicle_avoid_refresh_ms
+		and bot_cached_vehicle_escape != Vector3.ZERO
+	):
+		return bot_cached_vehicle_escape
+
+	bot_vehicle_avoid_refresh_ms = now + 650
+	bot_cached_vehicle_escape = Vector3.ZERO
+
+	var nearest_vehicle: Node3D = null
+	var nearest_distance: float = INF
+
+	for vehicle_value: Variant in (vehicles_value as Dictionary).values():
+		var vehicle: Node3D = vehicle_value as Node3D
+		if vehicle == null:
+			continue
+		if bool(vehicle.get("destroyed")):
+			continue
+		if int(vehicle.get("team_id")) == team:
+			continue
+
+		var distance: float = global_position.distance_to(
+			vehicle.global_position
+		)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_vehicle = vehicle
+
+	if nearest_vehicle == null or nearest_distance > 11.0:
+		return null
+
+	var away: Vector3 = global_position - nearest_vehicle.global_position
+	away.y = 0.0
+	if away.length_squared() < 0.01:
+		away = global_transform.basis.x
+
+	away = away.normalized()
+
+	# Bots retreat farther from tanks than lighter vehicles.
+	var escape_distance: float = 7.0
+	var vehicle_type_value: Variant = nearest_vehicle.get("vehicle_type")
+	if vehicle_type_value != null and int(vehicle_type_value) == 1:
+		escape_distance = 10.0
+
+	bot_cached_vehicle_escape = (
+		global_position + away * escape_distance
+	)
+	return bot_cached_vehicle_escape
+
+
+func _bot_grenade_safe_to_throw(
+	target: Node3D,
+	main: Node
+) -> bool:
+	if target == null or main == null:
+		return false
+
+	var impact_position: Vector3 = target.global_position
+	var player_map_value: Variant = main.get("players")
+	if not player_map_value is Dictionary:
+		return true
+
+	for candidate_value: Variant in (
+		player_map_value as Dictionary
+	).values():
+		var candidate: Node3D = candidate_value as Node3D
+		if candidate == null or candidate == self:
+			continue
+		if not bool(candidate.get("alive")):
+			continue
+		if int(candidate.get("team")) != team:
+			continue
+
+		if candidate.global_position.distance_to(
+			impact_position
+		) < 6.0:
+			return false
+
+	return true
+
+
+func _bot_low_health_cover_goal(
+	main: Node,
+	target: Node3D
+) -> Variant:
+	if main == null or target == null:
+		return null
+	if health > 42:
+		return null
+	if not main.has_method("bot_cover_position"):
+		return null
+
+	var now: int = Time.get_ticks_msec()
+	if now < bot_combat_cover_until_ms:
+		if bot_tactical_goal != Vector3.ZERO:
+			return bot_tactical_goal
+
+	bot_tactical_goal = Vector3(
+		main.call(
+			"bot_cover_position",
+			self,
+			target.global_position
+		)
+	)
+	bot_combat_cover_until_ms = now + 1800
+
+	if bot_tactical_goal == Vector3.ZERO:
+		return null
+	return bot_tactical_goal
+
+
 func _bot_suppression_goal(main: Node) -> Variant:
 	if suppression_remaining_ms() <= 0:
 		return null
@@ -4304,8 +4427,13 @@ func _server_bot_tick(delta: float) -> void:
 	var movement_goal := Vector3.ZERO
 	var has_movement_goal := false
 
+	var vehicle_escape_goal: Variant = _bot_vehicle_escape_goal(main)
+	if vehicle_escape_goal is Vector3:
+		movement_goal = Vector3(vehicle_escape_goal)
+		has_movement_goal = true
+
 	var suppression_goal: Variant = _bot_suppression_goal(main)
-	if suppression_goal is Vector3:
+	if suppression_goal is Vector3 and not has_movement_goal:
 		movement_goal = Vector3(suppression_goal)
 		has_movement_goal = true
 
@@ -4375,6 +4503,14 @@ func _server_bot_tick(delta: float) -> void:
 			target_player = null
 
 	if target_player != null:
+		var low_health_cover: Variant = _bot_low_health_cover_goal(
+			main,
+			target_player
+		)
+		if low_health_cover is Vector3 and not has_movement_goal:
+			movement_goal = Vector3(low_health_cover)
+			has_movement_goal = true
+
 		var enemy_distance: float = global_position.distance_to(
 			target_player.global_position
 		)
@@ -4398,11 +4534,15 @@ func _server_bot_tick(delta: float) -> void:
 			if (
 				bot_grenade_accumulator <= 0.0
 				and grenades_remaining > 0
-				and enemy_distance >= 8.0
-				and enemy_distance <= 22.0
-				and randf() <= 0.18
+				and enemy_distance >= 9.0
+				and enemy_distance <= 21.0
+				and _bot_grenade_safe_to_throw(
+					target_player,
+					main
+				)
+				and randf() <= 0.14
 			):
-				bot_grenade_accumulator = 7.0
+				bot_grenade_accumulator = 9.0
 				var grenade_direction: Vector3 = (
 					target_player.global_position
 					+ Vector3.UP * 0.8
@@ -4429,21 +4569,24 @@ func _server_bot_tick(delta: float) -> void:
 				)
 				retreat.y = 0.0
 				if retreat.length() > 0.01:
+					if not has_movement_goal:
+						movement_goal = (
+							global_position
+							+ retreat.normalized() * 4.0
+						)
+						has_movement_goal = true
+			elif enemy_distance > desired_spacing:
+				if not has_movement_goal:
+					movement_goal = target_player.global_position
+					has_movement_goal = true
+			else:
+				if not has_movement_goal:
+					var right: Vector3 = global_transform.basis.x
 					movement_goal = (
 						global_position
-						+ retreat.normalized() * 4.0
+						+ right * bot_strafe_direction * 3.0
 					)
 					has_movement_goal = true
-			elif enemy_distance > desired_spacing:
-				movement_goal = target_player.global_position
-				has_movement_goal = true
-			else:
-				var right: Vector3 = global_transform.basis.x
-				movement_goal = (
-					global_position
-					+ right * bot_strafe_direction * 3.0
-				)
-				has_movement_goal = true
 
 			if (
 				bot_fire_accumulator <= 0.0
@@ -4951,14 +5094,27 @@ func _server_bot_fire(target: Node3D) -> void:
 	if main_node != null:
 		skill_multiplier = float(main_node.get("bot_skill"))
 
+	var movement_penalty: float = (
+		0.82
+		if velocity.length() > 2.0
+		else 1.0
+	)
+	var suppression_penalty: float = (
+		0.74
+		if suppression_remaining_ms() > 0
+		else 1.0
+	)
 	var accuracy_scale: float = clampf(
 		(
 			0.88
 			if aim_requested
 			else 0.70
-		) * skill_multiplier,
-		0.35,
-		0.97
+		)
+		* skill_multiplier
+		* movement_penalty
+		* suppression_penalty,
+		0.30,
+		0.95
 	)
 	var shot_origin: Vector3 = $Head.global_position
 	var shot_end: Vector3 = target.global_position + Vector3.UP * 0.75
