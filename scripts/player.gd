@@ -510,6 +510,9 @@ func _refresh_first_person_arms_pose() -> void:
 			"apply_weapon_slot",
 			current_weapon_index
 		)
+		first_person_arms_fallback.call(
+			"refresh_team_materials"
+		)
 
 
 func _weapon_visual_team(slot_index: int) -> int:
@@ -7517,6 +7520,19 @@ func _update_first_person_animation(delta: float) -> void:
 	var moving: bool = speed > 0.8 and is_on_floor()
 	var visual_aiming: bool = is_aiming or aim_requested
 	var sprinting: bool = moving and sprint_requested and replicated_stamina > 1.0 and not visual_aiming
+
+	if first_person_arms_fallback != null:
+		first_person_arms_fallback.call(
+			"update_pose",
+			delta,
+			current_weapon_index,
+			visual_aiming,
+			sprinting,
+			is_reloading,
+			speed,
+			replicated_suppression_ms > 0
+		)
+
 	var grounded := is_on_floor()
 	if grounded and not visual_was_on_floor:
 		visual_landing_impulse = clampf(

@@ -1,67 +1,70 @@
-FRONTLINE: OBJECTIVE v9.15.0
-OBJECTIVE READABILITY + HUD CLEANUP + UI PERFORMANCE
+FRONTLINE: OBJECTIVE v9.16.0
+FIRST-PERSON ARMS/HANDS + WEAPON PRESENTATION POLISH
 
-OBJECTIVE HUD CLEANUP
-The top match-status line has been shortened.
+FIRST-PERSON ARMS FALLBACK
+The procedural fallback has been rebuilt with:
+- cleaner forearm/sleeve proportions
+- cuffs
+- structured palms
+- knuckle blocks
+- four low-poly fingers per hand
+- thumbs
+- reduced segment counts for performance
 
-Stage 1 example:
-BRIDGE 4/10 · TICKETS 78-76 · VEHICLE SUPPORT
+TEAM SLEEVES
+Allied:
+- muted olive-drab sleeve
 
-Bunker example:
-BUNKER 64% · CP ATK · TICKETS 71-68 · TANK SUPPORT
+Axis:
+- muted field-grey sleeve
 
-The detailed emplacement/sector/destructible-cover information remains
-available internally through extended_match_status_text(), but is no longer
-forced into the primary objective line every update.
+Team materials refresh when the weapon/team presentation refreshes.
 
-TACTICAL VEHICLE MARKERS
-- Low/Laptop marker range reduced to ~42m
-- Balanced/High range ~52m
-- distant markers show symbol + distance only
-- close markers show vehicle type + distance
-- markers fade toward the edge of their visibility range
+DYNAMIC ARM POSES
+The procedural hands now respond to:
+- primary vs pistol slot
+- ADS
+- sprinting
+- reload state
+- walking/running
+- suppression
 
-This reduces both clutter and unnecessary label rendering.
+ADS:
+hands pull inward toward the weapon.
 
-UI PERFORMANCE THROTTLING
-Previously several UI systems updated every rendered physics frame:
-- HUD text
-- vehicle HUD
-- role HUD
-- reinforcement HUD
-- team identity HUD
-- vehicle tactical markers
-- radar
+SPRINT:
+arms lower/tuck with the weapon.
 
-v9.15 groups these into quality-aware update intervals.
+RELOAD:
+support hand moves toward the magazine/breech region.
 
-LOW/LAPTOP:
-- HUD ~12 updates/sec
-- tactical vehicle markers ~5.5 updates/sec
-- radar ~7 updates/sec
+MOVEMENT:
+small independent arm sway reduces the floating/glued-to-camera appearance.
 
-BALANCED:
-- HUD ~20 updates/sec
-- markers ~10 updates/sec
-- radar ~12.5 updates/sec
+SUPPRESSION:
+tiny visual-only tremor. No accuracy manipulation.
 
-HIGH:
-- HUD ~28 updates/sec
-- markers ~13 updates/sec
-- radar ~18 updates/sec
+PERFORMANCE
+This remains a fallback rig made from simple MeshInstance3D primitives.
+- no Skeleton3D
+- no skinning
+- no animation tree
+- no imported high-poly arms
+- no shadows
+- reduced mesh radial segments
 
-Camera, movement, weapon animation and combat feedback remain per-frame.
+If a real first-person arm/hand rig is later imported, the fallback detects it
+and does not stack itself on top.
 
 PRESERVED
-- v9.14 infantry damage/suppression/effect scaling
-- v9.13.2 tracer scope fix
-- battlefield tracers/impact FX/smoke/fire
-- vehicle camera collision and safe exits
+- v9.15 HUD/objective performance pass
+- v9.14 infantry combat feedback
+- v9.13.2 tracer fixes
 - destructible streets
-- all vehicle and aircraft systems
+- all vehicle/aircraft systems
 - real vehicle GLBs
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.15.0
+Build: 9.16.0
 Protocol: 341
