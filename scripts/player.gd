@@ -292,6 +292,7 @@ var current_vehicle_id: int = -1
 var current_vehicle_seat: int = -1
 var vehicle_camera_active := false
 var vehicle_camera_mode := 0
+var vehicle_camera_obstructed := false
 var vehicle_hud_panel: PanelContainer
 var vehicle_hud_label: Label
 var vehicle_gunsight: Label
@@ -3056,12 +3057,19 @@ func _update_vehicle_hud() -> void:
 	if not service_text.is_empty():
 		service_text = " · " + service_text
 
+	var camera_safety_text := (
+		" · CAM BLOCKED"
+		if vehicle_camera_obstructed
+		else ""
+	)
+
 	vehicle_hud_label.text = (
-		"%s · %s · CAM %s · HP %d/%d · %d KM/H%s%s\n%s · AMMO %d/%d · %s · V CAMERA · E EXIT"
+		"%s · %s · CAM %s%s · HP %d/%d · %d KM/H%s%s\n%s · AMMO %d/%d · %s · V CAMERA · E EXIT"
 		% [
 			str(vehicle.call("display_name")),
 			seat_name,
 			_vehicle_camera_mode_name(),
+			camera_safety_text,
 			hp,
 			max_hp,
 			speed,
@@ -3137,6 +3145,71 @@ func _update_vehicle_camera() -> void:
 		)
 	else:
 		target = Transform3D(vehicle.call("camera_anchor"))
+
+	# Chase cameras should not pass through walls/buildings. Use one cheap
+	# raycast from a point above the vehicle toward the requested camera
+	# position, then pull the camera slightly forward from the hit surface.
+	var camera_probe_origin := (
+		vehicle.global_position
+		+ vehicle.global_transform.basis.y * 1.65
+	)
+	var requested_camera_position := target.origin
+	vehicle_camera_obstructed = false
+
+	if (
+		camera_probe_origin.is_finite()
+		and requested_camera_position.is_finite()
+		and camera_probe_origin.distance_squared_to(
+			requested_camera_position
+		) > 0.04
+	):
+		var camera_query := PhysicsRayQueryParameters3D.create(
+			camera_probe_origin,
+			requested_camera_position
+		)
+		camera_query.exclude = [self, vehicle]
+		camera_query.collision_mask = 1
+		camera_query.collide_with_bodies = true
+		camera_query.collide_with_areas = false
+
+		var camera_hit := (
+			get_world_3d()
+			.direct_space_state
+			.intersect_ray(camera_query)
+		)
+		vehicle_camera_obstructed = not camera_hit.is_empty()
+		if not camera_hit.is_empty():
+			var hit_position := Vector3(
+				camera_hit.get(
+					"position",
+					requested_camera_position
+				)
+			)
+			var hit_normal := Vector3(
+				camera_hit.get(
+					"normal",
+					Vector3.UP
+				)
+			)
+			var corrected_position := (
+				hit_position
+				+ hit_normal * 0.30
+			)
+
+			# Never collapse the chase camera completely into the vehicle.
+			var from_vehicle := (
+				corrected_position - camera_probe_origin
+			)
+			if from_vehicle.length() < 1.05:
+				corrected_position = (
+					camera_probe_origin
+					+ from_vehicle.normalized() * 1.05
+					if from_vehicle.length() > 0.001
+					else camera_probe_origin
+						+ vehicle.global_transform.basis.z * 1.05
+				)
+
+			target.origin = corrected_position
 
 	var speed_kph := 0.0
 	if vehicle.has_method("current_speed_kph"):

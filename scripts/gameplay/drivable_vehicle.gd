@@ -423,19 +423,36 @@ func seat_position() -> Vector3:
 
 
 func exit_position() -> Vector3:
-	var side_distance := 2.8
-	if vehicle_type == VehicleType.TANK:
-		side_distance = 3.2
-	elif vehicle_type == VehicleType.AIRCRAFT:
-		side_distance = 4.8
-
-	var exit_pos := (
-		global_position
-		+ global_transform.basis.x * side_distance
-		+ Vector3.UP * 1.15
+	var candidates := exit_position_candidates()
+	return (
+		candidates[0]
+		if not candidates.is_empty()
+		else global_position + Vector3.UP * 2.0
 	)
-	exit_pos.y = maxf(exit_pos.y, 1.15)
-	return exit_pos
+
+
+func exit_position_candidates() -> Array[Vector3]:
+	var side_distance := 2.8
+	var fore_distance := 3.2
+
+	if vehicle_type == VehicleType.TANK:
+		side_distance = 3.4
+		fore_distance = 4.0
+	elif vehicle_type == VehicleType.AIRCRAFT:
+		side_distance = 5.0
+		fore_distance = 5.4
+
+	var basis := global_transform.basis
+	var up := Vector3.UP * 1.15
+
+	# Try right, left, rear, front, then an elevated emergency position.
+	return [
+		global_position + basis.x * side_distance + up,
+		global_position - basis.x * side_distance + up,
+		global_position + basis.z * fore_distance + up,
+		global_position - basis.z * fore_distance + up,
+		global_position + Vector3.UP * 2.8
+	]
 
 func camera_anchor() -> Transform3D:
 	return camera_anchor_for_mode(0)

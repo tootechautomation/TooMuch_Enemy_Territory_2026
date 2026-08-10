@@ -231,7 +231,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.11.0"
+const BUILD_VERSION := "9.12.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -10301,14 +10301,14 @@ func _server_handle_vehicle_destroyed(vehicle: Node) -> void:
 	if driver_id > 0 and players.has(driver_id):
 		var player: Node = players.get(driver_id) as Node
 		if player != null:
-			var exit_position := Vector3(vehicle.call("exit_position"))
+			var exit_position := _safe_vehicle_exit_position(vehicle as Node3D, player as Node3D)
 			player.call("server_set_vehicle_state", -1, exit_position, -1)
 			vehicle_state_changed.rpc(driver_id, -1, exit_position, -1)
 
 	if gunner_id > 0 and players.has(gunner_id):
 		var gunner: Node = players.get(gunner_id) as Node
 		if gunner != null:
-			var gunner_exit := Vector3(vehicle.call("exit_position")) + Vector3(0.8, 0.0, 0.8)
+			var gunner_exit := _safe_vehicle_exit_position(vehicle as Node3D, gunner as Node3D)
 			gunner.call("server_set_vehicle_state", -1, gunner_exit, -1)
 			vehicle_state_changed.rpc(gunner_id, -1, gunner_exit, -1)
 
@@ -10577,6 +10577,102 @@ func request_vehicle_interact() -> void:
 	server_try_vehicle_interact(player)
 
 
+func _safe_vehicle_exit_position(
+	vehicle: Node3D,
+	player: Node3D
+) -> Vector3:
+	if vehicle == null:
+		return (
+			player.global_position + Vector3.UP * 1.0
+			if player != null
+			else Vector3(0.0, 2.0, 0.0)
+		)
+
+	var candidates: Array[Vector3] = []
+	if vehicle.has_method("exit_position_candidates"):
+		candidates = vehicle.call(
+			"exit_position_candidates"
+		) as Array[Vector3]
+
+	if candidates.is_empty():
+		candidates.append(
+			Vector3(vehicle.call("exit_position"))
+		)
+
+	var world := vehicle.get_world_3d()
+	if world == null:
+		return candidates[0]
+
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.42
+	capsule.height = 1.65
+
+	var exclude_rids: Array[RID] = []
+	if vehicle is CollisionObject3D:
+		exclude_rids.append(
+			(vehicle as CollisionObject3D).get_rid()
+		)
+	if player != null and player is CollisionObject3D:
+		exclude_rids.append(
+			(player as CollisionObject3D).get_rid()
+		)
+
+	for candidate: Vector3 in candidates:
+		if not _vector3_is_finite(candidate):
+			continue
+
+		# First place the capsule where the player's body would occupy space.
+		var shape_query := PhysicsShapeQueryParameters3D.new()
+		shape_query.shape = capsule
+		shape_query.transform = Transform3D(
+			Basis.IDENTITY,
+			candidate + Vector3.UP * 0.78
+		)
+		shape_query.collision_mask = 1
+		shape_query.exclude = exclude_rids
+		shape_query.collide_with_bodies = true
+		shape_query.collide_with_areas = false
+
+		var overlaps := (
+			world.direct_space_state.intersect_shape(
+				shape_query,
+				2
+			)
+		)
+		if not overlaps.is_empty():
+			continue
+
+		# Snap candidate onto nearby ground when possible.
+		var ground_query := PhysicsRayQueryParameters3D.create(
+			candidate + Vector3.UP * 1.5,
+			candidate + Vector3.DOWN * 3.5
+		)
+		ground_query.exclude = exclude_rids
+		ground_query.collision_mask = 1
+		ground_query.collide_with_bodies = true
+		ground_query.collide_with_areas = false
+
+		var ground_hit := (
+			world.direct_space_state.intersect_ray(
+				ground_query
+			)
+		)
+		if not ground_hit.is_empty():
+			var ground_position := Vector3(
+				ground_hit.get(
+					"position",
+					candidate
+				)
+			)
+			return ground_position + Vector3.UP * 1.05
+
+		return candidate
+
+	# Emergency fallback: above the vehicle, where normal player physics can
+	# settle the character downward rather than placing them inside a wall.
+	return vehicle.global_position + Vector3.UP * 3.2
+
+
 func server_try_vehicle_interact(player: Node3D) -> bool:
 	if not multiplayer.is_server() or player == null:
 		return false
@@ -10590,9 +10686,22 @@ func server_try_vehicle_interact(player: Node3D) -> bool:
 	if current_id >= 0 and vehicles.has(current_id):
 		var occupied: Node3D = vehicles.get(current_id) as Node3D
 		if occupied != null and bool(occupied.call("server_exit", peer_id)):
-			var exit_position := Vector3(occupied.call("exit_position"))
-			player.call("server_set_vehicle_state", -1, exit_position, -1)
-			vehicle_state_changed.rpc(peer_id, -1, exit_position, -1)
+			var exit_position := _safe_vehicle_exit_position(
+				occupied,
+				player
+			)
+			player.call(
+				"server_set_vehicle_state",
+				-1,
+				exit_position,
+				-1
+			)
+			vehicle_state_changed.rpc(
+				peer_id,
+				-1,
+				exit_position,
+				-1
+			)
 			return true
 
 	var nearest_id := -1
