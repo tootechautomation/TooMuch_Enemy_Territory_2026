@@ -207,6 +207,7 @@ var selected_class := 0
 var spawn_menu_open := false
 var has_deployed := false
 var menu_toggle_latched := false
+var local_unstuck_request_ms := 0
 var spawn_protection_until_ms := 0
 var replicated_spawn_protection_ms := 0
 var replicated_ability_cooldown_ms := 0
@@ -896,6 +897,33 @@ func _input(event: InputEvent) -> void:
 					get_viewport().set_input_as_handled()
 					return
 
+	# U requests a server-validated safe recovery position.
+	if (
+		key_code == KEY_U
+		and key_event.pressed
+		and not key_event.echo
+		and alive
+		and not downed
+		and current_vehicle_id < 0
+	):
+		var now_unstuck: int = Time.get_ticks_msec()
+		if now_unstuck - local_unstuck_request_ms >= 750:
+			local_unstuck_request_ms = now_unstuck
+			var unstuck_main: Node = get_parent()
+			if (
+				unstuck_main != null
+				and unstuck_main.has_method(
+					"request_player_unstuck"
+				)
+			):
+				unstuck_main.request_player_unstuck.rpc_id(1)
+				if selection_status != null:
+					selection_status.text = (
+						"UNSTUCK REQUESTED · U"
+					)
+		get_viewport().set_input_as_handled()
+		return
+
 	# TAB is a hold-to-view scoreboard control. Use _input rather than only
 	# _unhandled_input because focused menus/Controls may consume Tab for focus.
 	if key_code == KEY_TAB:
@@ -1024,6 +1052,29 @@ func _update_local_ui_throttled(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if (
+		multiplayer.is_server()
+		and alive
+		and current_vehicle_id < 0
+		and (
+			not global_position.is_finite()
+			or global_position.y < -8.0
+		)
+	):
+		var recovery_main: Node = get_parent()
+		if (
+			recovery_main != null
+			and recovery_main.has_method(
+				"_server_recover_player_position"
+			)
+		):
+			recovery_main.call(
+				"_server_recover_player_position",
+				self,
+				"MAP RECOVERY"
+			)
+			return
+
 	if multiplayer.is_server() and current_vehicle_id >= 0:
 		if _server_lock_to_vehicle():
 			return
@@ -2769,6 +2820,71 @@ func server_revive(reviver_id: int = 0) -> void:
 	if get_parent().players.has(reviver_id):
 		get_parent().players[reviver_id].add_xp(15, "revive")
 	get_parent().push_kill_feed.rpc("%s was revived" % player_name)
+
+@rpc("authority", "call_remote", "reliable")
+func unstuck_feedback(
+	success: bool,
+	message: String
+) -> void:
+	if not _is_local_player():
+		return
+
+	if selection_status != null:
+		selection_status.text = message
+
+	if success and elimination_notice != null:
+		elimination_notice.text = "POSITION RECOVERED"
+		elimination_notice_until_ms = (
+			Time.get_ticks_msec() + 900
+		)
+		elimination_notice.visible = true
+
+
+func server_position_recovered(
+	safe_position: Vector3,
+	reason: String
+) -> void:
+	if not multiplayer.is_server():
+		return
+
+	global_position = safe_position
+	target_position = safe_position
+	velocity = Vector3.ZERO
+	previous_vertical_velocity = 0.0
+	input_vector = Vector2.ZERO
+
+	var collision: CollisionShape3D = (
+		$CollisionShape3D as CollisionShape3D
+	)
+	if collision != null:
+		collision.set_deferred("disabled", false)
+
+	# A short protection refresh prevents a recovered player from being killed
+	# during the exact frame they are reinserted into the battlefield.
+	_activate_spawn_protection()
+
+	position_recovered.rpc_id(
+		peer_id,
+		safe_position,
+		reason
+	)
+
+
+@rpc("authority", "call_remote", "reliable")
+func position_recovered(
+	safe_position: Vector3,
+	reason: String
+) -> void:
+	if not _is_local_player():
+		return
+
+	global_position = safe_position
+	target_position = safe_position
+	velocity = Vector3.ZERO
+
+	if selection_status != null:
+		selection_status.text = reason
+
 
 func server_respawn(spawn_position: Vector3) -> void:
 	if not multiplayer.is_server():

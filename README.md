@@ -1,48 +1,64 @@
-FRONTLINE: OBJECTIVE v9.19.0
-VISIBILITY / LIGHTING BALANCE + ROUTE READABILITY
+FRONTLINE: OBJECTIVE v9.20.0
+SPAWN SAFETY + ANTI-STUCK RECOVERY
 
-WHY
-Recent gameplay has been playable but the environment still tends to look
-washed-out and hazy. v9.19 reduces that haze while preserving atmosphere.
+EXISTING SPAWN VALIDATION PRESERVED
+The project already had a strong server-side spawn candidate validator:
+- floor raycast
+- slope validation
+- player capsule overlap test
+- separation from living players
+- enemy staging exclusion
+- rally-point validation
 
-LOW / LAPTOP
-- volumetric fog OFF
-- glow OFF
-- low conventional fog density
-- higher contrast
-- slightly darker ambient fill
-- sun shadows disabled
-- new route detail capped near 30m
+v9.20 builds on that system rather than replacing it.
 
-BALANCED
-- much lighter volumetric fog than earlier builds
-- reduced glow intensity
-- stronger scene contrast
-- shorter shadow distance
-- route detail around 45m
+MANUAL UNSTUCK
+On foot:
+U = request safe position recovery.
 
-HIGH
-- atmospheric fog retained
-- volumetric density still less than half of the old default
-- moderate glow rather than the earlier strong bloom
-- shadow distance around 82m
-- route detail around 58m
+Server rules:
+- player must be alive
+- cannot be downed
+- cannot be inside a vehicle
+- must be nearly stationary
+- 15 second cooldown
+- server chooses the destination
 
-ROUTE READABILITY
-New non-colliding visual-only details:
-- low stone edge strips along the primary central route
-- four muted roadside approach stones around the bridge area
+The server searches:
+1. current position
+2. four nearby 1.5m offsets
+3. four nearby 2.5m offsets
+4. diagonal nearby offsets
+5. normal validated team spawn as final fallback
 
-These are intentionally period-neutral masonry rather than bright arcade arrows.
+Every candidate uses the existing authoritative spawn validator.
 
-PERFORMANCE
-- Low disables volumetric fog and sun shadows
-- no new collision
-- no dynamic lights
-- no physics objects
-- route geometry is tiny BoxMesh detail with distance culling
+AUTOMATIC BELOW-MAP RECOVERY
+If a living on-foot player:
+- falls below Y = -8
+- or somehow receives a non-finite position
+
+the server automatically invokes the same recovery system.
+
+RECOVERY SAFETY
+After recovery:
+- velocity resets
+- interpolation target resets
+- collision is re-enabled
+- input vector resets
+- short spawn protection refreshes
+- client receives the authoritative recovery position
+
+ANTI-ABUSE
+Manual U cannot be used while moving faster than 2.5 m/s and has a 15 second
+server cooldown.
+
+VEHICLES
+Vehicle occupants are intentionally excluded. Vehicle exit/ejection already
+uses the dedicated safe-exit system from earlier builds.
 
 PRESERVED
+- v9.19 visibility/lighting/route readability
 - v9.18.1 parser-safe environment pass
 - v9.17 first-person visibility fixes
 - HUD/combat feedback
@@ -51,5 +67,5 @@ PRESERVED
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.19.0
+Build: 9.20.0
 Protocol: 341

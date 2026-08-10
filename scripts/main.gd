@@ -237,7 +237,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.19.0"
+const BUILD_VERSION := "9.20.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -490,6 +490,9 @@ var vehicle_respawn_at_ms: Dictionary = {}
 var vehicle_damage_smoke_nodes: Dictionary = {}
 var ambient_battlefield_effects: Array[Node3D] = []
 var vehicle_service_accumulator := 0.0
+var player_unstuck_next_ms: Dictionary = {}
+const PLAYER_UNSTUCK_COOLDOWN_MS := 15000
+const PLAYER_WORLD_FALL_Y := -8.0
 const VEHICLE_SERVICE_INTERVAL := 1.0
 const VEHICLE_SERVICE_RADIUS := 8.0
 const VEHICLE_SERVICE_REPAIR := 35
@@ -6213,6 +6216,7 @@ func _on_peer_connected(id: int) -> void:
 	spawn_player.rpc(id, team, player_names[id], _get_spawn(team, id))
 
 func _on_peer_disconnected(id: int) -> void:
+	player_unstuck_next_ms.erase(id)
 	if not multiplayer.is_server(): return
 	remove_player.rpc(id)
 	player_teams.erase(id)
@@ -7116,6 +7120,165 @@ func server_recover_stuck_player(
 
 func _spawn_enemy_staging_position(team_id: int) -> Vector3:
 	return Vector3(56.0,0.0,10.0) if team_id == 0 else Vector3(-56.0,0.0,-10.0)
+
+func _nearby_safe_recovery_position(
+	player: Node3D,
+	peer_id: int
+) -> Variant:
+	if player == null:
+		return null
+
+	var origin: Vector3 = player.global_position
+	var offsets: Array[Vector3] = [
+		Vector3(0.0, 0.5, 0.0),
+		Vector3(1.5, 0.5, 0.0),
+		Vector3(-1.5, 0.5, 0.0),
+		Vector3(0.0, 0.5, 1.5),
+		Vector3(0.0, 0.5, -1.5),
+		Vector3(2.5, 0.5, 0.0),
+		Vector3(-2.5, 0.5, 0.0),
+		Vector3(0.0, 0.5, 2.5),
+		Vector3(0.0, 0.5, -2.5),
+		Vector3(1.8, 0.5, 1.8),
+		Vector3(-1.8, 0.5, 1.8),
+		Vector3(1.8, 0.5, -1.8),
+		Vector3(-1.8, 0.5, -1.8)
+	]
+
+	for offset: Vector3 in offsets:
+		var result: Dictionary = _validate_spawn_candidate(
+			origin + offset,
+			peer_id
+		)
+		if bool(result.get("valid", false)):
+			return Vector3(
+				result.get(
+					"position",
+					origin + offset
+				)
+			)
+
+	return null
+
+
+func _server_recover_player_position(
+	player: Node3D,
+	reason: String = "UNSTUCK"
+) -> bool:
+	if not multiplayer.is_server():
+		return false
+	if player == null:
+		return false
+
+	var peer_id: int = int(player.get("peer_id"))
+	if peer_id <= 0:
+		return false
+
+	# Never move seated players; vehicle exit has its own safe-position system.
+	if int(player.get("current_vehicle_id")) >= 0:
+		return false
+
+	var recovered_position: Variant = _nearby_safe_recovery_position(
+		player,
+		peer_id
+	)
+
+	if recovered_position == null:
+		var team_id: int = clampi(
+			int(player.get("team")),
+			0,
+			1
+		)
+		recovered_position = _get_spawn(
+			team_id,
+			peer_id
+		)
+
+	if not recovered_position is Vector3:
+		return false
+
+	var safe_position: Vector3 = recovered_position
+	if not _vector3_is_finite(safe_position):
+		return false
+
+	player.global_position = safe_position
+	player.set("target_position", safe_position)
+	player.set("velocity", Vector3.ZERO)
+
+	if player.has_method("server_position_recovered"):
+		player.call(
+			"server_position_recovered",
+			safe_position,
+			reason
+		)
+
+	return true
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_player_unstuck() -> void:
+	if not multiplayer.is_server():
+		return
+
+	var peer_id: int = multiplayer.get_remote_sender_id()
+	if peer_id <= 0:
+		return
+	if not players.has(peer_id):
+		return
+
+	var player: Node3D = players[peer_id] as Node3D
+	if player == null:
+		return
+	if not bool(player.get("alive")):
+		return
+	if bool(player.get("downed")):
+		return
+	if int(player.get("current_vehicle_id")) >= 0:
+		return
+
+	var now: int = Time.get_ticks_msec()
+	var next_allowed: int = int(
+		player_unstuck_next_ms.get(peer_id, 0)
+	)
+	if now < next_allowed:
+		if player.has_method("unstuck_feedback"):
+			player.call(
+				"unstuck_feedback",
+				false,
+				"UNSTUCK COOLDOWN %.0fs" % (
+					float(next_allowed - now) / 1000.0
+				)
+			)
+		return
+
+	# Manual unstuck is intended for wedged players, not instant combat escape.
+	# Moving quickly means the player is clearly not hard-stuck.
+	var player_velocity: Vector3 = Vector3(
+		player.get("velocity")
+	)
+	if player_velocity.length() > 2.5:
+		if player.has_method("unstuck_feedback"):
+			player.call(
+				"unstuck_feedback",
+				false,
+				"STOP MOVING BEFORE UNSTUCK"
+			)
+		return
+
+	if _server_recover_player_position(
+		player,
+		"MANUAL UNSTUCK"
+	):
+		player_unstuck_next_ms[peer_id] = (
+			now + PLAYER_UNSTUCK_COOLDOWN_MS
+		)
+		if player.has_method("unstuck_feedback"):
+			player.call(
+				"unstuck_feedback",
+				true,
+				"POSITION RECOVERED"
+			)
+
 
 func _validate_spawn_candidate(
 	base_candidate: Vector3,
