@@ -1,77 +1,83 @@
-FRONTLINE: OBJECTIVE v9.27.0
-CONTEXTUAL INTERACTION + E-KEY RELIABILITY
+FRONTLINE: OBJECTIVE v9.28.0
+REAL WWII ASSET INTEGRATION + FIRST MAP EXPANSION
 
-CONTEXT PROMPT
-A small interaction prompt now appears below the crosshair only when an
-action is actually available.
+NEW USER-SUPPLIED ASSETS INCLUDED
 
-Examples:
-E · EXIT VEHICLE
-E · ENTER M4 SHERMAN · DRIVER
-E · TAKE AMMO
-E · SWAP PRIMARY WEAPON
-E · RESUPPLY AMMO
-E · REVIVE PLAYERNAME
-E · BUILD BRIDGE · 4/10
-E · ARM DYNAMITE
-E · DEFUSE CHARGE · 2/5
+CHARACTERS
+- assets/external/characters/ww2_allied_soldier.glb
+- assets/external/characters/ww2_german_wehrmacht_soldier.glb
 
-INTERACTION PRIORITY
-The prompt mirrors the server's actual interaction order:
+The external-character system now prefers these models for Allied/Axis remote
+players and bots.
 
-1. vehicle entry/exit
-2. battlefield weapon/ammo pickup
-3. fixed resupply station
-4. Medic revive
-5. Engineer objective action
+IMPORTANT:
+Both supplied character GLBs are static/unrigged models (no Skeleton3D or
+animations in the GLB metadata). v9.28 therefore permits high-quality unrigged
+characters and applies lightweight procedural walk bob/lean/crouch motion.
+If rigged replacements are added later, the existing AnimationPlayer path is
+still used automatically.
 
-This means the prompt describes the same action the server will attempt first.
+MAP / ENVIRONMENT
+- city_ruins_environment.glb
+- ww2_low_poly_city_scene.glb
+- mothecombe_pillbox.glb
+- vairogs_v2.glb
 
-E KEY FIX
-Previously the dedicated physical E handler sent only
-request_vehicle_interact(). The generic interact path separately handled
-pickups/revive/objectives.
+PLACEMENT
+- City ruins: west/north-west battle edge
+- WWII low-poly city: east/north-east backdrop
+- Mothecombe pillbox: north approach / future expansion direction
+- Vairogs automobile: depot/street scenery
 
-Physical E now sends the unified request_player_interact() immediately.
+These are positioned around the outer portions of Operation Black River so the
+first map gains a more convincing WWII skyline and recognizable setpieces
+without moving the existing bridge/bunker objective chain.
 
-The server still validates:
-- range
-- vehicle seat
-- player state
-- team/class
-- objective state
-- pickup/resupply availability
+The very large city/pillbox downloads are used primarily as visual setpieces in
+this phase. Runtime trimesh collision generation is disabled for them to avoid
+a major startup/FPS penalty and to avoid reintroducing wall collision bugs.
+We can convert selected pieces into authored/simple collision zones in a later
+map-expansion phase.
 
-CONTROLLER / REMAPPED INPUT
-The existing held interact action remains available as a fallback. Its hold
-threshold is slightly longer to avoid a keyboard E tap producing duplicate
-RPCs.
+VAIROGS
+Inspection of the supplied GLB shows automobile components including body,
+bonnet, bumper and multiple seats. v9.28 uses it as a parked vehicle prop first.
+It is intentionally NOT made drivable yet; the existing Willys/Sherman/aircraft
+handling remains unchanged. It can become a fourth drivable vehicle after its
+scale/origin/seat alignment is tested in-game.
 
-HUD RESTRAINT
-The context prompt automatically hides during:
-- TAB scoreboard
-- cinema mode
-- tactical map
-- spawn/class menu
-- death/downed state
+ALLIED GRENADE
+- assets/external/weapons/mk2_grenade.glb
+
+Allied thrown grenades now attach the real Mk 2 model. The external asset
+adapter automatically scales it to approximately 18 cm overall length.
+Axis grenades continue using the existing Model 24 candidate when available,
+otherwise the gameplay grenade fallback remains.
+
+EXISTING VEHICLE GLBS PRESERVED
+- Willys Jeep
+- M4 Sherman
+- Spitfire
+- Bf 109
 
 PERFORMANCE
-The prompt is evaluated only with the already-throttled HUD update, not every
-render frame.
-
-No new physics, collision, particles, or network stream.
+- external setpieces use distance LOD metadata
+- no generated trimesh collision for the large new scene downloads
+- no new physics on backdrop assets
+- no new dynamic lighting
+- unrigged character procedural motion is transform-only
+- headless server does not instantiate visual assets
 
 PRESERVED
+- v9.27.2 interaction prompt scope fix
+- contextual E interaction
 - v9.26 weapon handling
-- v9.25 TAB scoreboard priority
-- v9.24 bot combat intelligence
-- team/revive awareness
-- spatial audio
-- effect budgets
-- spawn safety
-- all vehicles/aircraft
+- v9.25 TAB priority scoreboard
+- v9.24 bot intelligence
+- spawn safety / U unstuck
+- spatial audio / effect budgets
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.27.0
+Build: 9.28.0
 Protocol: 341

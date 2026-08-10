@@ -237,7 +237,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.27.0"
+const BUILD_VERSION := "9.28.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -3197,6 +3197,34 @@ func _spawn_external_environment_assets() -> void:
 			Vector3(8.0, 0.0, -5.0),
 			0.25,
 			Vector3.ONE
+		],
+		[
+			"city_ruins",
+			"ExternalCityRuins",
+			Vector3(-48.0, 0.0, 27.0),
+			deg_to_rad(14.0),
+			Vector3.ONE
+		],
+		[
+			"ww2_city_backdrop",
+			"ExternalWW2CityBackdrop",
+			Vector3(55.0, 0.0, 29.0),
+			deg_to_rad(-18.0),
+			Vector3.ONE
+		],
+		[
+			"mothecombe_pillbox",
+			"ExternalMothecombePillbox",
+			Vector3(2.0, 0.0, 49.0),
+			deg_to_rad(180.0),
+			Vector3.ONE
+		],
+		[
+			"vairogs_vehicle_prop",
+			"ExternalVairogsVehicle",
+			Vector3(19.0, 0.0, -29.0),
+			deg_to_rad(28.0),
+			Vector3.ONE
 		]
 	]
 
@@ -3252,6 +3280,22 @@ func _spawn_external_environment_assets() -> void:
 		)
 		if external_node == null:
 			continue
+
+		var lod_config: Dictionary = (
+			ExternalAssetRegistryScript.lod_config(asset_id)
+		)
+		external_node.set_meta(
+			"lod_near",
+			float(lod_config.get("near", 30.0))
+		)
+		external_node.set_meta(
+			"lod_medium",
+			float(lod_config.get("medium", 65.0))
+		)
+		external_node.set_meta(
+			"lod_far",
+			float(lod_config.get("far", 110.0))
+		)
 
 		var target_height := float(
 			asset_config.get("target_height", 0.0)
@@ -8348,6 +8392,28 @@ func spawn_grenade(
 		initial_velocity,
 		fuse_seconds
 	)
+
+	if DisplayServer.get_name() != "headless":
+		var grenade_scene: PackedScene = (
+			ExternalAssetRegistryScript.grenade_scene(owner_team)
+		)
+		if grenade_scene != null:
+			var grenade_model: Node3D = (
+				ExternalAssetLoaderScript.attach_scene_to_socket(
+					grenade,
+					grenade_scene,
+					"ExternalGrenadeModel",
+					Vector3.ZERO,
+					Vector3.ZERO,
+					Vector3.ONE
+				)
+			)
+			if grenade_model != null:
+				RealAssetAdapterScript.adapt_weapon(
+					grenade_model,
+					0.18
+				)
+
 	grenades[grenade_id] = grenade
 
 func server_explode_grenade(

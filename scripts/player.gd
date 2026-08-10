@@ -101,6 +101,9 @@ var axis_character_scene: PackedScene
 var external_character_model: Node3D
 var external_character_animator: AnimationPlayer
 var external_character_animation: StringName = &""
+var external_character_base_position := Vector3.ZERO
+var external_character_base_rotation := Vector3.ZERO
+var external_character_unrigged := false
 var external_animation_controller
 var external_weapon_socket: Node3D
 var external_model_loaded := false
@@ -323,6 +326,7 @@ var et_objective_label: Label
 var et_timer_label: Label
 var et_team_label: Label
 var et_crosshair_ring: Label
+var interaction_prompt: Label
 var scoreboard_panel: PanelContainer
 var scoreboard_canvas_layer: CanvasLayer
 var scoreboard_backdrop: ColorRect
@@ -3789,6 +3793,9 @@ func _build_external_character_model() -> bool:
 			external_character_model
 		)
 	)
+	external_character_base_position = external_character_model.position
+	external_character_base_rotation = external_character_model.rotation
+	external_character_unrigged = external_character_animator == null
 	external_animation_controller = (
 		HumanoidAnimationControllerScript.new()
 	)
@@ -3902,10 +3909,34 @@ func _update_external_character_animation() -> void:
 		not _is_local_player()
 		and alive
 	)
+	var speed: float = Vector2(
+		velocity.x,
+		velocity.z
+	).length()
+
+	if external_character_unrigged:
+		var walk_amount := clampf(speed / 6.0, 0.0, 1.0)
+		var phase := visual_animation_time * (6.0 + walk_amount * 3.0)
+		external_character_model.position = (
+			external_character_base_position
+			+ Vector3(
+				0.0,
+				absf(sin(phase)) * 0.018 * walk_amount,
+				0.0
+			)
+		)
+		external_character_model.rotation = external_character_base_rotation
+		external_character_model.rotation.z += (
+			sin(phase * 0.5) * 0.018 * walk_amount
+		)
+		if is_crouching:
+			external_character_model.position.y -= 0.22
+		return
+
 	if external_animation_controller == null:
 		return
 
-	var speed: float = Vector2(
+	var speed_unused: float = Vector2(
 		velocity.x,
 		velocity.z
 	).length()
@@ -3915,7 +3946,7 @@ func _update_external_character_animation() -> void:
 			downed,
 			is_reloading,
 			is_crouching,
-			speed,
+			speed_unused,
 			Time.get_ticks_msec() < muzzle_flash_until_ms,
 			player_class == PlayerClass.ENGINEER
 			and aim_requested
@@ -7286,6 +7317,9 @@ func _apply_cinema_mode_visibility() -> void:
 	if crosshair != null:
 		crosshair.visible = false
 
+	if interaction_prompt != null and cinema_mode_enabled:
+		interaction_prompt.visible = false
+
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
@@ -8993,11 +9027,11 @@ func _update_hud() -> void:
 	if objective_progress_text != null:
 		objective_progress_text.text = progress_title
 
-	var interaction_prompt: String = str(
+	var interaction_hint_text: String = str(
 		main.call("interaction_prompt_for", self)
 	)
-	if interaction_prompt == "":
-		interaction_prompt = "Follow the active objective marker"
+	if interaction_hint_text == "":
+		interaction_hint_text = "Follow the active objective marker"
 	var primary_name: String = _resource_string(
 		_class_primary_weapon(player_class),
 		"display_name",
@@ -9044,7 +9078,7 @@ func _update_hud() -> void:
 		replicated_smoke_grenades,
 		protection_text,
 		primary_name,
-		interaction_prompt,
+		interaction_hint_text,
 		objective_text,
 		minutes,
 		seconds,

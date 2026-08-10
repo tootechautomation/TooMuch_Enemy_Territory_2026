@@ -11,7 +11,6 @@ static func adapt_character(
 		"height_after": 0.0,
 		"scale_multiplier": 1.0,
 		"ground_offset": 0.0,
-		"meshes": 0,
 		"skeletons": 0,
 		"animations": 0,
 		"socket": "",
@@ -39,9 +38,6 @@ static func adapt_character(
 
 	var final_bounds := _bounds(model)
 	report["height_after"] = final_bounds.size.y
-	report["meshes"] = model.find_children(
-		"*", "MeshInstance3D", true, false
-	).size()
 	report["skeletons"] = model.find_children(
 		"*", "Skeleton3D", true, false
 	).size()
@@ -63,14 +59,10 @@ static func adapt_character(
 		model,
 		team_id
 	)
-	# A number of FBX importers expose a perfectly usable skinned/static mesh
-	# without a Skeleton3D node at runtime. Do not throw away the real model
-	# merely because animation metadata is unavailable; animation can fall back
-	# independently while the real character mesh remains visible.
 	report["valid"] = (
-		int(report["meshes"]) > 0
-		and final_bounds.size.y >= 1.20
-		and final_bounds.size.y <= 2.50
+		final_bounds.size.y >= 1.35
+		and final_bounds.size.y <= 2.30
+		and model.find_children("*", "MeshInstance3D", true, false).size() > 0
 	)
 	return report
 
@@ -82,45 +74,18 @@ static func adapt_weapon(
 		"valid": false,
 		"size_before": Vector3.ZERO,
 		"size_after": Vector3.ZERO,
-		"center_before": Vector3.ZERO,
 		"scale_multiplier": 1.0,
-		"long_axis": "z",
-		"orientation_degrees": Vector3.ZERO,
 		"materials_adjusted": 0
 	}
 	if model == null:
 		return report
-
 	var before := _bounds(model)
 	report["size_before"] = before.size
-	report["center_before"] = before.position + before.size * 0.5
-
-	# Determine the weapon's authored length axis instead of assuming every FBX
-	# uses +X. This prevents a Thompson/MP40 from becoming a flat side profile.
-	var longest := before.size.z
-	var axis := "z"
-	var orientation := Vector3.ZERO
-	if before.size.x >= before.size.y and before.size.x >= before.size.z:
-		longest = before.size.x
-		axis = "x"
-		orientation = Vector3(0.0, 90.0, 0.0)
-	elif before.size.y >= before.size.x and before.size.y >= before.size.z:
-		longest = before.size.y
-		axis = "y"
-		orientation = Vector3(90.0, 0.0, 0.0)
-	report["long_axis"] = axis
-	report["orientation_degrees"] = orientation
-
+	var longest := maxf(before.size.x, maxf(before.size.y, before.size.z))
 	if longest > 0.001 and target_length > 0.01:
 		var multiplier := clampf(target_length / longest, 0.001, 1000.0)
 		model.scale *= Vector3.ONE * multiplier
 		report["scale_multiplier"] = multiplier
-
-	# Recenter the whole imported scene at its parent without moving individual
-	# FBX children. Moving direct children can break skin/skeleton hierarchies.
-	var center := Vector3(report["center_before"])
-	model.position -= model.basis * center
-
 	var after := _bounds(model)
 	report["size_after"] = after.size
 	report["materials_adjusted"] = _clean_materials(model, false)
