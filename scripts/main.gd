@@ -240,7 +240,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "10.1.0"
+const BUILD_VERSION := "10.1.1"
 const NETWORK_PROTOCOL := 344
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
@@ -5311,9 +5311,6 @@ func bot_route_waypoint(
 			]
 		)
 
-	player: Node3D,
-	route_index: int
-) -> Vector3:
 	var team_id: int = int(player.get("team"))
 	var role: int = int(player.get("bot_squad_role"))
 	var routes: Array[Array] = []

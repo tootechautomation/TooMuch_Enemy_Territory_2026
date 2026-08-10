@@ -1,53 +1,39 @@
-FRONTLINE: OBJECTIVE v10.1.0
-MAP IDENTITY + MAP-AWARE HUD + RUINED CITY BOT ROUTES
+FRONTLINE: OBJECTIVE v10.1.1
+BOT ROUTE PARSER HOTFIX
 
-Operation Black River remains the default and its geometry is unchanged.
+SCREENSHOT ERROR
+main.gd around line 5314:
+Expected end of statement after expression, found ":" instead.
 
-RUINED CITY is now presented as:
-OPERATION ASHEN STREETS
+ROOT CAUSE
+The v10.1.0 Map 2 bot-route insertion accidentally retained the old
+bot_route_waypoint parameter/signature fragment after the new Ruined City
+branch.
 
-ATTACK:
-Open the central crossing, seize the command post, and demolish the eastern
-pillbox.
+That produced a stray block beginning with:
+player: Node3D,
+route_index: int
+) -> Vector3:
 
-DEFEND:
-Hold the central streets, deny the command post, and protect the eastern
-pillbox.
-
-MAP-AWARE PRESENTATION
-- TAB scoreboard shows active operation and location
-- objective marker uses map-specific language
-- contextual E prompts use map-specific language
-- status bar says CROSSING/PILLBOX on Ruined City
-- tactical map is unique per map
-- a 5.2-second mission banner appears after map load
-- server console prints operation/mission details
-
-BOT FIX
-Ruined City bots now have their own four-route waypoint set per team instead
-of following Black River coordinates.
-
-Ruined City forward-spawn sector priority now uses:
-West Ruins / Central Square / Pillbox Ridge.
-
-MAP SELECTION
-Server:
---map ruined_city
-
-Clients still receive the server-selected map automatically.
+FIX
+- removed the duplicate parameter/signature fragment
+- retained the original Black River route body
+- retained the new Ruined City route branch
+- verified exactly one bot_route_waypoint() function exists in the region
+- checked delimiter balance through the full bot-route block
 
 UNCHANGED
-- Black River map detail
-- Ruined City geometry/setpieces
-- Jeep / Sherman / Spitfire / Bf 109
-- WWII character models
-- Allied Mk 2 grenade
-- Axis grenade path
-- weapons/textures
-- collision/destruction
-- TAB priority behavior
-- contextual E mechanics
-- --bots 0 / --bots=0 / --no-bots
+- protocol remains 344
+- server-authoritative map selection
+- Operation Ashen Streets identity
+- Ruined City tactical map
+- Ruined City bot waypoints
+- Black River bot waypoints
+- vehicles / aircraft
+- maps / map detail
+- WWII soldiers
+- Mk 2 grenade
+- --bots 0
 
-Build: 10.1.0
+Build: 10.1.1
 Protocol: 344
