@@ -3182,7 +3182,7 @@ func server_respawn(spawn_position: Vector3) -> void:
 	current_vehicle_id = -1
 	vehicle_camera_active = false
 	velocity = Vector3.ZERO
-	var safe_spawn_position := spawn_position + Vector3.UP * 0.35
+	var safe_spawn_position := spawn_position
 	global_position = safe_spawn_position
 	target_position = safe_spawn_position
 	health = _class_health(player_class)

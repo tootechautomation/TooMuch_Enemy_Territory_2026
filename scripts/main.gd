@@ -240,8 +240,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "12.0.0"
-const NETWORK_PROTOCOL := 353
+const BUILD_VERSION := "12.1.0"
+const NETWORK_PROTOCOL := 354
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -376,22 +376,22 @@ var destructible_covers: Dictionary = {}
 var next_cover_id := 1
 var spawn_points := {
 	0: [
-		Vector3(-58.0, 1.2, -16.0),
-		Vector3(-58.0, 1.2, -10.0),
-		Vector3(-58.0, 1.2, -4.0),
-		Vector3(-54.0, 1.2, -18.0),
-		Vector3(-54.0, 1.2, -10.0),
-		Vector3(-54.0, 1.2, -2.0),
-		Vector3(-50.0, 1.2, -10.0)
+		Vector3(-17.5, 1.2, -12.0),
+		Vector3(-17.5, 1.2, -6.0),
+		Vector3(-17.5, 1.2, 0.0),
+		Vector3(-17.5, 1.2, 6.0),
+		Vector3(-17.5, 1.2, 12.0),
+		Vector3(-13.0, 1.2, -9.0),
+		Vector3(-13.0, 1.2, 9.0)
 	],
 	1: [
-		Vector3(58.0, 1.2, 16.0),
-		Vector3(58.0, 1.2, 10.0),
-		Vector3(58.0, 1.2, 4.0),
-		Vector3(54.0, 1.2, 18.0),
-		Vector3(54.0, 1.2, 10.0),
-		Vector3(54.0, 1.2, 2.0),
-		Vector3(50.0, 1.2, 10.0)
+		Vector3(17.5, 1.2, 12.0),
+		Vector3(17.5, 1.2, 6.0),
+		Vector3(17.5, 1.2, 0.0),
+		Vector3(17.5, 1.2, -6.0),
+		Vector3(17.5, 1.2, -12.0),
+		Vector3(13.0, 1.2, 9.0),
+		Vector3(13.0, 1.2, -9.0)
 	]
 }
 var next_team := 0
@@ -7783,30 +7783,36 @@ func _get_spawn(team: int, peer_id: int) -> Vector3:
 	var safe_team: int = clampi(team, 0, 1)
 	var points: Array = spawn_points.get(safe_team, spawn_points[0])
 
-	var rally_spawn: Variant = _rally_spawn_position(
-		safe_team,
-		peer_id
-	)
-	if rally_spawn is Vector3:
-		return rally_spawn as Vector3
+	# Bots may use tactical rally/sector spawns immediately. Human players
+	# receive the authored base-spawn pass first so joining a match can never
+	# drop them inside a rally prop, ruin shell, roof, or forward objective.
+	var is_human_peer := peer_id < BOT_PEER_ID_START
 
-	var sector_spawn: Variant = sector_forward_spawn(safe_team)
-	if sector_spawn is Vector3:
-		var validated_sector: Dictionary = _validate_spawn_candidate(
-			sector_spawn as Vector3,
+	if not is_human_peer:
+		var rally_spawn: Variant = _rally_spawn_position(
+			safe_team,
 			peer_id
 		)
-		if bool(validated_sector.get("valid", false)):
-			return Vector3(validated_sector.get("position"))
+		if rally_spawn is Vector3:
+			return rally_spawn as Vector3
 
-	if (
-		objective_stage >= 1
-		and command_post_control == safe_team
-	):
-		points = forward_spawn_points.get(
-			safe_team,
-			points
-		)
+		var sector_spawn: Variant = sector_forward_spawn(safe_team)
+		if sector_spawn is Vector3:
+			var validated_sector: Dictionary = _validate_spawn_candidate(
+				sector_spawn as Vector3,
+				peer_id
+			)
+			if bool(validated_sector.get("valid", false)):
+				return Vector3(validated_sector.get("position"))
+
+		if (
+			objective_stage >= 1
+			and command_post_control == safe_team
+		):
+			points = forward_spawn_points.get(
+				safe_team,
+				points
+			)
 	var start_index: int = posmod(peer_id, points.size())
 
 	for offset in range(points.size()):
@@ -7842,8 +7848,8 @@ func _get_spawn(team: int, peer_id: int) -> Vector3:
 
 	# Last-resort point is still placed above known solid team ground.
 	var emergency := Vector3(
-		-17.0 if safe_team == 0 else 17.0,
-		1.15,
+		-15.0 if safe_team == 0 else 15.0,
+		1.35,
 		0.0
 	)
 	push_warning(
