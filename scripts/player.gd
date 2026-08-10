@@ -104,6 +104,8 @@ var external_character_animation: StringName = &""
 var external_character_test_unrigged := false
 var external_character_test_base_position := Vector3.ZERO
 var external_character_test_base_rotation := Vector3.ZERO
+var external_character_quality_refresh_ms := 0
+var external_character_last_quality := -1
 var external_animation_controller
 var external_weapon_socket: Node3D
 var external_model_loaded := false
@@ -3734,6 +3736,85 @@ func _class_short_name(class_id: int) -> String:
 		PlayerClass.SCOUT: return "SCOUT"
 		_: return "CLASS"
 
+func _apply_external_character_quality(force: bool = false) -> void:
+	if external_character_model == null:
+		return
+
+	var now: int = Time.get_ticks_msec()
+	if not force and now < external_character_quality_refresh_ms:
+		return
+	external_character_quality_refresh_ms = now + 900
+
+	var quality: int = _local_visual_quality_preset()
+	if not force and quality == external_character_last_quality:
+		return
+	external_character_last_quality = quality
+
+	var mesh_range: float = 78.0
+	var cast_shadows: bool = true
+
+	if quality == 0:
+		mesh_range = 52.0
+		cast_shadows = false
+	elif quality == 2:
+		mesh_range = 105.0
+
+	for descendant: Node in external_character_model.find_children(
+		"*",
+		"",
+		true,
+		false
+	):
+		if descendant is GeometryInstance3D:
+			var geometry: GeometryInstance3D = (
+				descendant as GeometryInstance3D
+			)
+			geometry.visibility_range_end = mesh_range
+			geometry.visibility_range_end_margin = 6.0
+			geometry.visibility_range_fade_mode = (
+				GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
+			)
+			geometry.cast_shadow = (
+				GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+				if cast_shadows
+				else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			)
+
+	# Identity labels should be useful nearby, not permanently float over
+	# characters across the entire battlefield.
+	if world_nameplate != null:
+		world_nameplate.visibility_range_end = (
+			24.0
+			if quality == 0
+			else 32.0
+			if quality == 1
+			else 40.0
+		)
+		world_nameplate.visibility_range_end_margin = 3.0
+
+	if world_class_label != null:
+		world_class_label.visibility_range_end = (
+			18.0
+			if quality == 0
+			else 25.0
+			if quality == 1
+			else 32.0
+		)
+		world_class_label.visibility_range_end_margin = 3.0
+
+	if revive_marker != null:
+		# Revive range logic already controls whether it appears. This additional
+		# geometry range prevents a stale marker from rendering at extreme range.
+		revive_marker.visibility_range_end = (
+			22.0
+			if quality == 0
+			else 32.0
+			if quality == 1
+			else 40.0
+		)
+		revive_marker.visibility_range_end_margin = 3.0
+
+
 func _build_external_character_model() -> bool:
 	if DisplayServer.get_name() == "headless":
 		return false
@@ -3913,6 +3994,8 @@ func _build_external_character_model() -> bool:
 		fallback_body.visible = false
 	if fallback_character != null:
 		fallback_character.visible = false
+
+	_apply_external_character_quality(true)
 	return true
 
 
@@ -3972,6 +4055,8 @@ func _refresh_external_weapon_model() -> void:
 func _update_external_character_animation() -> void:
 	if external_character_model == null:
 		return
+
+	_apply_external_character_quality()
 	_refresh_external_weapon_model()
 
 	external_character_model.visible = (
@@ -4141,7 +4226,10 @@ func _refresh_identity_visuals(force: bool = false) -> void:
 
 	if world_class_label != null:
 		world_class_label.text = _class_short_name(player_class)
-		world_class_label.modulate = accent_color.lightened(0.25)
+		world_class_label.modulate = accent_color.lightened(0.18)
+
+	if external_model_loaded:
+		_apply_external_character_quality(true)
 
 func _apply_first_person_body_visibility() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -4163,7 +4251,11 @@ func _apply_first_person_body_visibility() -> void:
 	if character_visual != null:
 		character_visual.visible = fallback_visible
 	if class_accent_mesh != null:
-		class_accent_mesh.visible = not local_view and alive
+		class_accent_mesh.visible = (
+			not local_view
+			and alive
+			and not external_model_loaded
+		)
 
 	if local_view:
 		if world_nameplate != null:
