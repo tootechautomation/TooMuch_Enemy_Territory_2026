@@ -320,6 +320,8 @@ var et_timer_label: Label
 var et_team_label: Label
 var et_crosshair_ring: Label
 var scoreboard_panel: PanelContainer
+var scoreboard_canvas_layer: CanvasLayer
+var scoreboard_backdrop: ColorRect
 var hud_canvas_layer: CanvasLayer
 var hud_base_resolution := Vector2(1280.0, 720.0)
 var hud_last_viewport_size := Vector2.ZERO
@@ -3200,7 +3202,7 @@ func _update_vehicle_tactical_markers() -> void:
 
 		marker.visible = (
 			not cinema_mode_enabled
-			and not scoreboard.visible
+			and not (scoreboard_canvas_layer != null and scoreboard_canvas_layer.visible)
 			and distance <= marker_range
 		)
 		if not marker.visible:
@@ -3260,7 +3262,7 @@ func _update_vehicle_hud() -> void:
 	var show_hud := (
 		current_vehicle_id >= 0
 		and not cinema_mode_enabled
-		and not scoreboard.visible
+		and not (scoreboard_canvas_layer != null and scoreboard_canvas_layer.visible)
 	)
 	vehicle_hud_panel.visible = show_hud
 	if vehicle_gunsight != null:
@@ -6694,11 +6696,15 @@ func _apply_resolution_safe_hud() -> void:
 	var rendered_size: Vector2 = hud_base_resolution * scale_factor
 	var offset: Vector2 = (viewport_size - rendered_size) * 0.5
 
-	hud_canvas_layer.transform = Transform2D(
+	var safe_transform := Transform2D(
 		Vector2(scale_factor, 0.0),
 		Vector2(0.0, scale_factor),
 		offset
 	)
+	hud_canvas_layer.transform = safe_transform
+
+	if scoreboard_canvas_layer != null:
+		scoreboard_canvas_layer.transform = safe_transform
 
 func _hud_panel_style(
 	background: Color,
@@ -7043,7 +7049,7 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 
 	var hud_visible: bool = (
 		not cinema_mode_enabled
-		and not scoreboard.visible
+		and not (scoreboard_canvas_layer != null and scoreboard_canvas_layer.visible)
 		and not tactical_map_open
 		and not spawn_menu_open
 		and not round_results_open
@@ -7051,6 +7057,72 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 	et_hud_root.visible = hud_visible
 	if radar_panel != null:
 		radar_panel.visible = hud_visible
+
+func _apply_scoreboard_focus(show_scoreboard: bool) -> void:
+	if scoreboard_canvas_layer != null:
+		scoreboard_canvas_layer.visible = show_scoreboard
+
+	# The priority layer already covers the whole screen, but explicitly
+	# suppressing ordinary HUD also prevents needless updates/draw work.
+	if et_hud_root != null:
+		et_hud_root.visible = (
+			not show_scoreboard
+			and not cinema_mode_enabled
+			and not tactical_map_open
+			and not spawn_menu_open
+		)
+
+	if radar_panel != null:
+		radar_panel.visible = (
+			not show_scoreboard
+			and not cinema_mode_enabled
+			and not tactical_map_open
+			and not spawn_menu_open
+		)
+
+	if feed != null:
+		feed.visible = (
+			not show_scoreboard
+			and not cinema_mode_enabled
+		)
+
+	if class_role_panel != null:
+		class_role_panel.visible = (
+			not show_scoreboard
+			and not cinema_mode_enabled
+			and alive
+		)
+
+	if reinforcement_death_panel != null and show_scoreboard:
+		reinforcement_death_panel.visible = false
+
+	if vehicle_hud_panel != null and show_scoreboard:
+		vehicle_hud_panel.visible = false
+
+	if vehicle_gunsight != null and show_scoreboard:
+		vehicle_gunsight.visible = false
+
+	if objective_progress_text != null:
+		objective_progress_text.visible = (
+			not show_scoreboard
+			and not cinema_mode_enabled
+		)
+
+	if objective_progress_bar != null:
+		objective_progress_bar.visible = (
+			not show_scoreboard
+			and not cinema_mode_enabled
+		)
+
+	if mission_banner != null and show_scoreboard:
+		mission_banner.visible = false
+
+	if suppression_overlay != null and show_scoreboard:
+		suppression_overlay.visible = false
+
+	if et_crosshair_ring != null and show_scoreboard:
+		et_crosshair_ring.visible = false
+
 
 func _apply_cinema_mode_visibility() -> void:
 	# Scoreboard remains usable in cinema mode. Everything else in the regular
@@ -7060,7 +7132,7 @@ func _apply_cinema_mode_visibility() -> void:
 	if et_hud_root != null:
 		et_hud_root.visible = (
 			show_game_hud
-			and not scoreboard.visible
+			and not (scoreboard_canvas_layer != null and scoreboard_canvas_layer.visible)
 			and not tactical_map_open
 			and not spawn_menu_open
 		)
@@ -7068,7 +7140,7 @@ func _apply_cinema_mode_visibility() -> void:
 	if radar_panel != null:
 		radar_panel.visible = (
 			show_game_hud
-			and not scoreboard.visible
+			and not (scoreboard_canvas_layer != null and scoreboard_canvas_layer.visible)
 			and not tactical_map_open
 			and not spawn_menu_open
 		)
@@ -7405,21 +7477,38 @@ func _build_hud() -> void:
 	feed.add_theme_constant_override("shadow_offset_y", 2)
 	layer.add_child(feed)
 
-	# Framed TAB results panel.
+	# TAB scoreboard uses its own very high CanvasLayer so it always wins over
+	# combat HUD, objective overlays, radar, feed, and other presentation layers.
+	scoreboard_canvas_layer = CanvasLayer.new()
+	scoreboard_canvas_layer.name = "ScoreboardPriorityLayer"
+	scoreboard_canvas_layer.layer = 100
+	scoreboard_canvas_layer.visible = false
+	add_child(scoreboard_canvas_layer)
+
+	scoreboard_backdrop = ColorRect.new()
+	scoreboard_backdrop.name = "ScoreboardBackdrop"
+	scoreboard_backdrop.position = Vector2.ZERO
+	scoreboard_backdrop.size = Vector2(1280, 720)
+	scoreboard_backdrop.color = Color(0.0, 0.0, 0.0, 0.58)
+	scoreboard_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scoreboard_canvas_layer.add_child(scoreboard_backdrop)
+
 	scoreboard_panel = PanelContainer.new()
+	scoreboard_panel.name = "ScoreboardPanel"
 	scoreboard_panel.position = Vector2(185, 62)
 	scoreboard_panel.size = Vector2(910, 590)
+	scoreboard_panel.z_index = 10
 	scoreboard_panel.add_theme_stylebox_override(
 		"panel",
 		_hud_panel_style(
-			Color(0.025, 0.030, 0.028, 0.94),
-			Color(0.53, 0.48, 0.30, 0.98),
+			Color(0.018, 0.022, 0.021, 0.985),
+			Color(0.62, 0.56, 0.34, 1.0),
 			3,
 			8
 		)
 	)
-	scoreboard_panel.visible = false
-	layer.add_child(scoreboard_panel)
+	scoreboard_panel.visible = true
+	scoreboard_canvas_layer.add_child(scoreboard_panel)
 	scoreboard.reparent(scoreboard_panel)
 	scoreboard.position = Vector2.ZERO
 	scoreboard.custom_minimum_size = Vector2(870, 550)
@@ -7436,6 +7525,7 @@ func _build_hud() -> void:
 	scoreboard.add_theme_constant_override("shadow_offset_y", 2)
 
 	_build_et_style_hud(layer)
+	hud_last_viewport_size = Vector2.ZERO
 	_apply_resolution_safe_hud()
 
 	# Dead-player reinforcement queue panel. Hidden while alive.
@@ -8333,7 +8423,7 @@ func _update_reinforcement_death_panel() -> void:
 	var show_panel := (
 		not alive
 		and not cinema_mode_enabled
-		and not scoreboard.visible
+		and not (scoreboard_canvas_layer != null and scoreboard_canvas_layer.visible)
 		and not spawn_menu_open
 		and not tactical_map_open
 	)
@@ -8420,7 +8510,7 @@ func _update_class_role_hud() -> void:
 	var visible_state: bool = (
 		alive
 		and not cinema_mode_enabled
-		and not scoreboard.visible
+		and not (scoreboard_canvas_layer != null and scoreboard_canvas_layer.visible)
 		and not tactical_map_open
 		and not spawn_menu_open
 		and not round_results_open
@@ -8793,15 +8883,16 @@ func _update_hud() -> void:
 		or Input.is_action_pressed("scoreboard")
 		or Input.is_physical_key_pressed(KEY_TAB)
 	)
-	scoreboard.visible = (
+	var scoreboard_active: bool = (
 		scoreboard_requested
 		and not round_results_open
 		and not tactical_map_open
 		and not spawn_menu_open
 	)
-	if scoreboard_panel != null:
-		scoreboard_panel.visible = scoreboard.visible
-	if scoreboard.visible:
+	scoreboard.visible = true
+	_apply_scoreboard_focus(scoreboard_active)
+
+	if scoreboard_active:
 		scoreboard.text = str(main.call("scoreboard_text"))
 
 	_update_et_style_hud(main, names)
@@ -8810,5 +8901,13 @@ func _update_hud() -> void:
 	if radar_panel != null and round_results_open:
 		radar_panel.visible = false
 	if feed != null:
-		feed.visible = not round_results_open and not cinema_mode_enabled
+		var scoreboard_is_active := (
+			scoreboard_canvas_layer != null
+			and scoreboard_canvas_layer.visible
+		)
+		feed.visible = (
+			not round_results_open
+			and not cinema_mode_enabled
+			and not scoreboard_is_active
+		)
 		feed.text = "\n".join(main.kill_feed)
