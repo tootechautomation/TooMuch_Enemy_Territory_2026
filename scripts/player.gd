@@ -1744,17 +1744,19 @@ func server_fire(direction: Vector3) -> void:
 					confirm_hit.rpc_id(peer_id)
 
 	var main_node: Node = get_parent()
-	if main_node != null and main_node.has_method(
-		"show_shot_effect"
-	):
-	var tracer_main: Node = get_parent()
-	if tracer_main != null and tracer_main.has_method("show_combat_tracer"):
-		tracer_main.show_combat_tracer.rpc(
+
+	# Tracers are independent of the legacy shot-effect RPC. Keeping this
+	# outside that conditional also prevents an empty if block/parser error.
+	if main_node != null and main_node.has_method("show_combat_tracer"):
+		main_node.show_combat_tracer.rpc(
 			shot_origin,
 			effect_end,
 			false
 		)
 
+	if main_node != null and main_node.has_method(
+		"show_shot_effect"
+	):
 		main_node.show_shot_effect.rpc(
 			origin,
 			effect_end,

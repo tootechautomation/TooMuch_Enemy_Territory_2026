@@ -1,36 +1,12 @@
-FRONTLINE: OBJECTIVE v9.13.0
-COMBAT FEEDBACK + BATTLEFIELD ATMOSPHERE
+FRONTLINE: OBJECTIVE v9.13.1 HOTFIX
 
-NEW:
-- quality-scaled infantry tracers
-- lightweight bullet impact dust/sparks
-- vehicle weapon tracers/impact feedback
-- four ambient smoke pockets
-- two ambient fire pockets
+Fixes player.gd parser error near line 1749 introduced by v9.13.0 tracer integration.
+The tracer call had accidentally been inserted between an if statement and its required indented body.
 
-LOW/LAPTOP:
-- skips short tracers
-- low particle counts
-- short effect lifetime
-- no shadow-casting effect lights
+The corrected flow is:
+1. Resolve shot/hit.
+2. Broadcast combat tracer when supported.
+3. Broadcast existing show_shot_effect when supported.
 
-BALANCED/HIGH:
-- progressively richer but still lightweight effects
-
-PERFORMANCE:
-- no rigid-body debris
-- no physical shell casings
-- no volumetric smoke
-- short-lived tracer meshes and GPUParticles3D only
-
-PRESERVED:
-- v9.12 camera collision and safe vehicle exits
-- v9.11 vehicle camera modes
-- v9.10 destructible streets and transform safety
-- all vehicle/aircraft systems
-- real vehicle GLBs
-- F6/F8
-- --bots 0 / --bots=0 / --no-bots
-
-Build: 9.13.0
-Protocol: 341
+No gameplay systems were intentionally removed.
+Protocol remains 341.
