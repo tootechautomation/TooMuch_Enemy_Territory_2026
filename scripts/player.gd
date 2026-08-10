@@ -1707,11 +1707,35 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 				if local_player != null:
 					local_team = int(local_player.get("team"))
 
-		revive_marker.visible = (
+		var revive_distance := INF
+	var local_player_id := multiplayer.get_unique_id()
+	if main.players.has(local_player_id):
+		var local_player_node: Node3D = (
+			main.players[local_player_id] as Node3D
+		)
+		if local_player_node != null:
+			revive_distance = (
+				local_player_node.global_position.distance_to(
+					global_position
+				)
+			)
+
+	var revive_range := 30.0
+	if _local_visual_quality_preset() == 0:
+		revive_range = 20.0
+	elif _local_visual_quality_preset() == 2:
+		revive_range = 38.0
+
+	revive_marker.visible = (
 			alive
 			and downed
 			and local_team == team
 			and not _is_local_player()
+			and revive_distance <= revive_range
+		)
+	if revive_marker.visible:
+		revive_marker.text = "✚ REVIVE · %dm" % int(
+			round(revive_distance)
 		)
 
 	if _is_local_player():
@@ -2706,6 +2730,18 @@ func server_take_damage(amount: int, attacker_id: int) -> void:
 
 		downed = true
 		visual_incapacitation_impact = 1.0
+
+		if not is_bot:
+			var down_main: Node = get_parent()
+			if (
+				down_main != null
+				and down_main.has_method("team_callout")
+			):
+				down_main.team_callout.rpc(
+					team,
+					"TEAMMATE DOWN · MEDIC NEEDED",
+					"DOWNED_%d" % peer_id
+				)
 		health = 1
 		bleedout_finish_ms = Time.get_ticks_msec() + BLEEDOUT_MS
 		is_reloading = false
@@ -2822,6 +2858,12 @@ func server_revive(reviver_id: int = 0) -> void:
 	if get_parent().players.has(reviver_id):
 		get_parent().players[reviver_id].add_xp(15, "revive")
 	get_parent().push_kill_feed.rpc("%s was revived" % player_name)
+	if get_parent().has_method("team_callout"):
+		get_parent().team_callout.rpc(
+			team,
+			"%s REVIVED" % player_name,
+			"REVIVED_%d" % peer_id
+		)
 
 @rpc("authority", "call_remote", "reliable")
 func unstuck_feedback(

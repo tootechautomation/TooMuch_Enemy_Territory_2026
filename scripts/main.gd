@@ -237,7 +237,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.22.0"
+const BUILD_VERSION := "9.23.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -523,6 +523,10 @@ var supply_depot_progress_label: Label3D
 var supply_depot_light: OmniLight3D
 var mission_banner_text := ""
 var mission_banner_until_ms := 0
+var active_squad_ping_markers: Array[Node] = []
+var last_team_callout_key := ""
+var last_team_callout_ms := 0
+const TEAM_CALLOUT_COOLDOWN_MS := 3500
 var sector_positions: Dictionary = {
 	"Village": Vector3(-28.0, 0.0, 1.0),
 	"Rail Yard": Vector3(25.0, 0.0, -20.0),
@@ -1208,6 +1212,11 @@ func _process(delta: float) -> void:
 			if not overtime_active:
 				overtime_active = true
 				push_kill_feed.rpc("OVERTIME — objective remains active")
+				team_callout.rpc(
+					-1,
+					"OVERTIME · OBJECTIVE STILL ACTIVE",
+					"OVERTIME"
+				)
 		else:
 			overtime_active = false
 			_end_match("DEFENDERS WIN — objective secured")
@@ -6346,6 +6355,103 @@ func submit_player_input(
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	receive_input_ack.rpc_id(sender_id, sequence)
 
+func _local_team_id() -> int:
+	var local_id: int = multiplayer.get_unique_id()
+	if not players.has(local_id):
+		return -1
+
+	var local_player: Node = players[local_id] as Node
+	if local_player == null:
+		return -1
+
+	return int(local_player.get("team"))
+
+
+func _local_player_position() -> Vector3:
+	var local_id: int = multiplayer.get_unique_id()
+	if players.has(local_id):
+		var local_player: Node3D = players[local_id] as Node3D
+		if local_player != null:
+			return local_player.global_position
+
+	var viewport: Viewport = get_viewport()
+	if viewport != null:
+		var camera: Camera3D = viewport.get_camera_3d()
+		if camera != null:
+			return camera.global_position
+
+	return Vector3.ZERO
+
+
+func _squad_ping_cap() -> int:
+	if visual_quality_manager == null:
+		return 4
+
+	var preset: int = clampi(
+		int(visual_quality_manager.get("current_preset")),
+		0,
+		2
+	)
+	if preset == 0:
+		return 2
+	if preset == 2:
+		return 6
+	return 4
+
+
+func _cleanup_squad_pings() -> void:
+	for index: int in range(
+		active_squad_ping_markers.size() - 1,
+		-1,
+		-1
+	):
+		var marker: Node = active_squad_ping_markers[index]
+		if marker == null or not is_instance_valid(marker):
+			active_squad_ping_markers.remove_at(index)
+
+	while active_squad_ping_markers.size() > _squad_ping_cap():
+		var oldest: Node = active_squad_ping_markers.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
+
+
+func _show_team_callout(
+	callout_team: int,
+	message: String,
+	callout_key: String
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	if callout_team >= 0 and _local_team_id() != callout_team:
+		return
+
+	var now: int = Time.get_ticks_msec()
+	if (
+		callout_key == last_team_callout_key
+		and now - last_team_callout_ms < TEAM_CALLOUT_COOLDOWN_MS
+	):
+		return
+
+	last_team_callout_key = callout_key
+	last_team_callout_ms = now
+	mission_banner_text = message
+	mission_banner_until_ms = now + 2600
+
+
+@rpc("authority", "call_local", "reliable")
+func team_callout(
+	callout_team: int,
+	message: String,
+	callout_key: String
+) -> void:
+	_show_team_callout(
+		callout_team,
+		message,
+		callout_key
+	)
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func request_squad_ping(
 	requested_peer_id: int,
@@ -6397,32 +6503,69 @@ func show_squad_ping(
 	if DisplayServer.get_name() == "headless":
 		return
 
-	var local_id: int = multiplayer.get_unique_id()
-	if players.has(local_id):
-		var local_player: Node = players[local_id] as Node
-		if local_player != null:
-			if int(local_player.get("team")) != ping_team:
-				return
+	if _local_team_id() != ping_team:
+		return
+
+	var local_position: Vector3 = _local_player_position()
+	var distance: float = local_position.distance_to(
+		ping_position
+	)
+
+	var max_distance := 62.0
+	if visual_quality_manager != null:
+		var preset := clampi(
+			int(visual_quality_manager.get("current_preset")),
+			0,
+			2
+		)
+		if preset == 0:
+			max_distance = 42.0
+		elif preset == 2:
+			max_distance = 78.0
+
+	if distance > max_distance:
+		return
+
+	_cleanup_squad_pings()
+	if active_squad_ping_markers.size() >= _squad_ping_cap():
+		var oldest: Node = active_squad_ping_markers.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
 
 	var marker := Label3D.new()
 	marker.name = "SquadPing"
-	marker.text = "▲  %s" % sender_name
+	marker.text = "▲ %s · %dm" % [
+		sender_name,
+		int(round(distance))
+	]
 	marker.position = ping_position + Vector3.UP * 0.45
-	marker.font_size = 30
-	marker.outline_size = 10
+	marker.font_size = 24
+	marker.outline_size = 8
 	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	marker.fixed_size = false
 	marker.modulate = Color(0.22, 0.88, 1.0)
 	add_child(marker)
+	active_squad_ping_markers.append(marker)
 
 	var timer := Timer.new()
 	timer.one_shot = true
-	timer.wait_time = 5.0
-	timer.timeout.connect(marker.queue_free)
+	timer.wait_time = 3.8
+	timer.timeout.connect(
+		func() -> void:
+			active_squad_ping_markers.erase(marker)
+			if is_instance_valid(marker):
+				marker.queue_free()
+	)
 	marker.add_child(timer)
 	timer.start()
 
-	push_kill_feed.rpc("%s marked a squad target" % sender_name)
+	_show_team_callout(
+		ping_team,
+		"SQUAD MARK · %dm" % int(round(distance)),
+		"PING_%s" % sender_name
+	)
+
+
 
 func server_call_artillery(caller: Node3D, target_position: Vector3) -> void:
 	if not multiplayer.is_server() or caller == null:
@@ -7551,6 +7694,16 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 			_update_objective_visuals()
 			if bridge_progress >= bridge_required:
 				objective_stage = 1
+				team_callout.rpc(
+					0,
+					"BRIDGE COMPLETE · ADVANCE ON BUNKER",
+					"BRIDGE_COMPLETE_ATK"
+				)
+				team_callout.rpc(
+					1,
+					"BRIDGE LOST · DEFEND THE BUNKER",
+					"BRIDGE_COMPLETE_DEF"
+				)
 				var bridge: Node = get_node_or_null("ConstructedBridge")
 				if bridge:
 					bridge.visible = true
@@ -7587,6 +7740,8 @@ func arm_dynamite(engineer_id: int) -> bool:
 		return false
 	dynamite_armed = true
 	dynamite_remaining = DYNAMITE_FUSE_SECONDS
+			team_callout.rpc(0, "CHARGE ARMED · HOLD THE BUNKER", "CHARGE_ARMED_ATK")
+			team_callout.rpc(1, "CHARGE ARMED · DEFUSE NOW", "CHARGE_ARMED_DEF")
 	defuse_progress = 0
 	_update_objective_visuals()
 	push_kill_feed.rpc("%s armed the bunker charge" % player_names.get(engineer_id, "Engineer"))

@@ -1,82 +1,69 @@
-FRONTLINE: OBJECTIVE v9.22.0
-SPATIAL AUDIO + SURFACE FOOTSTEPS + VEHICLE ENGINE SOUND
+FRONTLINE: OBJECTIVE v9.23.0
+TEAM AWARENESS + OBJECTIVE CALLOUTS + PING RESTRAINT
 
-NEW INCLUDED AUDIO ASSETS
-This build now includes lightweight WAV assets directly in /audio:
-- rifle_fire.wav
-- pistol_fire.wav
-- world_gunshot.wav
-- explosion.wav
-- reload.wav
-- dry_click.wav
-- hit_confirm.wav
-- headshot_confirm.wav
-- ground/gravel/stone/wood/metal footsteps
-- Jeep/Tank/Aircraft engine loops
+SQUAD PINGS
+Existing squad pings are now quality/distance aware.
 
-This means the existing optional audio-loading code now has actual fallback
-sounds even if no external sound pack is installed.
+LOW/LAPTOP:
+- max 2 simultaneous ping markers
+- visible to roughly 42m
 
-SURFACE FOOTSTEPS
-Footstep raycasts already identified surface type. v9.22 now maps that result
-to different actual sounds:
-- ground
-- gravel
-- stone/brick
-- wood
-- metal
+BALANCED:
+- max 4
+- roughly 62m
 
-Remote player footsteps also play spatially on clients.
+HIGH:
+- max 6
+- roughly 78m
 
-LOW/LAPTOP
-Remote footsteps beyond roughly 14m are skipped.
+Ping markers now show sender + approximate distance and expire after 3.8 sec.
 
-BALANCED/HIGH
-Remote footstep range extends to roughly 21m.
+IMPORTANT FIX
+show_squad_ping() no longer tries to generate a new global kill-feed RPC from
+every receiving client. This removes redundant ping-related message/network
+noise.
 
-WORLD GUNFIRE
-Remote gunfire now creates capped AudioStreamPlayer3D reports.
+TEAM CALLOUTS
+Short mission-banner callouts are now generated for important events:
+- bridge complete / bunker defense begins
+- dynamite charge armed
+- overtime
+- teammate down
+- teammate revived
+- squad mark received
 
-The shooter's own close-range sound is not duplicated because shots within
-2.5m of the listening camera skip the world report.
+Callouts are filtered by team where appropriate and duplicate keys are
+cooldown-limited.
 
-Approximate gunfire ranges:
-- Low ~38m
-- Balanced ~62m
-- High ~82m
+REVIVE AWARENESS
+Friendly downed-player markers now show:
+✚ REVIVE · XXm
 
-Audio player count is capped:
-- Low 6
-- Balanced 12
-- High 18
+Distance culling:
+- Low ~20m
+- Balanced ~30m
+- High ~38m
 
-VEHICLE ENGINES
-Jeep, tank and aircraft now have separate lightweight looped engine sounds.
-
-Pitch/volume respond to movement/throttle:
-- stationary occupied vehicles idle quietly
-- acceleration raises pitch/volume
-- tanks remain lower pitched
-- aircraft use the highest pitch/range
-- destroyed vehicles fade nearly silent
+This reduces distant label clutter while preserving nearby Medic awareness.
 
 PERFORMANCE
-- mono 22.05 kHz WAV assets
-- no convolution/reverb processing
-- distance attenuation
-- capped transient world audio
-- no new physics or networking
-- no GPU cost
+- no new physics
+- no continuous network stream
+- ping count is hard capped
+- callouts are event-driven only
+- duplicate callout suppression
+- no new dynamic lighting/particles
 
 PRESERVED
-- v9.21 visual effect budgets
+- v9.22 spatial audio / surface footsteps / vehicle engines
+- v9.21 effect budgets
 - v9.20 spawn safety / U unstuck
-- v9.19 visibility/route readability
-- first-person/HUD/combat fixes
+- visibility/environment work
+- first-person/HUD/combat systems
 - destructible streets
 - all vehicle and aircraft gameplay
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.22.0
+Build: 9.23.0
 Protocol: 341
