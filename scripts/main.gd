@@ -240,8 +240,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "10.2.0"
-const NETWORK_PROTOCOL := 345
+const BUILD_VERSION := "10.2.1"
+const NETWORK_PROTOCOL := 346
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -5186,19 +5186,17 @@ func _update_sector_visuals() -> void:
 			)
 
 func sector_status_text() -> String:
-	var ordered_sectors: Array[String] = (
-		[
-			"West Ruins",
-			"Central Square",
-			"Pillbox Ridge"
-		]
-		if active_map_id == MAP_RUINED_CITY
-		else [
-			"Village",
-			"Rail Yard",
-			"Fort"
-		]
-	)
+	# Keep this explicitly typed. A ternary containing array literals is
+	# inferred by Godot as Array, which cannot be assigned to Array[String].
+	var ordered_sectors: Array[String] = []
+	if active_map_id == MAP_RUINED_CITY:
+		ordered_sectors.append("West Ruins")
+		ordered_sectors.append("Central Square")
+		ordered_sectors.append("Pillbox Ridge")
+	else:
+		ordered_sectors.append("Village")
+		ordered_sectors.append("Rail Yard")
+		ordered_sectors.append("Fort")
 
 	var parts: Array[String] = []
 	for sector_name: String in ordered_sectors:
