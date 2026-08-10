@@ -75,6 +75,9 @@ const ReinforcementStatusHUDScript = preload(
 const DrivableVehicleScript = preload(
 	"res://scripts/gameplay/drivable_vehicle.gd"
 )
+const VehicleDestructibleBarrierScript = preload(
+	"res://scripts/gameplay/destructible_vehicle_barrier.gd"
+)
 const VehicleMapExpansionScript = preload(
 	"res://scripts/gameplay/vehicle_map_expansion.gd"
 )
@@ -228,7 +231,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.08.0"
+const BUILD_VERSION := "9.09.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -472,6 +475,7 @@ var objective_matchflow_hud: CanvasLayer
 var structural_collision_guard: Node
 var reinforcement_status_hud: CanvasLayer
 var vehicles: Dictionary = {}
+var vehicle_destructible_barriers: Dictionary = {}
 var next_vehicle_id: int = 1
 var vehicle_map_expansion: Node
 var vehicle_snapshot_accumulator := 0.0
@@ -8012,6 +8016,80 @@ func server_explode_grenade(
 			if grenade_owner != null:
 				grenade_owner.call("server_confirm_hit")
 
+
+	# Explosives also damage vehicles. Damage is intentionally reduced versus
+	# infantry so ordinary grenades threaten armor without replacing tank guns.
+	for vehicle_value: Variant in vehicles.values():
+		var target_vehicle: Node3D = vehicle_value as Node3D
+		if target_vehicle == null:
+			continue
+		if bool(target_vehicle.get("destroyed")):
+			continue
+		if int(target_vehicle.get("team_id")) == owner_team:
+			continue
+
+		var vehicle_distance := explosion_position.distance_to(
+			target_vehicle.global_position
+		)
+		var vehicle_radius := radius * 1.20
+		if vehicle_distance > vehicle_radius:
+			continue
+
+		var vehicle_scale := 1.0 - clampf(
+			vehicle_distance / vehicle_radius,
+			0.0,
+			1.0
+		)
+		var vehicle_damage := maxi(
+			1,
+			int(round(
+				float(maximum_damage)
+				* 0.55
+				* vehicle_scale
+			))
+		)
+
+		var destroyed_now := bool(
+			target_vehicle.call(
+				"server_apply_damage",
+				vehicle_damage
+			)
+		)
+		if destroyed_now:
+			_server_handle_vehicle_destroyed(target_vehicle)
+
+	# Grenades can clear the lightweight battlefield barriers too.
+	for barrier_value: Variant in vehicle_destructible_barriers.values():
+		var barrier: Node3D = barrier_value as Node3D
+		if barrier == null or bool(barrier.get("destroyed")):
+			continue
+
+		var barrier_distance := explosion_position.distance_to(
+			barrier.global_position
+		)
+		if barrier_distance > radius * 1.35:
+			continue
+
+		var barrier_scale := 1.0 - clampf(
+			barrier_distance / (radius * 1.35),
+			0.0,
+			1.0
+		)
+		var barrier_damage := maxi(
+			1,
+			int(round(
+				float(maximum_damage)
+				* 0.85
+				* barrier_scale
+			))
+		)
+
+		if bool(barrier.call("server_apply_damage", barrier_damage)):
+			set_vehicle_barrier_destroyed.rpc(
+				int(barrier.get("barrier_id")),
+				barrier.global_position
+			)
+
 	explode_grenade.rpc(grenade_id, explosion_position)
 
 @rpc("authority", "call_local", "reliable")
@@ -8937,7 +9015,7 @@ func objective_status_text() -> String:
 		)
 
 	return (
-		"Destroy bunker %d%% · CP %s · Tickets %d-%d · %s%s"
+		"Destroy bunker %d%% · CP %s · Tickets %d-%d · TANKS CAN DAMAGE BUNKER · %s%s"
 		% [
 			objective_health,
 			post_text,
@@ -9627,6 +9705,7 @@ func _reset_round() -> void:
 			beacon_node.queue_free()
 	pending_artillery.clear()
 	_reset_destructible_cover()
+	_reset_vehicle_destructible_barriers()
 
 	var bridge: Node = get_node_or_null("ConstructedBridge")
 	if bridge:
@@ -9687,6 +9766,7 @@ func _initialize_vehicle_map_and_spawns() -> void:
 	vehicle_map_expansion.name = "VehicleMapExpansion"
 	add_child(vehicle_map_expansion)
 	vehicle_map_expansion.call("initialize", self)
+	_initialize_vehicle_destructible_barriers()
 
 	if not multiplayer.is_server():
 		return
@@ -9721,6 +9801,85 @@ func _initialize_vehicle_map_and_spawns() -> void:
 		DrivableVehicleScript.VehicleType.AIRCRAFT,
 		1, Vector3(8.0, 0.95, 43.0), PI
 	)
+
+
+func _initialize_vehicle_destructible_barriers() -> void:
+	if not vehicle_destructible_barriers.is_empty():
+		return
+
+	var data: Array[Dictionary] = [
+		{
+			"id": 1,
+			"position": Vector3(-18.0, 0.85, -7.0),
+			"yaw": 0.10,
+			"size": Vector3(5.2, 1.7, 0.75),
+			"health": 220
+		},
+		{
+			"id": 2,
+			"position": Vector3(-17.0, 0.85, 7.5),
+			"yaw": -0.08,
+			"size": Vector3(4.8, 1.7, 0.75),
+			"health": 220
+		},
+		{
+			"id": 3,
+			"position": Vector3(18.0, 0.85, -7.5),
+			"yaw": 0.08,
+			"size": Vector3(4.8, 1.7, 0.75),
+			"health": 220
+		},
+		{
+			"id": 4,
+			"position": Vector3(20.0, 0.85, 7.0),
+			"yaw": -0.12,
+			"size": Vector3(5.2, 1.7, 0.75),
+			"health": 220
+		}
+	]
+
+	for entry: Dictionary in data:
+		var id := int(entry["id"])
+		var barrier: StaticBody3D = VehicleDestructibleBarrierScript.new()
+		barrier.name = "VehicleBarrier_%d" % id
+		add_child(barrier)
+		barrier.call(
+			"configure",
+			id,
+			Vector3(entry["position"]),
+			float(entry["yaw"]),
+			Vector3(entry["size"]),
+			int(entry["health"])
+		)
+		vehicle_destructible_barriers[id] = barrier
+
+
+func _reset_vehicle_destructible_barriers() -> void:
+	for barrier_value: Variant in vehicle_destructible_barriers.values():
+		var barrier: Node = barrier_value as Node
+		if barrier != null and barrier.has_method("reset_barrier"):
+			barrier.call("reset_barrier")
+
+
+@rpc("authority", "call_local", "reliable")
+func set_vehicle_barrier_destroyed(
+	barrier_id: int,
+	impact_position: Vector3
+) -> void:
+	if vehicle_destructible_barriers.has(barrier_id):
+		var barrier: Node = vehicle_destructible_barriers[barrier_id] as Node
+		if barrier != null:
+			barrier.call("set_destroyed_visual")
+
+	if (
+		DisplayServer.get_name() != "headless"
+		and battlefield_effects_manager != null
+	):
+		battlefield_effects_manager.call(
+			"spawn_explosion",
+			impact_position,
+			0.75
+		)
 
 
 func _server_create_vehicle(
@@ -9919,6 +10078,32 @@ func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 		var collider: Object = hit.get("collider")
 
 		if (
+			collider != null
+			and collider.name == "Objective"
+			and objective_stage == 1
+			and int(vehicle.get("team_id")) == 0
+			and int(vehicle.get("vehicle_type")) == 1
+		):
+			# Tank shells can support the bunker assault, but dynamite remains
+			# substantially more efficient. Direct cannon hit = 12 integrity.
+			damage_objective(12, 0)
+
+		elif (
+			collider != null
+			and collider.has_method("server_apply_damage")
+			and collider.get("barrier_id") != null
+		):
+			var barrier := collider as Node
+			var barrier_destroyed := bool(
+				barrier.call("server_apply_damage", damage)
+			)
+			if barrier_destroyed:
+				set_vehicle_barrier_destroyed.rpc(
+					int(barrier.get("barrier_id")),
+					end
+				)
+
+		elif (
 			collider != null
 			and collider.has_method("server_apply_damage")
 			and collider.get("vehicle_id") != null

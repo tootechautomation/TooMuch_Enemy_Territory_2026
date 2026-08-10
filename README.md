@@ -1,56 +1,58 @@
-FRONTLINE: OBJECTIVE v9.08.0
-VEHICLE SERVICE AREAS + OBJECTIVE SUPPORT
+FRONTLINE: OBJECTIVE v9.09.0
+VEHICLE OBJECTIVE COMBAT + ANTI-VEHICLE EXPLOSIVES + DESTRUCTIBLE BARRIERS
 
-TEAM VEHICLE SERVICE ZONES
-Allied service area:
-approximately (-48, -10)
+TANKS NOW SUPPORT THE BUNKER ASSAULT
+During Stage 2, direct Allied tank-cannon hits on the bunker objective inflict:
+12 bunker integrity damage per shell.
 
-Axis service area:
-approximately (48, 10)
+Dynamite remains the primary objective mechanic. The tank is support rather
+than an automatic replacement for Engineers.
 
-When a friendly vehicle is within 8m and moving 6 KM/H or slower:
-- repairs 35 HP per second
-- rearms 40 rounds/shell units per second
-- vehicle HUD shows SERVICE · REPAIR/REARM
+ANTI-VEHICLE GRENADES
+Normal grenade explosions now apply reduced radial damage to enemy vehicles.
 
-If moving too quickly:
-SERVICE · SLOW BELOW 6 KM/H
+- friendly vehicles are ignored
+- vehicle blast radius is slightly larger than infantry radius
+- damage falls off with distance
+- grenades threaten Jeeps/aircraft and slowly wear down tanks
+- destroyed vehicles use the existing explosion/ejection/respawn system
 
-This creates a reason to return damaged vehicles to the motor pool instead of
-treating them as disposable one-life assets.
+DESTRUCTIBLE BATTLEFIELD BARRIERS
+Four lightweight destructible barriers have been added around the central
+vehicle approaches.
 
-BRIDGE OBJECTIVE INTEGRATION
-The vehicle-support helper from v9.07 is now connected to Stage 1.
+They:
+- use simple StaticBody3D box collision
+- cost almost nothing while intact
+- can be destroyed by tank/vehicle weapons
+- can be destroyed by grenades
+- disappear rather than becoming dozens of rigid-body fragments
+- reset every round
 
-If an occupied Allied vehicle is within ~14m of the bridge build site while an
-Allied Engineer constructs:
-- normal engineer interaction = +1 construction
-- supported engineer interaction = +2 construction
+This is the performance-friendly foundation for later:
+- destructible brick walls
+- sandbag positions
+- wooden barricades
+- damaged building sections
+- vehicle roadblocks
 
-Engineers are still mandatory. Vehicles cannot build the bridge on their own.
-
-HUD/status reports:
-VEHICLE SUPPORT
-when the support condition is active.
-
-BALANCE
-The support bonus is deliberately modest and capped:
-- vehicle does not replace Engineer
-- vehicle must be occupied
-- vehicle must survive close to the objective
-- defenders can counter the support vehicle
+PERFORMANCE
+No rigid-body debris simulation was added.
+Destruction is replicated as a single state change plus a quality-scaled
+explosion effect.
 
 PRESERVED
-- v9.07 improved aircraft throttle/takeoff/landing
-- damage smoke/muzzle flash
-- v9.06 aircraft state stability
-- v9.05 mouse turret aiming/repair/markers
+- v9.08 vehicle service zones and bridge support
+- v9.07 aircraft takeoff/landing/throttle
+- v9.06 vehicle-state stability
+- mouse turret aiming
+- Engineer vehicle repair
+- vehicle tactical markers
 - multi-seat vehicles
-- combat/destruction/respawn
-- real GLB models
+- vehicle respawn/combat
+- real Willys/Sherman/Spitfire/Bf109 GLBs
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
-- laptop scalability work
 
-Build: 9.08.0
+Build: 9.09.0
 Protocol: 341
