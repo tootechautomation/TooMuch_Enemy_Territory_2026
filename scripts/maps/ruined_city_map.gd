@@ -11,6 +11,10 @@ static func build(root: Node) -> void:
 	_build_playable_geometry(root)
 	_build_objective_nodes(root)
 	_build_sector_visuals(root)
+
+	# Multiplayer collision must exist on the authoritative headless server.
+	_build_imported_architecture_proxies(root)
+
 	_build_visual_setpieces(root)
 
 
@@ -437,7 +441,7 @@ static func _instantiate_visual(
 	rotation_y: float,
 	target_height: float,
 	max_range: float,
-	build_collision: bool = true
+	build_collision: bool = false
 ) -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -491,54 +495,215 @@ static func _instantiate_visual(
 			GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		)
 
-	# v10.4: imported scenery is no longer ghost geometry. Generate accurate
-	# static trimesh collision for substantial architectural meshes only.
-	# Tiny props, particles, decals and obvious terrain/ground meshes stay
-	# visual-only to avoid snagging the player on battlefield clutter.
-	if build_collision:
-		_build_imported_architecture_collision(model)
+	# Collision is built separately by the server-safe proxy pass below.
 
 
-static func _build_imported_architecture_collision(model: Node3D) -> void:
-	var generated: int = 0
-	const MAX_COLLISION_MESHES := 220
+static func _architecture_proxy_skip(name_value: String) -> bool:
+	var lower_name := name_value.to_lower()
 	var skip_words: Array[String] = [
 		"ground", "terrain", "road", "street", "floor", "plane",
 		"decal", "glass", "window", "leaf", "leaves", "grass",
-		"smoke", "fire", "flame", "particle", "water", "sky"
+		"smoke", "fire", "flame", "particle", "water", "sky",
+		"light", "lamp", "sign", "wire", "cable"
 	]
+	for word: String in skip_words:
+		if lower_name.contains(word):
+			return true
+	return false
 
-	for child: Node in model.find_children("*", "MeshInstance3D", true, false):
-		if generated >= MAX_COLLISION_MESHES:
-			break
+
+static func _proxy_box_from_world_aabb(
+	root: Node,
+	name_value: String,
+	world_bounds: AABB
+) -> void:
+	var size := world_bounds.size.abs()
+	if (
+		not is_finite(size.x)
+		or not is_finite(size.y)
+		or not is_finite(size.z)
+	):
+		return
+
+	var longest := maxf(size.x, maxf(size.y, size.z))
+	var volume := size.x * size.y * size.z
+	if longest < 1.20 or volume < 0.32:
+		return
+	if size.y < 0.38 and maxf(size.x, size.z) < 3.5:
+		return
+
+	var body := StaticBody3D.new()
+	body.name = name_value
+	body.collision_layer = 1
+	body.collision_mask = 1
+	body.position = world_bounds.get_center()
+
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(
+		maxf(0.30, size.x * 0.90),
+		maxf(0.45, size.y),
+		maxf(0.30, size.z * 0.90)
+	)
+	collision.shape = shape
+	body.add_child(collision)
+	root.add_child(body)
+
+
+static func _build_proxy_set_for_import(
+	root: Node,
+	path: String,
+	proxy_prefix: String,
+	position_value: Vector3,
+	rotation_y: float,
+	target_height: float,
+	max_proxies: int
+) -> int:
+	if not ResourceLoader.exists(path):
+		push_warning("Ruined City collision source missing: %s" % path)
+		return 0
+
+	var resource: Resource = load(path)
+	if not resource is PackedScene:
+		push_warning("Ruined City collision source is not PackedScene: %s" % path)
+		return 0
+
+	var instance: Node = (resource as PackedScene).instantiate()
+	if not instance is Node3D:
+		instance.queue_free()
+		return 0
+
+	var source := instance as Node3D
+	source.name = "%s_Source" % proxy_prefix
+	root.add_child(source)
+
+	var has_bounds := false
+	var local_bounds := AABB()
+	for child: Node in source.find_children(
+		"*",
+		"MeshInstance3D",
+		true,
+		false
+	):
 		var mesh_instance := child as MeshInstance3D
 		if mesh_instance.mesh == null:
 			continue
 
-		var lower_name := mesh_instance.name.to_lower()
-		var skip_mesh := false
-		for word: String in skip_words:
-			if lower_name.contains(word):
-				skip_mesh = true
-				break
-		if skip_mesh:
+		var transformed := (
+			mesh_instance.transform
+			* mesh_instance.get_aabb()
+		)
+
+		if not has_bounds:
+			local_bounds = transformed
+			has_bounds = true
+		else:
+			local_bounds = local_bounds.merge(transformed)
+
+	if has_bounds and local_bounds.size.y > 0.01:
+		var scale_factor := clampf(
+			target_height / local_bounds.size.y,
+			0.005,
+			8.0
+		)
+		source.scale = Vector3.ONE * scale_factor
+
+	source.position = position_value
+	source.rotation.y = rotation_y
+	source.force_update_transform()
+
+	var generated := 0
+	for child: Node in source.find_children(
+		"*",
+		"MeshInstance3D",
+		true,
+		false
+	):
+		if generated >= max_proxies:
+			break
+
+		var mesh_instance := child as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		if _architecture_proxy_skip(mesh_instance.name):
 			continue
 
-		var bounds := mesh_instance.get_aabb()
-		var scaled_size := bounds.size * mesh_instance.global_transform.basis.get_scale()
-		var longest := maxf(scaled_size.x, maxf(scaled_size.y, scaled_size.z))
-		var volume := absf(scaled_size.x * scaled_size.y * scaled_size.z)
-
-		# Ignore tiny rubble/props. Anything roughly wall, wreck, bunker or
-		# building sized receives exact static collision from its render mesh.
-		if longest < 1.15 or volume < 0.22:
+		var local_aabb := mesh_instance.get_aabb()
+		if local_aabb.size.length_squared() <= 0.0001:
 			continue
 
-		mesh_instance.create_trimesh_collision()
+		var world_aabb: AABB = (
+			mesh_instance.global_transform
+			* local_aabb
+		)
+
+		var world_size := world_aabb.size.abs()
+		var longest := maxf(
+			world_size.x,
+			maxf(world_size.y, world_size.z)
+		)
+		var volume := (
+			world_size.x
+			* world_size.y
+			* world_size.z
+		)
+
+		if longest < 1.35 or volume < 0.40:
+			continue
+
+		_proxy_box_from_world_aabb(
+			root,
+			"%s_%03d" % [proxy_prefix, generated],
+			world_aabb
+		)
 		generated += 1
 
-	if generated > 0:
-		print("Ruined City imported collision: %d architecture meshes protected" % generated)
+	source.queue_free()
+
+	print(
+		"Ruined City proxy collision: %s -> %d blockers"
+		% [proxy_prefix, generated]
+	)
+	return generated
+
+
+static func _build_imported_architecture_proxies(root: Node) -> void:
+	var total := 0
+
+	total += _build_proxy_set_for_import(
+		root,
+		"res://assets/maps/ruined_city/city_ruins_environment.glb",
+		"RCProxy_WestRuins",
+		Vector3(-35.0, 0.0, -5.0),
+		deg_to_rad(12.0),
+		11.0,
+		96
+	)
+
+	total += _build_proxy_set_for_import(
+		root,
+		"res://assets/maps/ruined_city/ww2_low_poly_city_scene.glb",
+		"RCProxy_City",
+		Vector3(22.0, 0.0, -4.0),
+		deg_to_rad(-8.0),
+		16.0,
+		128
+	)
+
+	total += _build_proxy_set_for_import(
+		root,
+		"res://assets/maps/ruined_city/mothecombe_pillbox.glb",
+		"RCProxy_Pillbox",
+		Vector3(38.0, 0.0, 8.0),
+		deg_to_rad(180.0),
+		5.2,
+		48
+	)
+
+	print(
+		"Ruined City authoritative architecture collision: %d proxies"
+		% total
+	)
 
 
 static func _build_visual_setpieces(root: Node) -> void:

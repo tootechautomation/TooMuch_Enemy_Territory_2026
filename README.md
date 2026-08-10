@@ -1,26 +1,54 @@
-FRONTLINE: OBJECTIVE v10.4.0 — SOLID CITY / COLLISION MAJOR PASS
-Protocol 348
+FRONTLINE: OBJECTIVE v10.5.0
+MAJOR FIX — AUTHORITATIVE ARCHITECTURE COLLISION
 
-Primary fix
------------
-Ruined City imported GLB scenery is no longer visual-only ghost geometry.
-Substantial architecture now receives static trimesh collision generated from
-its actual imported mesh. Players should collide with buildings, ruins,
-bunkers, wreck-sized geometry, structural walls and other major scenery.
+ROOT CAUSE
+The previous GLB collision pass ran inside the visual-instantiation function.
+That function exits on a dedicated/headless server.
 
-Safety/performance rules
-------------------------
-- Existing authored gray-wall collision remains untouched.
-- Ground/terrain/roads/floors are excluded from generated GLB collision.
-- Glass/windows/foliage/fire/smoke/decals/water are excluded.
-- Tiny rubble and clutter are excluded to reduce snagging.
-- Collision generation is capped per imported setpiece.
-- Existing spawn points, objectives, vehicles, weapons and map logic remain.
+Because multiplayer movement is server-authoritative, the server therefore had
+NO collision for the imported ruins/buildings. The gray authored StaticBody3D
+walls worked because they were created on the server.
 
-Test focus
-----------
-1. Walk directly into the large imported buildings/ruins.
-2. Test the pillbox exterior.
-3. Check spawn areas for trapping.
-4. Test doorways/open passages; report any invisible blockage with screenshot.
-5. Test vehicles around the new solid scenery.
+FIX
+Ruined City now builds imported-architecture collision independently of
+rendering on BOTH dedicated servers and clients.
+
+For each imported environment GLB, v10.5:
+- loads the scene temporarily
+- applies the same scale, rotation, and position as the visible model
+- transforms substantial mesh bounds into WORLD SPACE
+- creates explicit StaticBody3D + BoxShape3D proxies on collision layer 1
+- removes the temporary source scene
+- then separately loads normal visual scenery on graphical clients
+
+This uses conservative box proxies rather than trimesh collision for better:
+- dedicated-server reliability
+- laptop performance
+- CharacterBody3D movement
+- vehicle movement
+- predictable collision
+- fewer tiny mesh snags
+
+FILTERED OUT
+Ground, terrain, roads, floors, glass/windows, foliage, fire/smoke, wires,
+signs, lights, and tiny clutter do not receive proxy collision.
+
+SERVER DIAGNOSTICS
+When Ruined City starts, the server should now print:
+Ruined City proxy collision: RCProxy_WestRuins -> X blockers
+Ruined City proxy collision: RCProxy_City -> X blockers
+Ruined City proxy collision: RCProxy_Pillbox -> X blockers
+Ruined City authoritative architecture collision: X proxies
+
+TEST THE SAME BUILDINGS FROM THE SCREENSHOT
+You should no longer be able to simply walk through the imported architecture.
+If a specific doorway/opening becomes blocked, that can now be adjusted
+precisely because the proxies are deterministic.
+
+UNCHANGED
+Operation Black River, objectives, sectors, vehicles/aircraft, WWII soldiers,
+weapons/textures, Allied Mk 2 grenade, Axis grenade, bots, TAB, E interactions,
+F6/F8, and --bots 0 behavior remain intact.
+
+Build: 10.5.0
+Protocol: 349
