@@ -514,6 +514,12 @@ func _refresh_first_person_arms_pose() -> void:
 			"refresh_team_materials"
 		)
 
+		# Never let the fallback override vehicle/cinema visibility rules.
+		first_person_arms_fallback.visible = (
+			current_vehicle_id < 0
+			and not cinema_mode_enabled
+		)
+
 
 func _weapon_visual_team(slot_index: int) -> int:
 	if slot_index >= 0 and slot_index < weapon_slot_teams.size():
@@ -3035,8 +3041,8 @@ func _update_vehicle_tactical_markers() -> void:
 			vehicle_name = "WRECK"
 
 		# Far markers become intentionally terse to reduce HUD noise.
-		if distance > 32:
-			marker.text = "%s %dm" % [
+		if distance > 28:
+			marker.text = "%s%d" % [
 				"◆" if friendly else "◇",
 				distance
 			]
@@ -3064,7 +3070,9 @@ func _update_vehicle_tactical_markers() -> void:
 			-420.0,
 			420.0
 		)
-		marker.position = Vector2(620.0 + horizontal, 115.0)
+		# Keep tactical vehicle markers below the compass/objective header.
+		# v9.16 markers at y=115 overlapped heading/objective text.
+		marker.position = Vector2(620.0 + horizontal, 205.0)
 
 	for id_value: Variant in vehicle_marker_labels.keys():
 		var id := int(id_value)

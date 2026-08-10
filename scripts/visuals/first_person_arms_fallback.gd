@@ -5,15 +5,16 @@ var player: Node
 var weapon_view: Node3D
 var root_armature: Node3D
 
-var right_arm: Node3D
-var left_arm: Node3D
+var right_hand: Node3D
+var left_hand: Node3D
+var right_forearm: MeshInstance3D
+var left_forearm: MeshInstance3D
 
 var current_slot := 0
-var pose_blend := 0.0
+var animation_time := 0.0
+var aim_blend := 0.0
 var sprint_blend := 0.0
 var reload_blend := 0.0
-var aim_blend := 0.0
-var animation_time := 0.0
 
 
 func initialize(owner_player: Node, view_root: Node3D) -> void:
@@ -28,12 +29,23 @@ func initialize(owner_player: Node, view_root: Node3D) -> void:
 	call_deferred("_build_if_needed")
 
 
+func _quality_preset() -> int:
+	if player == null:
+		return 1
+	if player.has_method("_local_visual_quality_preset"):
+		return clampi(
+			int(player.call("_local_visual_quality_preset")),
+			0,
+			2
+		)
+	return 1
+
+
 func _build_if_needed() -> void:
 	if weapon_view == null:
 		return
 
-	# If a proper imported first-person rig appears later, do not stack this
-	# procedural fallback on top of it.
+	# Never stack fallback geometry over a real imported first-person arm rig.
 	for child: Node in weapon_view.find_children("*", "", true):
 		var key := child.name.to_lower()
 		if (
@@ -45,49 +57,212 @@ func _build_if_needed() -> void:
 			return
 
 	root_armature = Node3D.new()
-	root_armature.name = "FirstPersonArmsFallback_v916"
+	root_armature.name = "FirstPersonArmsFallback_v917"
 	weapon_view.add_child(root_armature)
+
+	# HARD SAFETY SCALE:
+	# v9.16 used long arm capsules that could intersect the camera and fill the
+	# screen. This entire fallback is now constrained to a small viewmodel scale.
+	root_armature.scale = Vector3(0.72, 0.72, 0.72)
 
 	var sleeve_material := _sleeve_material()
 	var skin_material := _skin_material()
 	var glove_material := _glove_material()
 
-	right_arm = _build_arm(
+	right_hand = _build_compact_hand(
 		"Right",
-		Vector3(0.220, -0.235, -0.300),
-		Vector3(-10.0, -5.0, -15.0),
-		0.53,
 		true,
-		sleeve_material,
 		skin_material,
 		glove_material
 	)
-
-	left_arm = _build_arm(
+	left_hand = _build_compact_hand(
 		"Left",
-		Vector3(-0.205, -0.245, -0.450),
-		Vector3(-15.0, 8.0, 18.0),
-		0.58,
 		false,
-		sleeve_material,
 		skin_material,
 		glove_material
 	)
 
+	right_forearm = _build_short_forearm(
+		"Right",
+		sleeve_material,
+		glove_material
+	)
+	left_forearm = _build_short_forearm(
+		"Left",
+		sleeve_material,
+		glove_material
+	)
+
+	_apply_quality_visibility()
 	apply_weapon_slot(int(player.get("current_weapon_index")))
+
+
+func _build_compact_hand(
+	side_name: String,
+	is_right: bool,
+	skin_material: Material,
+	glove_material: Material
+) -> Node3D:
+	var hand_root := Node3D.new()
+	hand_root.name = "%sHandRoot" % side_name
+	root_armature.add_child(hand_root)
+
+	var palm := MeshInstance3D.new()
+	palm.name = "%sPalm" % side_name
+	var palm_mesh := BoxMesh.new()
+	palm_mesh.size = Vector3(0.095, 0.060, 0.125)
+	palm.mesh = palm_mesh
+	palm.material_override = skin_material
+	palm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	hand_root.add_child(palm)
+
+	# Three compact grip fingers are enough to read as a hand at gameplay FOV.
+	for index: int in range(3):
+		var finger := MeshInstance3D.new()
+		finger.name = "%sFinger_%d" % [side_name, index]
+		var finger_mesh := CapsuleMesh.new()
+		finger_mesh.radius = 0.012
+		finger_mesh.height = 0.063
+		finger_mesh.radial_segments = 6
+		finger_mesh.rings = 2
+		finger.mesh = finger_mesh
+		finger.position = Vector3(
+			(-0.028 + float(index) * 0.028)
+			* (1.0 if is_right else -1.0),
+			-0.043,
+			0.015
+		)
+		finger.rotation_degrees = Vector3(
+			78.0,
+			0.0,
+			10.0 if is_right else -10.0
+		)
+		finger.material_override = skin_material
+		finger.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		hand_root.add_child(finger)
+
+	var thumb := MeshInstance3D.new()
+	thumb.name = "%sThumb" % side_name
+	var thumb_mesh := CapsuleMesh.new()
+	thumb_mesh.radius = 0.014
+	thumb_mesh.height = 0.072
+	thumb_mesh.radial_segments = 6
+	thumb_mesh.rings = 2
+	thumb.mesh = thumb_mesh
+	thumb.position = Vector3(
+		0.052 if is_right else -0.052,
+		-0.010,
+		0.005
+	)
+	thumb.rotation_degrees = Vector3(
+		60.0,
+		-25.0 if is_right else 25.0,
+		28.0 if is_right else -28.0
+	)
+	thumb.material_override = skin_material
+	thumb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	hand_root.add_child(thumb)
+
+	# Small dark cuff immediately behind the hand.
+	var cuff := MeshInstance3D.new()
+	cuff.name = "%sCuff" % side_name
+	var cuff_mesh := BoxMesh.new()
+	cuff_mesh.size = Vector3(0.105, 0.070, 0.075)
+	cuff.mesh = cuff_mesh
+	cuff.position = Vector3(0.0, 0.0, 0.082)
+	cuff.material_override = glove_material
+	cuff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	hand_root.add_child(cuff)
+
+	return hand_root
+
+
+func _build_short_forearm(
+	side_name: String,
+	sleeve_material: Material,
+	glove_material: Material
+) -> MeshInstance3D:
+	# SHORT box/taper-style sleeve rather than a long CapsuleMesh.
+	# It stays behind the hand and cannot form the giant circular/oval shapes
+	# seen in the v9.16 screenshots.
+	var sleeve := MeshInstance3D.new()
+	sleeve.name = "%sShortSleeve" % side_name
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.115, 0.090, 0.245)
+	sleeve.mesh = mesh
+	sleeve.material_override = sleeve_material
+	sleeve.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root_armature.add_child(sleeve)
+	return sleeve
+
+
+func _apply_quality_visibility() -> void:
+	var quality := _quality_preset()
+
+	# Low/Laptop = hands only. This is both cheaper and guarantees the center
+	# view remains unobstructed on machines using the performance preset.
+	if right_forearm != null:
+		right_forearm.visible = quality >= 1
+	if left_forearm != null:
+		left_forearm.visible = quality >= 1
+
+
+func refresh_team_materials() -> void:
+	if root_armature == null:
+		return
+
+	var sleeve_material := _sleeve_material()
+	var glove_material := _glove_material()
+	var skin_material := _skin_material()
+
+	for child: Node in root_armature.find_children("*ShortSleeve", "", true):
+		if child is MeshInstance3D:
+			(child as MeshInstance3D).material_override = sleeve_material
+
+	for child: Node in root_armature.find_children("*Cuff", "", true):
+		if child is MeshInstance3D:
+			(child as MeshInstance3D).material_override = glove_material
+
+	for child: Node in root_armature.find_children("*Palm", "", true):
+		if child is MeshInstance3D:
+			(child as MeshInstance3D).material_override = skin_material
+
+	_apply_quality_visibility()
 
 
 func apply_weapon_slot(slot_index: int) -> void:
 	current_slot = clampi(slot_index, 0, 1)
-
-	if right_arm == null or left_arm == null:
+	if right_hand == null or left_hand == null:
 		return
 
-	var poses := _base_pose_for_slot(current_slot)
-	right_arm.position = poses["right_position"]
-	right_arm.rotation_degrees = poses["right_rotation"]
-	left_arm.position = poses["left_position"]
-	left_arm.rotation_degrees = poses["left_rotation"]
+	if current_slot == 1:
+		# Pistol: both hands close to the grip. Keep them below center screen.
+		right_hand.position = Vector3(0.135, -0.235, -0.145)
+		right_hand.rotation_degrees = Vector3(-5.0, -7.0, -12.0)
+
+		left_hand.position = Vector3(-0.075, -0.245, -0.175)
+		left_hand.rotation_degrees = Vector3(-7.0, 10.0, 10.0)
+
+		if right_forearm != null:
+			right_forearm.position = Vector3(0.175, -0.275, -0.015)
+			right_forearm.rotation_degrees = Vector3(-6.0, -8.0, -10.0)
+		if left_forearm != null:
+			left_forearm.position = Vector3(-0.115, -0.290, -0.035)
+			left_forearm.rotation_degrees = Vector3(-8.0, 9.0, 9.0)
+	else:
+		# Primary: dominant hand at grip, support hand under/forward.
+		right_hand.position = Vector3(0.155, -0.255, -0.180)
+		right_hand.rotation_degrees = Vector3(-7.0, -8.0, -14.0)
+
+		left_hand.position = Vector3(-0.145, -0.265, -0.315)
+		left_hand.rotation_degrees = Vector3(-10.0, 10.0, 14.0)
+
+		if right_forearm != null:
+			right_forearm.position = Vector3(0.205, -0.300, -0.045)
+			right_forearm.rotation_degrees = Vector3(-7.0, -8.0, -12.0)
+		if left_forearm != null:
+			left_forearm.position = Vector3(-0.190, -0.310, -0.170)
+			left_forearm.rotation_degrees = Vector3(-11.0, 10.0, 12.0)
 
 
 func update_pose(
@@ -102,6 +277,8 @@ func update_pose(
 	if root_armature == null:
 		return
 
+	_apply_quality_visibility()
+
 	if slot_index != current_slot:
 		apply_weapon_slot(slot_index)
 
@@ -114,7 +291,7 @@ func update_pose(
 	sprint_blend = move_toward(
 		sprint_blend,
 		1.0 if sprinting else 0.0,
-		delta * 7.5
+		delta * 8.0
 	)
 	reload_blend = move_toward(
 		reload_blend,
@@ -122,264 +299,65 @@ func update_pose(
 		delta * 10.0
 	)
 
-	var poses := _base_pose_for_slot(current_slot)
-	var right_position: Vector3 = poses["right_position"]
-	var right_rotation: Vector3 = poses["right_rotation"]
-	var left_position: Vector3 = poses["left_position"]
-	var left_rotation: Vector3 = poses["left_rotation"]
-
-	# ADS pulls both hands inward and slightly raises the support hand.
-	right_position = right_position.lerp(
-		right_position + Vector3(-0.025, 0.025, -0.035),
-		aim_blend
+	# Re-establish safe base positions each frame, then add SMALL offsets.
+	var right_base := (
+		Vector3(0.135, -0.235, -0.145)
+		if current_slot == 1
+		else Vector3(0.155, -0.255, -0.180)
 	)
-	left_position = left_position.lerp(
-		left_position + Vector3(0.030, 0.040, 0.055),
-		aim_blend
+	var left_base := (
+		Vector3(-0.075, -0.245, -0.175)
+		if current_slot == 1
+		else Vector3(-0.145, -0.265, -0.315)
 	)
 
-	# Sprint pose lowers the weapon-side arm and tucks support hand.
-	right_position += Vector3(
-		0.015,
-		-0.105,
-		0.115
-	) * sprint_blend
-	right_rotation += Vector3(
-		16.0,
-		4.0,
-		-8.0
-	) * sprint_blend
+	var right_target := right_base
+	var left_target := left_base
 
-	left_position += Vector3(
-		0.045,
-		-0.125,
-		0.135
-	) * sprint_blend
-	left_rotation += Vector3(
-		20.0,
-		-5.0,
-		7.0
-	) * sprint_blend
+	# ADS: lift only a few centimeters. Never move toward the center/camera.
+	right_target += Vector3(-0.010, 0.022, -0.018) * aim_blend
+	left_target += Vector3(0.012, 0.025, 0.020) * aim_blend
 
-	# Reload animation moves the support hand toward the magazine/breech area.
-	var reload_wave := sin(animation_time * 7.2)
-	left_position += Vector3(
-		0.085,
-		-0.055 + reload_wave * 0.018,
-		0.100
-	) * reload_blend
-	left_rotation += Vector3(
-		16.0,
-		-18.0,
-		-8.0
+	# Sprint lowers hands out of the sight line.
+	right_target += Vector3(0.010, -0.070, 0.055) * sprint_blend
+	left_target += Vector3(0.018, -0.075, 0.060) * sprint_blend
+
+	# Reload support-hand motion stays below center.
+	left_target += Vector3(
+		0.050,
+		-0.035,
+		0.055
 	) * reload_blend
 
-	# Small movement sway is applied to the arms independently from the weapon
-	# root. This reduces the "hands glued to camera" look.
 	if movement_speed > 0.8 and not aiming:
-		var movement_scale := clampf(
-			movement_speed / 10.0,
-			0.0,
-			1.0
-		)
-		var sway_x := sin(animation_time * 7.4) * 0.007 * movement_scale
-		var sway_y := absf(cos(animation_time * 7.4)) * 0.005 * movement_scale
-		right_position += Vector3(sway_x, -sway_y, 0.0)
-		left_position += Vector3(-sway_x * 0.8, -sway_y * 0.8, 0.0)
+		var motion := clampf(movement_speed / 10.0, 0.0, 1.0)
+		var sway := sin(animation_time * 7.2) * 0.004 * motion
+		right_target.x += sway
+		left_target.x -= sway * 0.7
 
-	# Visual-only suppression tremor, intentionally tiny.
 	if suppressed and not aiming:
-		var tremor := sin(animation_time * 19.0) * 0.003
-		right_position.x += tremor
-		left_position.x -= tremor * 0.7
+		var tremor := sin(animation_time * 19.0) * 0.002
+		right_target.x += tremor
+		left_target.x -= tremor
 
-	var blend_weight := clampf(delta * 12.0, 0.0, 1.0)
-	right_arm.position = right_arm.position.lerp(
-		right_position,
-		blend_weight
-	)
-	left_arm.position = left_arm.position.lerp(
-		left_position,
-		blend_weight
-	)
+	var weight := clampf(delta * 13.0, 0.0, 1.0)
+	right_hand.position = right_hand.position.lerp(right_target, weight)
+	left_hand.position = left_hand.position.lerp(left_target, weight)
 
-	right_arm.rotation_degrees = right_arm.rotation_degrees.lerp(
-		right_rotation,
-		blend_weight
-	)
-	left_arm.rotation_degrees = left_arm.rotation_degrees.lerp(
-		left_rotation,
-		blend_weight
-	)
+	# HARD POSITION CLAMPS:
+	# Fallback hands cannot cross into the upper/center sight picture.
+	right_hand.position.x = clampf(right_hand.position.x, 0.075, 0.230)
+	right_hand.position.y = clampf(right_hand.position.y, -0.390, -0.175)
+	right_hand.position.z = clampf(right_hand.position.z, -0.350, -0.080)
 
-
-func refresh_team_materials() -> void:
-	if root_armature == null:
-		return
-
-	var sleeve_material := _sleeve_material()
-	var glove_material := _glove_material()
-
-	for child: Node in root_armature.find_children("*Sleeve", "", true):
-		if child is MeshInstance3D:
-			(child as MeshInstance3D).material_override = sleeve_material
-
-	for child: Node in root_armature.find_children("*Cuff", "", true):
-		if child is MeshInstance3D:
-			(child as MeshInstance3D).material_override = glove_material
-
-
-func _base_pose_for_slot(slot_index: int) -> Dictionary:
-	if slot_index == 1:
-		return {
-			"right_position": Vector3(0.175, -0.215, -0.265),
-			"right_rotation": Vector3(-7.0, -4.0, -10.0),
-			"left_position": Vector3(-0.105, -0.225, -0.305),
-			"left_rotation": Vector3(-9.0, 9.0, 10.0)
-		}
-
-	return {
-		"right_position": Vector3(0.220, -0.235, -0.300),
-		"right_rotation": Vector3(-10.0, -5.0, -15.0),
-		"left_position": Vector3(-0.205, -0.245, -0.450),
-		"left_rotation": Vector3(-15.0, 8.0, 18.0)
-	}
-
-
-func _build_arm(
-	side_name: String,
-	position: Vector3,
-	rotation_degrees_value: Vector3,
-	length: float,
-	is_right: bool,
-	sleeve_material: Material,
-	skin_material: Material,
-	glove_material: Material
-) -> Node3D:
-	var arm_root := Node3D.new()
-	arm_root.name = "%sArm" % side_name
-	arm_root.position = position
-	arm_root.rotation_degrees = rotation_degrees_value
-	root_armature.add_child(arm_root)
-
-	# Sleeve/forearm.
-	var sleeve := MeshInstance3D.new()
-	sleeve.name = "%sSleeve" % side_name
-	var sleeve_mesh := CapsuleMesh.new()
-	sleeve_mesh.radius = 0.068
-	sleeve_mesh.height = length
-	sleeve_mesh.radial_segments = 12
-	sleeve_mesh.rings = 5
-	sleeve.mesh = sleeve_mesh
-	sleeve.position = Vector3(0.0, 0.0, length * 0.32)
-	sleeve.rotation_degrees.x = 90.0
-	sleeve.scale = Vector3(1.0, 0.92, 0.86)
-	sleeve.material_override = sleeve_material
-	sleeve.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	arm_root.add_child(sleeve)
-
-	# Cuff gives a visible transition from sleeve to hand.
-	var cuff := MeshInstance3D.new()
-	cuff.name = "%sCuff" % side_name
-	var cuff_mesh := CylinderMesh.new()
-	cuff_mesh.top_radius = 0.071
-	cuff_mesh.bottom_radius = 0.077
-	cuff_mesh.height = 0.072
-	cuff_mesh.radial_segments = 12
-	cuff.mesh = cuff_mesh
-	cuff.position = Vector3(0.0, 0.0, length * 0.67)
-	cuff.rotation_degrees.x = 90.0
-	cuff.material_override = glove_material
-	cuff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	arm_root.add_child(cuff)
-
-	# Palm.
-	var hand := MeshInstance3D.new()
-	hand.name = "%sHand" % side_name
-	var hand_mesh := SphereMesh.new()
-	hand_mesh.radius = 0.071
-	hand_mesh.height = 0.130
-	hand_mesh.radial_segments = 12
-	hand_mesh.rings = 6
-	hand.mesh = hand_mesh
-	hand.position = Vector3(0.0, -0.002, length * 0.77)
-	hand.scale = Vector3(0.86, 0.66, 1.18)
-	hand.rotation_degrees = Vector3(
-		7.0 if is_right else -5.0,
-		0.0,
-		-8.0 if is_right else 8.0
-	)
-	hand.material_override = skin_material
-	hand.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	arm_root.add_child(hand)
-
-	# Knuckle block gives the hand more structure without adding bones.
-	var knuckles := MeshInstance3D.new()
-	knuckles.name = "%sKnuckles" % side_name
-	var knuckle_mesh := BoxMesh.new()
-	knuckle_mesh.size = Vector3(0.115, 0.043, 0.075)
-	knuckles.mesh = knuckle_mesh
-	knuckles.position = Vector3(0.0, -0.032, length * 0.81)
-	knuckles.material_override = skin_material
-	knuckles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	arm_root.add_child(knuckles)
-
-	# Four low-poly fingers around the weapon grip.
-	for index: int in range(4):
-		var finger := MeshInstance3D.new()
-		finger.name = "%sFinger_%d" % [side_name, index]
-		var finger_mesh := CapsuleMesh.new()
-		finger_mesh.radius = 0.016
-		finger_mesh.height = 0.090
-		finger_mesh.radial_segments = 8
-		finger_mesh.rings = 3
-		finger.mesh = finger_mesh
-		finger.position = Vector3(
-			(-0.037 + float(index) * 0.024)
-			* (1.0 if is_right else -1.0),
-			-0.038,
-			length * 0.845
-		)
-		finger.rotation_degrees = Vector3(
-			76.0,
-			4.0 * float(index - 1),
-			13.0 if is_right else -13.0
-		)
-		finger.material_override = skin_material
-		finger.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		arm_root.add_child(finger)
-
-	var thumb := MeshInstance3D.new()
-	thumb.name = "%sThumb" % side_name
-	var thumb_mesh := CapsuleMesh.new()
-	thumb_mesh.radius = 0.018
-	thumb_mesh.height = 0.100
-	thumb_mesh.radial_segments = 8
-	thumb_mesh.rings = 3
-	thumb.mesh = thumb_mesh
-	thumb.position = Vector3(
-		0.052 if is_right else -0.052,
-		-0.010,
-		length * 0.80
-	)
-	thumb.rotation_degrees = Vector3(
-		61.0,
-		-24.0 if is_right else 24.0,
-		34.0 if is_right else -34.0
-	)
-	thumb.material_override = skin_material
-	thumb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	arm_root.add_child(thumb)
-
-	return arm_root
+	left_hand.position.x = clampf(left_hand.position.x, -0.240, -0.035)
+	left_hand.position.y = clampf(left_hand.position.y, -0.400, -0.180)
+	left_hand.position.z = clampf(left_hand.position.z, -0.390, -0.100)
 
 
 func _sleeve_material() -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	var team_id := int(player.get("team"))
-
-	# Allied olive-drab / Axis field-grey. Kept muted so imported weapons remain
-	# the focal point rather than the procedural fallback geometry.
 	mat.albedo_color = (
 		Color(0.24, 0.27, 0.17)
 		if team_id == 0

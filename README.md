@@ -1,70 +1,64 @@
-FRONTLINE: OBJECTIVE v9.16.0
-FIRST-PERSON ARMS/HANDS + WEAPON PRESENTATION POLISH
+FRONTLINE: OBJECTIVE v9.17.0
+FIRST-PERSON VISIBILITY FIX + GAMEPLAY SCREENSHOT RESPONSE
 
-FIRST-PERSON ARMS FALLBACK
-The procedural fallback has been rebuilt with:
-- cleaner forearm/sleeve proportions
-- cuffs
-- structured palms
-- knuckle blocks
-- four low-poly fingers per hand
-- thumbs
-- reduced segment counts for performance
+WHY THIS PHASE
+The v9.16 gameplay screenshots showed the procedural arm fallback obscuring
+large portions of the screen:
+- large white rounded geometry could cover the center view
+- black/oval arm geometry could sit beside/over the weapon
+- nearby vehicle marker text overlapped compass/objective information
 
-TEAM SLEEVES
-Allied:
-- muted olive-drab sleeve
+FIRST-PERSON ARM SAFETY REDESIGN
+The long capsule-based forearms from v9.16 have been removed.
 
-Axis:
-- muted field-grey sleeve
+New fallback:
+- compact palm geometry
+- three low-poly grip fingers per hand
+- thumb
+- small cuff
+- optional SHORT box-style forearm sleeve
 
-Team materials refresh when the weapon/team presentation refreshes.
+LOW/LAPTOP
+- hands only
+- short forearm sleeves hidden entirely
+- no long arm primitive can cross the camera
 
-DYNAMIC ARM POSES
-The procedural hands now respond to:
-- primary vs pistol slot
-- ADS
-- sprinting
-- reload state
-- walking/running
-- suppression
+BALANCED/HIGH
+- compact hands
+- short sleeves behind the hands
+- no long capsules
 
-ADS:
-hands pull inward toward the weapon.
+HARD VIEW SAFETY
+- entire fallback root scaled to 72%
+- hand positions are clamped to safe lower-screen ranges
+- ADS motion cannot pull hands toward the center sight picture
+- sprint moves hands farther down
+- reload movement stays below the crosshair
+- vehicle/cinema modes force fallback visibility off
 
-SPRINT:
-arms lower/tuck with the weapon.
+TACTICAL MARKER CLEANUP
+Nearby vehicle markers have moved from y=115 to y=205 so they no longer sit
+inside the heading/objective strip.
 
-RELOAD:
-support hand moves toward the magazine/breech region.
-
-MOVEMENT:
-small independent arm sway reduces the floating/glued-to-camera appearance.
-
-SUPPRESSION:
-tiny visual-only tremor. No accuracy manipulation.
+Far markers are also shortened to symbol + distance.
 
 PERFORMANCE
-This remains a fallback rig made from simple MeshInstance3D primitives.
-- no Skeleton3D
-- no skinning
-- no animation tree
-- no imported high-poly arms
+The new fallback is cheaper than v9.16:
+- fewer finger segments
+- no long capsule forearms
+- Low/Laptop hides sleeve geometry
 - no shadows
-- reduced mesh radial segments
-
-If a real first-person arm/hand rig is later imported, the fallback detects it
-and does not stack itself on top.
+- no skeleton/skin/animation tree
 
 PRESERVED
-- v9.15 HUD/objective performance pass
+- v9.15 HUD throttling/objective cleanup
 - v9.14 infantry combat feedback
 - v9.13.2 tracer fixes
+- battlefield atmosphere
 - destructible streets
 - all vehicle/aircraft systems
-- real vehicle GLBs
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.16.0
+Build: 9.17.0
 Protocol: 341
