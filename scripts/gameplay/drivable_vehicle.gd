@@ -448,7 +448,7 @@ func apply_network_snapshot(
 ) -> void:
 	target_position = _finite_vector3(position, global_position)
 	target_yaw = _finite_float(yaw, rotation.y)
-	target_pitch = _finite_float(pitch, 0.0)_value
+	target_pitch = _finite_float(pitch_value, 0.0)
 	health = new_health
 	driver_peer_id = new_driver
 

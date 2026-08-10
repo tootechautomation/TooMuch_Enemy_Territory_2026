@@ -1,58 +1,37 @@
-FRONTLINE: OBJECTIVE v9.09.0
-VEHICLE OBJECTIVE COMBAT + ANTI-VEHICLE EXPLOSIVES + DESTRUCTIBLE BARRIERS
+FRONTLINE: OBJECTIVE v9.10.2
+DRIVABLE VEHICLE PARSER HOTFIX
 
-TANKS NOW SUPPORT THE BUNKER ASSAULT
-During Stage 2, direct Allied tank-cannon hits on the bunker objective inflict:
-12 bunker integrity damage per shell.
+SCREENSHOT ERROR
+main.gd:
+Could not resolve/preload:
+res://scripts/gameplay/drivable_vehicle.gd
 
-Dynamite remains the primary objective mechanic. The tank is support rather
-than an automatic replacement for Engineers.
+ROOT CAUSE
+The v9.10.1 finite-transform patch accidentally produced this invalid line:
 
-ANTI-VEHICLE GRENADES
-Normal grenade explosions now apply reduced radial damage to enemy vehicles.
+    target_pitch = _finite_float(pitch, 0.0)_value
 
-- friendly vehicles are ignored
-- vehicle blast radius is slightly larger than infantry radius
-- damage falls off with distance
-- grenades threaten Jeeps/aircraft and slowly wear down tanks
-- destroyed vehicles use the existing explosion/ejection/respawn system
+The function parameter is named pitch_value.
 
-DESTRUCTIBLE BATTLEFIELD BARRIERS
-Four lightweight destructible barriers have been added around the central
-vehicle approaches.
+CORRECTED
+    target_pitch = _finite_float(pitch_value, 0.0)
 
-They:
-- use simple StaticBody3D box collision
-- cost almost nothing while intact
-- can be destroyed by tank/vehicle weapons
-- can be destroyed by grenades
-- disappear rather than becoming dozens of rigid-body fragments
-- reset every round
-
-This is the performance-friendly foundation for later:
-- destructible brick walls
-- sandbag positions
-- wooden barricades
-- damaged building sections
-- vehicle roadblocks
-
-PERFORMANCE
-No rigid-body debris simulation was added.
-Destruction is replicated as a single state change plus a quality-scaled
-explosion effect.
+This parser error prevented drivable_vehicle.gd from loading, which then caused
+main.gd's preload to fail.
 
 PRESERVED
-- v9.08 vehicle service zones and bridge support
-- v9.07 aircraft takeoff/landing/throttle
-- v9.06 vehicle-state stability
-- mouse turret aiming
-- Engineer vehicle repair
-- vehicle tactical markers
-- multi-seat vehicles
-- vehicle respawn/combat
-- real Willys/Sherman/Spitfire/Bf109 GLBs
+- v9.10.1 NaN/infinite transform protection
+- network transform validation
+- destructible streets
+- brick/sandbag/wood/concrete cover
+- tank bunker support
+- anti-vehicle grenades
+- vehicle service zones
+- aircraft handling
+- multi-seat vehicle system
+- real Willys/Sherman/Spitfire/Bf109 models
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.09.0
+Build: 9.10.2
 Protocol: 341
