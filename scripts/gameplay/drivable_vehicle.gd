@@ -34,6 +34,8 @@ var turret_yaw := 0.0
 var turret_target_yaw := 0.0
 
 var visual_root: Node3D
+var engine_audio: AudioStreamPlayer3D
+var engine_audio_stream: AudioStream
 var spawn_position_saved := Vector3.ZERO
 var spawn_yaw_saved := 0.0
 
@@ -77,6 +79,97 @@ func configure(
 	_build_collision()
 	if DisplayServer.get_name() != "headless":
 		_build_visual()
+		_build_engine_audio()
+
+func _build_engine_audio() -> void:
+	if engine_audio != null:
+		return
+
+	var path := "res://audio/engine_jeep.wav"
+	if vehicle_type == VehicleType.TANK:
+		path = "res://audio/engine_tank.wav"
+	elif vehicle_type == VehicleType.AIRCRAFT:
+		path = "res://audio/engine_aircraft.wav"
+
+	if not ResourceLoader.exists(path):
+		return
+
+	var resource: Resource = load(path)
+	if not resource is AudioStream:
+		return
+
+	engine_audio_stream = resource as AudioStream
+	if engine_audio_stream is AudioStreamWAV:
+		var wav := engine_audio_stream as AudioStreamWAV
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_begin = 0
+		wav.loop_end = 0
+
+	engine_audio = AudioStreamPlayer3D.new()
+	engine_audio.name = "VehicleEngineAudio"
+	engine_audio.stream = engine_audio_stream
+	engine_audio.bus = "SFX"
+	engine_audio.max_distance = (
+		75.0
+		if vehicle_type == VehicleType.AIRCRAFT
+		else 48.0
+		if vehicle_type == VehicleType.TANK
+		else 38.0
+	)
+	engine_audio.unit_size = 4.0
+	engine_audio.attenuation_filter_cutoff_hz = 3800.0
+	engine_audio.attenuation_filter_db = -10.0
+	engine_audio.volume_db = -13.0
+	add_child(engine_audio)
+	engine_audio.play()
+
+
+func _update_engine_audio() -> void:
+	if engine_audio == null:
+		return
+
+	var speed_ratio := 0.0
+	if vehicle_type == VehicleType.AIRCRAFT:
+		speed_ratio = clampf(
+			throttle_setting,
+			0.0,
+			1.0
+		)
+	elif vehicle_type == VehicleType.TANK:
+		speed_ratio = clampf(
+			velocity.length() / TANK_SPEED,
+			0.0,
+			1.0
+		)
+	else:
+		speed_ratio = clampf(
+			velocity.length() / JEEP_SPEED,
+			0.0,
+			1.0
+		)
+
+	if destroyed:
+		engine_audio.volume_db = -42.0
+		engine_audio.pitch_scale = 0.75
+		return
+
+	var occupied := driver_peer_id != 0
+	var idle_db := -20.0 if occupied else -28.0
+	engine_audio.volume_db = lerpf(
+		idle_db,
+		-8.0,
+		speed_ratio
+	)
+
+	var base_pitch := (
+		1.15
+		if vehicle_type == VehicleType.AIRCRAFT
+		else 0.82
+		if vehicle_type == VehicleType.TANK
+		else 0.95
+	)
+	engine_audio.pitch_scale = base_pitch + speed_ratio * 0.42
+
 
 func throttle_percent() -> int:
 	if vehicle_type == VehicleType.AIRCRAFT:
@@ -668,6 +761,7 @@ func _physics_process(delta: float) -> void:
 				1.0 - exp(-8.0 * delta)
 			)
 	_animate_vehicle_visuals(delta)
+	_update_engine_audio()
 	_sanitize_vehicle_state()
 
 func _update_turret_visual() -> void:

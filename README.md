@@ -1,84 +1,82 @@
-FRONTLINE: OBJECTIVE v9.21.0
-EFFECT BUDGET + DISTANCE CULLING + LONG-MATCH PERFORMANCE
+FRONTLINE: OBJECTIVE v9.22.0
+SPATIAL AUDIO + SURFACE FOOTSTEPS + VEHICLE ENGINE SOUND
 
-WHY
-The game now has substantially more combat and atmosphere effects than the
-early builds. During sustained firefights, transient visual nodes can become a
-larger cost than the underlying hitscan gameplay.
+NEW INCLUDED AUDIO ASSETS
+This build now includes lightweight WAV assets directly in /audio:
+- rifle_fire.wav
+- pistol_fire.wav
+- world_gunshot.wav
+- explosion.wav
+- reload.wav
+- dry_click.wav
+- hit_confirm.wav
+- headshot_confirm.wav
+- ground/gravel/stone/wood/metal footsteps
+- Jeep/Tank/Aircraft engine loops
 
-v9.21 adds local visual budgets. Gameplay damage/network authority is unchanged.
+This means the existing optional audio-loading code now has actual fallback
+sounds even if no external sound pack is installed.
 
-HARD TRANSIENT CAPS
+SURFACE FOOTSTEPS
+Footstep raycasts already identified surface type. v9.22 now maps that result
+to different actual sounds:
+- ground
+- gravel
+- stone/brick
+- wood
+- metal
 
-LOW / LAPTOP
-- up to 10 active tracers
-- up to 8 active bullet impacts
-- up to 4 muzzle flashes
-- up to 8 larger explosion/fire effects
+Remote player footsteps also play spatially on clients.
 
-BALANCED
-- 20 tracers
-- 18 impacts
-- 8 muzzle flashes
-- 14 larger effects
+LOW/LAPTOP
+Remote footsteps beyond roughly 14m are skipped.
 
-HIGH
-- 32 tracers
-- 28 impacts
-- 12 muzzle flashes
-- 20 larger effects
+BALANCED/HIGH
+Remote footstep range extends to roughly 21m.
 
-When a budget is exceeded, the oldest purely visual effect is removed first.
+WORLD GUNFIRE
+Remote gunfire now creates capped AudioStreamPlayer3D reports.
 
-DISTANCE CULLING
-Effects outside useful viewing distance are not created locally.
+The shooter's own close-range sound is not duplicated because shots within
+2.5m of the listening camera skip the world report.
 
-Approximate Low/Laptop limits:
-- tracers ~45m
-- bullet impacts ~34m
-- vehicle muzzle flashes ~38m
-- explosions ~55m
-- ambient fire ~34m
-- ambient smoke ~38m
+Approximate gunfire ranges:
+- Low ~38m
+- Balanced ~62m
+- High ~82m
 
-Balanced/High progressively extend these ranges.
+Audio player count is capped:
+- Low 6
+- Balanced 12
+- High 18
 
-MAINTENANCE PASS
-Every 0.5 seconds the BattlefieldEffectsManager:
-- removes invalid/stale effect references
-- trims arrays to the active quality budget
-- removes oldest visual-only effects if necessary
+VEHICLE ENGINES
+Jeep, tank and aircraft now have separate lightweight looped engine sounds.
 
-This prevents stale references from building up during long matches.
-
-IMPORTANT
-This is VISUAL culling only.
-The server still resolves:
-- hitscan
-- damage
-- explosions
-- vehicle weapons
-- objective damage
-- destruction
-
-A distant effect not being rendered does not change gameplay.
+Pitch/volume respond to movement/throttle:
+- stationary occupied vehicles idle quietly
+- acceleration raises pitch/volume
+- tanks remain lower pitched
+- aircraft use the highest pitch/range
+- destroyed vehicles fade nearly silent
 
 PERFORMANCE
-No additional network traffic.
-No additional physics.
-No extra collision.
-The effect-budget maintenance pass runs only twice per second.
+- mono 22.05 kHz WAV assets
+- no convolution/reverb processing
+- distance attenuation
+- capped transient world audio
+- no new physics or networking
+- no GPU cost
 
 PRESERVED
-- v9.20 spawn safety / U unstuck / below-map recovery
-- v9.19 visibility and route readability
-- v9.18.1 parser-safe environment pass
-- first-person fixes
-- HUD/combat feedback
+- v9.21 visual effect budgets
+- v9.20 spawn safety / U unstuck
+- v9.19 visibility/route readability
+- first-person/HUD/combat fixes
 - destructible streets
-- all vehicles and aircraft
+- all vehicle and aircraft gameplay
 - F6/F8
 - --bots 0 / --bots=0 / --no-bots
 
-Build: 9.21.0
+Build: 9.22.0
 Protocol: 341

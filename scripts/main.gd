@@ -237,7 +237,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.21.0"
+const BUILD_VERSION := "9.22.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -489,6 +489,8 @@ var vehicle_next_fire_ms: Dictionary = {}
 var vehicle_respawn_at_ms: Dictionary = {}
 var vehicle_damage_smoke_nodes: Dictionary = {}
 var ambient_battlefield_effects: Array[Node3D] = []
+var active_world_audio: Array[Node] = []
+var world_audio_cleanup_accumulator := 0.0
 var vehicle_service_accumulator := 0.0
 var player_unstuck_next_ms: Dictionary = {}
 const PLAYER_UNSTUCK_COOLDOWN_MS := 15000
@@ -8626,6 +8628,106 @@ func _notify_world_shot_recoil(start_position: Vector3) -> void:
 	if closest_player != null and closest_player.has_method("register_world_shot_recoil"):
 		closest_player.call("register_world_shot_recoil")
 
+func _world_audio_cap() -> int:
+	if visual_quality_manager == null:
+		return 12
+
+	var preset := clampi(
+		int(visual_quality_manager.get("current_preset")),
+		0,
+		2
+	)
+	if preset == 0:
+		return 6
+	if preset == 2:
+		return 18
+	return 12
+
+
+func _cleanup_world_audio() -> void:
+	for index: int in range(
+		active_world_audio.size() - 1,
+		-1,
+		-1
+	):
+		var node: Node = active_world_audio[index]
+		if node == null or not is_instance_valid(node):
+			active_world_audio.remove_at(index)
+
+	while active_world_audio.size() > _world_audio_cap():
+		var oldest: Node = active_world_audio.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
+
+
+func _play_world_gunshot(position: Vector3) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var viewport: Viewport = get_viewport()
+	if viewport == null:
+		return
+
+	var camera: Camera3D = viewport.get_camera_3d()
+	if camera == null:
+		return
+
+	var distance := camera.global_position.distance_to(position)
+
+	# The shooter's local 2D weapon sound already handles very close fire.
+	if distance < 2.5:
+		return
+
+	var max_distance := 62.0
+	if visual_quality_manager != null:
+		var preset := clampi(
+			int(visual_quality_manager.get("current_preset")),
+			0,
+			2
+		)
+		if preset == 0:
+			max_distance = 38.0
+		elif preset == 2:
+			max_distance = 82.0
+
+	if distance > max_distance:
+		return
+
+	_cleanup_world_audio()
+	if active_world_audio.size() >= _world_audio_cap():
+		return
+
+	var path := "res://audio/world_gunshot.wav"
+	if not ResourceLoader.exists(path):
+		return
+
+	var resource: Resource = load(path)
+	if not resource is AudioStream:
+		return
+
+	var audio := AudioStreamPlayer3D.new()
+	audio.name = "WorldGunshotAudio"
+	audio.stream = resource as AudioStream
+	audio.bus = "SFX"
+	audio.global_position = position
+	audio.max_distance = max_distance
+	audio.unit_size = 3.0
+	audio.attenuation_filter_cutoff_hz = 5200.0
+	audio.attenuation_filter_db = -14.0
+	audio.volume_db = -7.0
+	audio.pitch_scale = randf_range(0.94, 1.06)
+
+	add_child(audio)
+	active_world_audio.append(audio)
+	audio.finished.connect(
+		func() -> void:
+			active_world_audio.erase(audio)
+			if is_instance_valid(audio):
+				audio.queue_free()
+	)
+	audio.play()
+
+
 @rpc("authority", "call_local", "unreliable")
 func show_shot_effect(
 	start_position: Vector3,
@@ -8637,6 +8739,7 @@ func show_shot_effect(
 		return
 	_notify_world_shot_recoil(start_position)
 	_spawn_world_muzzle_effect(start_position, end_position)
+	_play_world_gunshot(start_position)
 
 	var effect_root := Node3D.new()
 	effect_root.name = "ShotEffect"

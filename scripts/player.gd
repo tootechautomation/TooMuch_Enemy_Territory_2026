@@ -241,6 +241,7 @@ var pistol_fire_sound: AudioStream
 var dry_click_sound: AudioStream
 var reload_sound: AudioStream
 var footstep_sound: AudioStream
+var footstep_surface_sounds: Dictionary = {}
 var hit_confirm_sound: AudioStream
 var headshot_confirm_sound: AudioStream
 var weapon_audio: AudioStreamPlayer
@@ -1139,6 +1140,7 @@ func _physics_process(delta: float) -> void:
 			)
 			velocity = remote_smoothed_velocity
 		_update_world_character_animation(delta)
+		_update_footstep_audio(delta)
 		_update_identity_visibility()
 	if multiplayer.is_server(): _server_simulate(delta)
 
@@ -6257,7 +6259,14 @@ func _build_audio_players() -> void:
 	pistol_fire_sound = _safe_load_audio("res://audio/pistol_fire.wav")
 	dry_click_sound = _safe_load_audio("res://audio/dry_click.wav")
 	reload_sound = _safe_load_audio("res://audio/reload.wav")
-	footstep_sound = _safe_load_audio("res://audio/footstep.wav")
+	footstep_sound = _safe_load_audio("res://audio/footstep_ground.wav")
+	footstep_surface_sounds = {
+		"ground": _safe_load_audio("res://audio/footstep_ground.wav"),
+		"gravel": _safe_load_audio("res://audio/footstep_gravel.wav"),
+		"stone": _safe_load_audio("res://audio/footstep_stone.wav"),
+		"wood": _safe_load_audio("res://audio/footstep_wood.wav"),
+		"metal": _safe_load_audio("res://audio/footstep_metal.wav")
+	}
 	hit_confirm_sound = _safe_load_audio("res://audio/hit_confirm.wav")
 	headshot_confirm_sound = _safe_load_audio(
 		"res://audio/headshot_confirm.wav"
@@ -6277,7 +6286,10 @@ func _build_audio_players() -> void:
 	footstep_audio = AudioStreamPlayer3D.new()
 	footstep_audio.stream = footstep_sound
 	footstep_audio.bus = "SFX"
-	footstep_audio.max_distance = 18.0
+	footstep_audio.max_distance = 24.0
+	footstep_audio.unit_size = 2.2
+	footstep_audio.attenuation_filter_cutoff_hz = 4200.0
+	footstep_audio.attenuation_filter_db = -12.0
 	footstep_audio.volume_db = -10.0
 	add_child(footstep_audio)
 
@@ -6397,12 +6409,48 @@ func _update_footstep_audio(delta: float) -> void:
 	if footstep_accumulator >= interval:
 		footstep_accumulator = 0.0
 		current_surface_name = _detect_surface_name()
+
+		var selected_footstep: AudioStream = (
+			footstep_surface_sounds.get(
+				current_surface_name,
+				footstep_sound
+			) as AudioStream
+		)
+		if selected_footstep == null:
+			selected_footstep = footstep_sound
+		if selected_footstep == null:
+			return
+
+		# Remote footsteps are useful spatial information, but Low/Laptop does
+		# not play them beyond 14m.
+		if not _is_local_player():
+			var viewport: Viewport = get_viewport()
+			var camera: Camera3D = (
+				viewport.get_camera_3d()
+				if viewport != null
+				else null
+			)
+			if camera != null:
+				var listener_distance := (
+					camera.global_position.distance_to(
+						global_position
+					)
+				)
+				var remote_limit := (
+					14.0
+					if _local_visual_quality_preset() == 0
+					else 21.0
+				)
+				if listener_distance > remote_limit:
+					return
+
+		footstep_audio.stream = selected_footstep
 		footstep_audio.pitch_scale = _surface_footstep_pitch(
 			current_surface_name
 		)
 		footstep_audio.volume_db = _surface_footstep_volume(
 			current_surface_name
-		)
+		) - (3.0 if not _is_local_player() else 0.0)
 		footstep_audio.play()
 
 func _play_confirm_sound(headshot: bool) -> void:
