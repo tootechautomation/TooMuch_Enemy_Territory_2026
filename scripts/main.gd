@@ -207,6 +207,9 @@ const ResupplyStationScript = preload(
 const CasualtyMarkerScript = preload(
 	"res://scripts/gameplay/casualty_marker.gd"
 )
+const ClassWarfareDeployableScript = preload(
+	"res://scripts/class_warfare_deployable.gd"
+)
 
 const ExternalAssetRegistryScript = preload(
 	"res://scripts/assets/asset_registry.gd"
@@ -240,8 +243,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "13.0.0"
-const NETWORK_PROTOCOL := 355
+const BUILD_VERSION := "14.0.0"
+const NETWORK_PROTOCOL := 356
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -274,6 +277,10 @@ const LARGE_MAP_HALF_LENGTH := 52.0
 const SECTOR_CAPTURE_RADIUS := 7.0
 const SECTOR_CAPTURE_SECONDS := 12.0
 const SECTOR_TICKET_INTERVAL := 18.0
+const CLASS_SUPPORT_LIFETIME := 50.0
+const CLASS_SUPPORT_INTERACT_RANGE := 2.6
+const MAX_CLASS_SUPPORT_PER_TEAM_TYPE := 2
+const FRONTLINE_SUPPORT_RADIUS := 18.0
 
 var tex_metal: Texture2D
 var tex_objective: Texture2D
@@ -364,6 +371,9 @@ var next_battlefield_pickup_id: int = 1
 var resupply_stations: Array[Node3D] = []
 var casualty_markers: Dictionary = {}
 var next_casualty_id: int = 1
+var class_support_deployables: Dictionary = {}
+var class_support_order: Dictionary = {}
+var next_class_support_id: int = 1
 var next_smoke_id := 1
 var station_accumulator := 0.0
 var command_health_station: MeshInstance3D
@@ -1301,6 +1311,7 @@ func _process(delta: float) -> void:
 	_update_pending_artillery(delta)
 	_update_supply_depot(delta)
 	_update_sector_warfare(delta)
+	_update_class_warfare(delta)
 
 	station_accumulator += delta
 	if station_accumulator >= COMMAND_POST_STATION_INTERVAL:
@@ -6898,6 +6909,24 @@ func _on_peer_connected(id: int) -> void:
 			pack.global_position
 		)
 
+	# v14 late-join synchronization for active class support positions.
+	for support_value in class_support_deployables.values():
+		var support: Node3D = support_value as Node3D
+		if support == null or not is_instance_valid(support):
+			continue
+		spawn_class_support.rpc_id(
+			id,
+			int(support.get("deployable_id")),
+			int(support.get("owner_id")),
+			int(support.get("team")),
+			int(support.get("support_type")),
+			support.global_position,
+			support.rotation.y,
+			int(support.get("health")),
+			float(support.get("remaining_seconds")),
+			bool(support.get("frontline_bonus"))
+		)
+
 	for grenade_value in grenades.values():
 		var grenade: Node3D = grenade_value as Node3D
 		if grenade == null:
@@ -9267,6 +9296,222 @@ func explode_grenade(
 	)
 	tween.chain().tween_callback(flash.queue_free)
 
+func _clear_class_support_deployables() -> void:
+	if not multiplayer.is_server():
+		return
+	var ids: Array[int] = []
+	for id_value: Variant in class_support_deployables.keys():
+		ids.append(int(id_value))
+	for deployable_id: int in ids:
+		server_destroy_class_support(deployable_id, 0)
+	class_support_order.clear()
+
+
+func _update_class_warfare(_delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	# Deployables self-expire. This pass only prunes invalid references so the
+	# long-running server cannot accumulate stale dictionary entries.
+	var stale_ids: Array[int] = []
+	for id_value: Variant in class_support_deployables.keys():
+		var deployable_id: int = int(id_value)
+		var deployable: Node = class_support_deployables.get(deployable_id) as Node
+		if deployable == null or not is_instance_valid(deployable) or deployable.is_queued_for_deletion():
+			stale_ids.append(deployable_id)
+	for deployable_id: int in stale_ids:
+		class_support_deployables.erase(deployable_id)
+
+
+func _class_support_key(team_id: int, support_type: int) -> String:
+	return "%d:%d" % [team_id, support_type]
+
+
+func _is_near_frontline(team_id: int, world_position: Vector3) -> bool:
+	var front_value: Variant = frontline_sector_position(team_id)
+	if not front_value is Vector3:
+		return false
+	return world_position.distance_to(Vector3(front_value)) <= FRONTLINE_SUPPORT_RADIUS
+
+
+func deploy_class_support(owner: Node3D, support_type: int) -> bool:
+	if not multiplayer.is_server() or owner == null or match_over:
+		return false
+	if support_type < 0 or support_type > 1:
+		return false
+	if not bool(owner.get("alive")) or bool(owner.get("downed")):
+		return false
+
+	var owner_id: int = int(owner.get("peer_id"))
+	var team_id: int = int(owner.get("team"))
+	var spawn_position: Vector3 = owner.global_position + (-owner.global_transform.basis.z * 1.8)
+	spawn_position.y = 0.0
+	var key := _class_support_key(team_id, support_type)
+	var ordered: Array = class_support_order.get(key, [])
+	while ordered.size() >= MAX_CLASS_SUPPORT_PER_TEAM_TYPE:
+		var oldest: int = int(ordered.pop_front())
+		server_destroy_class_support(oldest, 0)
+
+	var deployable_id := next_class_support_id
+	next_class_support_id += 1
+	ordered.append(deployable_id)
+	class_support_order[key] = ordered
+	var frontline_bonus := _is_near_frontline(team_id, spawn_position)
+	var deployable_health := 150 if frontline_bonus else 120
+	spawn_class_support.rpc(
+		deployable_id,
+		owner_id,
+		team_id,
+		support_type,
+		spawn_position,
+		owner.rotation.y,
+		deployable_health,
+		CLASS_SUPPORT_LIFETIME,
+		frontline_bonus
+	)
+	owner.call("add_xp", 5 if frontline_bonus else 3, "frontline support")
+	push_kill_feed.rpc(
+		"%s deployed %s%s" % [
+			str(owner.get("player_name")),
+			"an aid station" if support_type == 0 else "an ammo crate",
+			" at the frontline" if frontline_bonus else ""
+		]
+	)
+	return true
+
+
+@rpc("authority", "call_local", "reliable")
+func spawn_class_support(
+	deployable_id: int,
+	owner_id: int,
+	team_id: int,
+	support_type: int,
+	spawn_position: Vector3,
+	rotation_y: float,
+	health_value: int,
+	duration_value: float,
+	frontline_bonus: bool
+) -> void:
+	if class_support_deployables.has(deployable_id):
+		return
+	var deployable := StaticBody3D.new()
+	deployable.name = "ClassSupport_%d" % deployable_id
+	deployable.set_script(ClassWarfareDeployableScript)
+	add_child(deployable)
+	deployable.call(
+		"configure",
+		deployable_id,
+		owner_id,
+		team_id,
+		support_type,
+		spawn_position,
+		rotation_y,
+		health_value,
+		duration_value,
+		frontline_bonus
+	)
+	class_support_deployables[deployable_id] = deployable
+
+
+func server_destroy_class_support(deployable_id: int, attacker_id: int) -> void:
+	if not multiplayer.is_server() or not class_support_deployables.has(deployable_id):
+		return
+	var deployable: Node = class_support_deployables.get(deployable_id) as Node
+	if deployable != null:
+		var key := _class_support_key(int(deployable.get("team")), int(deployable.get("support_type")))
+		var ordered: Array = class_support_order.get(key, [])
+		ordered.erase(deployable_id)
+		class_support_order[key] = ordered
+	class_support_deployables.erase(deployable_id)
+	remove_class_support.rpc(deployable_id)
+	if attacker_id != 0 and players.has(attacker_id):
+		players[attacker_id].call("add_xp", 6, "support position destroyed")
+
+
+@rpc("authority", "call_local", "reliable")
+func remove_class_support(deployable_id: int) -> void:
+	var deployable: Node = class_support_deployables.get(deployable_id) as Node
+	class_support_deployables.erase(deployable_id)
+	if deployable != null and is_instance_valid(deployable) and not deployable.is_queued_for_deletion():
+		deployable.queue_free()
+	else:
+		var fallback: Node = get_node_or_null("ClassSupport_%d" % deployable_id)
+		if fallback != null:
+			fallback.queue_free()
+
+
+func server_try_class_support(player: Node3D) -> bool:
+	if not multiplayer.is_server() or player == null:
+		return false
+	if not bool(player.get("alive")) or bool(player.get("downed")):
+		return false
+	var best: Node3D = null
+	var best_distance := CLASS_SUPPORT_INTERACT_RANGE
+	for value: Variant in class_support_deployables.values():
+		var deployable: Node3D = value as Node3D
+		if deployable == null or not is_instance_valid(deployable):
+			continue
+		if int(deployable.get("team")) != int(player.get("team")):
+			continue
+		var distance := player.global_position.distance_to(deployable.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = deployable
+	if best == null:
+		return false
+	var support_type: int = int(best.get("support_type"))
+	var amount: int = 38 if support_type == 0 else 70
+	if bool(best.get("frontline_bonus")):
+		amount += 12
+	return bool(player.call("server_receive_class_support", support_type, amount, int(best.get("owner_id"))))
+
+
+func class_warfare_goal(actor: Node3D, class_id: int) -> Variant:
+	if actor == null:
+		return null
+	var team_id: int = int(actor.get("team"))
+	if class_id == 1:
+		var casualty: Node3D = nearest_downed_teammate(actor) as Node3D
+		if casualty != null:
+			return casualty.global_position
+	if class_id == 2:
+		var front: Variant = frontline_sector_position(team_id)
+		if front is Vector3:
+			return Vector3(front)
+	if class_id == 3:
+		var support_center := Vector3.ZERO
+		var count := 0
+		for player_value: Variant in players.values():
+			var teammate: Node3D = player_value as Node3D
+			if teammate == null or teammate == actor:
+				continue
+			if int(teammate.get("team")) != team_id or not bool(teammate.get("alive")):
+				continue
+			if teammate.global_position.distance_to(actor.global_position) > 26.0:
+				continue
+			support_center += teammate.global_position
+			count += 1
+		if count >= 2:
+			return support_center / float(count)
+	if class_id == 0:
+		var pressure: Variant = frontline_sector_position(team_id)
+		if pressure is Vector3:
+			return Vector3(pressure)
+	return null
+
+
+func engineer_frontline_fortify(engineer: Node3D) -> int:
+	if not multiplayer.is_server() or engineer == null:
+		return 0
+	var repaired := repair_nearby_barricades(engineer, 95)
+	var team_id: int = int(engineer.get("team"))
+	var front: Variant = frontline_sector_position(team_id)
+	if front is Vector3 and engineer.global_position.distance_to(Vector3(front)) <= FRONTLINE_SUPPORT_RADIUS:
+		# Engineers at the active front receive extra repair value without
+		# automatically creating collision geometry around the player.
+		repaired += repair_nearby_barricades(engineer, 45)
+	return repaired
+
+
 func create_supply_pack(owner: Node3D, pack_type: int, amount: int) -> void:
 	if not multiplayer.is_server():
 		return
@@ -10950,6 +11195,7 @@ func nearest_downed_teammate(from_player: Node3D) -> Node3D:
 
 func _reset_round() -> void:
 	hide_round_results.rpc()
+	_clear_class_support_deployables()
 	match_over = false
 	match_time_remaining = MATCH_LENGTH_SECONDS
 	spawn_wave_remaining = SPAWN_WAVE_SECONDS

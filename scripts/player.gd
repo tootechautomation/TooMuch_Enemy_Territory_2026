@@ -2568,6 +2568,43 @@ func server_absorb_matching_dropped_weapon(
 	)
 
 
+func server_receive_class_support(
+	support_type: int,
+	amount: int,
+	provider_id: int
+) -> bool:
+	if not multiplayer.is_server() or not alive or downed:
+		return false
+	var now := Time.get_ticks_msec()
+	if now < next_resupply_time:
+		return false
+	var applied := 0
+	if support_type == 0:
+		var maximum := _class_health(player_class)
+		if health >= maximum:
+			return false
+		var old_health := health
+		health = mini(maximum, health + maxi(1, amount))
+		applied = health - old_health
+	else:
+		_store_current_weapon_ammo()
+		var maximum_reserve := _weapon_reserve_ammo() + 90
+		var old_reserve := reserve_ammo
+		reserve_ammo = mini(maximum_reserve, reserve_ammo + maxi(1, amount))
+		weapon_reserves[current_weapon_index] = reserve_ammo
+		applied = reserve_ammo - old_reserve
+		if applied <= 0:
+			return false
+	next_resupply_time = now + 4500
+	if provider_id != peer_id and get_parent().players.has(provider_id):
+		get_parent().players[provider_id].call("add_xp", 2, "class support")
+	combat_notice.rpc_id(
+		peer_id,
+		("AID +%d" if support_type == 0 else "AMMO +%d") % applied
+	)
+	return true
+
+
 func _battlefield_slot_name(slot_index: int) -> String:
 	return "PRIMARY" if slot_index == 0 else "SECONDARY"
 
@@ -3801,6 +3838,14 @@ func server_interact_request() -> void:
 	):
 		return
 
+	# v14 class support deployables use the same deliberate interaction path.
+	if (
+		main_node != null
+		and main_node.has_method("server_try_class_support")
+		and bool(main_node.call("server_try_class_support", self))
+	):
+		return
+
 	# Fixed ammunition stations use the same INTERACT action, but only after
 	# nearby dropped equipment has been given priority.
 	if (
@@ -4577,13 +4622,17 @@ func server_ability_request() -> void:
 						healed_count += 1
 			if main.has_method("create_supply_pack"):
 				main.call("create_supply_pack", self, 0, 50)
+			if main.has_method("deploy_class_support"):
+				main.call("deploy_class_support", self, 0)
 			add_xp(revived_count * 12 + healed_count * 3, "revive pulse")
 			main.push_kill_feed.rpc("%s used Revive Pulse" % player_name)
 
 		PlayerClass.ENGINEER:
 			health = mini(_class_health(player_class), health + 30)
 			var repaired := 0
-			if main.has_method("repair_nearby_barricades"):
+			if main.has_method("engineer_frontline_fortify"):
+				repaired = int(main.call("engineer_frontline_fortify", self))
+			elif main.has_method("repair_nearby_barricades"):
 				repaired = int(main.call("repair_nearby_barricades", self, 85))
 			if main.has_method("server_engineer_interact"):
 				for step in range(2):
@@ -4605,6 +4654,8 @@ func server_ability_request() -> void:
 				main.call("server_call_artillery", self, target_position)
 			if main.has_method("create_supply_pack"):
 				main.call("create_supply_pack", self, 1, 85)
+			if main.has_method("deploy_class_support"):
+				main.call("deploy_class_support", self, 1)
 			add_xp(5, "artillery call")
 
 		PlayerClass.SCOUT:
@@ -4690,6 +4741,11 @@ func _bot_class_tactical_goal(main: Node) -> Vector3:
 			bot_squad_role
 		)
 	)
+
+	if main.has_method("class_warfare_goal"):
+		var class_goal: Variant = main.call("class_warfare_goal", self, player_class)
+		if class_goal is Vector3 and global_position.distance_to(Vector3(class_goal)) > 3.0:
+			anchor = Vector3(class_goal)
 
 	match player_class:
 		PlayerClass.MEDIC:
@@ -5004,6 +5060,14 @@ func _server_bot_tick(delta: float) -> void:
 			main.call("server_engineer_interact", self)
 		else:
 			movement_goal = objective_goal
+			has_movement_goal = true
+
+	# v14: class roles can pull bots toward casualties, squad resupply clusters,
+	# and the Frontline Director pressure sector before generic route travel.
+	if not has_movement_goal and player_class != PlayerClass.ENGINEER:
+		var class_goal := _bot_class_tactical_goal(main)
+		if class_goal != Vector3.ZERO and global_position.distance_to(class_goal) > 3.0:
+			movement_goal = class_goal
 			has_movement_goal = true
 
 	target_player = main.call(
@@ -5563,8 +5627,11 @@ func _bot_try_ability() -> void:
 			var should_fortify := health < int(
 				_class_health(player_class) * 0.85
 			)
-			if not should_fortify:
-				should_fortify = randf() <= 0.28
+			var main: Node = get_parent()
+			if not should_fortify and main != null and main.has_method("frontline_sector_position"):
+				var front: Variant = main.call("frontline_sector_position", team)
+				if front is Vector3:
+					should_fortify = global_position.distance_to(Vector3(front)) <= 18.0
 			if should_fortify:
 				server_ability_request()
 
