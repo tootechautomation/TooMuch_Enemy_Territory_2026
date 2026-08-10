@@ -2400,10 +2400,11 @@ func confirm_hit() -> void:
 	if not _is_local_player():
 		return
 	_play_confirm_sound(false)
-	hit_marker_until_ms = Time.get_ticks_msec() + 140
+	hit_marker_until_ms = Time.get_ticks_msec() + 150
 	if hit_marker != null:
 		hit_marker.text = "×"
 		hit_marker.position = Vector2(638, 346)
+		hit_marker.add_theme_font_size_override("font_size", 27)
 		hit_marker.visible = true
 
 @rpc("authority", "call_remote", "reliable")
@@ -2412,10 +2413,11 @@ func confirm_headshot() -> void:
 		return
 
 	_play_confirm_sound(true)
-	hit_marker_until_ms = Time.get_ticks_msec() + 260
+	hit_marker_until_ms = Time.get_ticks_msec() + 290
 	if hit_marker != null:
-		hit_marker.text = "×"
-		hit_marker.position = Vector2(638, 346)
+		hit_marker.text = "✦"
+		hit_marker.position = Vector2(638, 344)
+		hit_marker.add_theme_font_size_override("font_size", 31)
 		hit_marker.visible = true
 
 	_show_combat_medal("HEADSHOT", true)
@@ -2698,6 +2700,17 @@ func damage_feedback(attacker_position: Vector3, amount: int) -> void:
 		direction_text
 	) as Label
 	if direction_arrow != null:
+		var severity := clampf(float(amount) / 50.0, 0.35, 1.0)
+		direction_arrow.add_theme_font_size_override(
+			"font_size",
+			int(round(26.0 + severity * 10.0))
+		)
+		direction_arrow.modulate = Color(
+			1.0,
+			0.72 - severity * 0.30,
+			0.62 - severity * 0.42,
+			0.72 + severity * 0.28
+		)
 		direction_arrow.visible = true
 
 func server_revive(reviver_id: int = 0) -> void:
@@ -5125,8 +5138,34 @@ func _local_fire_feedback() -> void:
 	_spawn_muzzle_smoke()
 	_spawn_muzzle_light()
 
+func _local_visual_quality_preset() -> int:
+	var main_node: Node = get_parent()
+	if main_node == null:
+		return 1
+
+	var manager_value: Variant = main_node.get(
+		"visual_quality_manager"
+	)
+	if manager_value == null:
+		return 1
+
+	var manager: Node = manager_value as Node
+	if manager == null:
+		return 1
+
+	var preset_value: Variant = manager.get("current_preset")
+	if preset_value == null:
+		return 1
+
+	return clampi(int(preset_value), 0, 2)
+
+
 func _spawn_muzzle_light() -> void:
 	if weapon_view == null or not _is_local_player():
+		return
+
+	# Low/Laptop avoids a per-shot dynamic light entirely.
+	if _local_visual_quality_preset() == 0:
 		return
 
 	if active_muzzle_light != null and is_instance_valid(
@@ -5159,7 +5198,11 @@ func _spawn_muzzle_light() -> void:
 func _spawn_muzzle_smoke() -> void:
 	if weapon_view == null or muzzle_smoke_texture == null or not _is_local_player():
 		return
-	var smoke_layers: int = 2 if visual_weapon_heat >= 0.58 else 1
+	var quality := _local_visual_quality_preset()
+	var smoke_layers: int = 1
+	if quality >= 2 and visual_weapon_heat >= 0.58:
+		smoke_layers = 2
+
 	for layer_index in range(smoke_layers):
 		var smoke := Sprite3D.new()
 		smoke.name = "MuzzleSmoke%d" % layer_index
@@ -5175,7 +5218,11 @@ func _spawn_muzzle_smoke() -> void:
 		smoke.modulate = Color(0.78, 0.79, 0.76, smoke_alpha)
 		smoke.rotation_degrees.z = randf_range(0.0, 360.0)
 		weapon_view.add_child(smoke)
-		var duration: float = lerpf(0.30, 0.58, visual_weapon_heat)
+		var duration: float = lerpf(
+			0.22 if quality == 0 else 0.30,
+			0.42 if quality == 0 else 0.58,
+			visual_weapon_heat
+		)
 		var drift := Vector3(
 			randf_range(-0.08, 0.08),
 			lerpf(0.14, 0.26, visual_weapon_heat),
@@ -5200,6 +5247,10 @@ func _spawn_muzzle_smoke() -> void:
 
 func _spawn_local_shell_effect() -> void:
 	if weapon_view == null or not _is_local_player():
+		return
+
+	var quality := _local_visual_quality_preset()
+	if quality == 0:
 		return
 
 	var shell := MeshInstance3D.new()
@@ -5227,6 +5278,7 @@ func _spawn_local_shell_effect() -> void:
 
 	var tween: Tween = create_tween()
 	tween.set_parallel(true)
+	var shell_duration := 0.18 if quality == 1 else 0.26
 	var shell_target: Vector3 = shell.position + Vector3(
 		randf_range(0.24, 0.38),
 		randf_range(0.14, 0.24),
@@ -5236,7 +5288,7 @@ func _spawn_local_shell_effect() -> void:
 		shell,
 		"position",
 		shell_target,
-		0.26
+		shell_duration
 	)
 	tween.tween_property(
 		shell,
@@ -5246,7 +5298,7 @@ func _spawn_local_shell_effect() -> void:
 			randf_range(120.0, 240.0),
 			randf_range(260.0, 420.0)
 		),
-		0.26
+		shell_duration
 	)
 	tween.chain().tween_callback(shell.queue_free)
 
@@ -7418,6 +7470,25 @@ func _update_first_person_animation(delta: float) -> void:
 	)
 	var target_position: Vector3 = weapon_base_position + recoil_position_impulse
 	var target_rotation: Vector3 = weapon_base_rotation + recoil_rotation_impulse
+
+	# Suppression causes a small visual tremor only. It does not alter the
+	# authoritative bullet direction, keeping gameplay predictable.
+	if replicated_suppression_ms > 0 and not visual_aiming:
+		var suppression_amount := clampf(
+			float(replicated_suppression_ms)
+				/ float(SUPPRESSION_DURATION_MS),
+			0.0,
+			1.0
+		)
+		target_position.x += sin(
+			visual_animation_time * 18.0
+		) * 0.0035 * suppression_amount
+		target_position.y += cos(
+			visual_animation_time * 15.0
+		) * 0.0024 * suppression_amount
+		target_rotation.z += sin(
+			visual_animation_time * 16.0
+		) * 0.0040 * suppression_amount
 	if visual_aiming:
 		target_position = (
 			_aim_weapon_position() + recoil_position_impulse * 0.64
@@ -7930,11 +8001,30 @@ func _update_hud() -> void:
 		stamina_bar.value = replicated_stamina
 	if suppression_overlay != null:
 		suppression_overlay.visible = replicated_suppression_ms > 0
+		if suppression_overlay.visible:
+			var suppression_strength := clampf(
+				float(replicated_suppression_ms)
+				/ float(SUPPRESSION_DURATION_MS),
+				0.0,
+				1.0
+			)
+			var pulse := 0.5 + 0.5 * sin(
+				float(now) * 0.012
+			)
+			suppression_overlay.color = Color(
+				0.46,
+				0.045,
+				0.018,
+				0.055
+					+ suppression_strength * 0.075
+					+ pulse * 0.025
+			)
 
 	if hit_marker != null and hit_marker.visible and now >= hit_marker_until_ms:
 		hit_marker.visible = false
 		hit_marker.text = "×"
 		hit_marker.position = Vector2(634, 344)
+		hit_marker.add_theme_font_size_override("font_size", 27)
 
 	if (
 		elimination_notice != null
