@@ -1673,6 +1673,13 @@ func server_fire(direction: Vector3) -> void:
 
 	if not hit.is_empty():
 		effect_end = Vector3(hit.get("position", effect_end))
+		var combat_main: Node = get_parent()
+		if combat_main != null and combat_main.has_method("show_combat_impact"):
+			combat_main.show_combat_impact.rpc(
+				effect_end,
+				Vector3(hit.get("normal", Vector3.UP)),
+				false
+			)
 
 	if not hit.is_empty():
 		var hit_collider: Object = hit.get("collider")
@@ -1740,6 +1747,14 @@ func server_fire(direction: Vector3) -> void:
 	if main_node != null and main_node.has_method(
 		"show_shot_effect"
 	):
+	var tracer_main: Node = get_parent()
+	if tracer_main != null and tracer_main.has_method("show_combat_tracer"):
+		tracer_main.show_combat_tracer.rpc(
+			shot_origin,
+			effect_end,
+			false
+		)
+
 		main_node.show_shot_effect.rpc(
 			origin,
 			effect_end,

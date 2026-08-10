@@ -206,3 +206,175 @@ func spawn_vehicle_muzzle_flash(
 			if is_instance_valid(flash):
 				flash.queue_free()
 	)
+
+
+func spawn_tracer(
+	start: Vector3,
+	end: Vector3,
+	is_vehicle_weapon: bool = false
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var distance := start.distance_to(end)
+	if distance < 0.35:
+		return
+
+	var preset := _preset()
+	if preset == 0 and distance < 12.0:
+		return
+
+	var tracer := MeshInstance3D.new()
+	tracer.name = "Tracer"
+
+	var mesh := BoxMesh.new()
+	var thickness := 0.032 if is_vehicle_weapon else 0.018
+	mesh.size = Vector3(thickness, thickness, distance)
+	tracer.mesh = mesh
+
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color(1.0, 0.72, 0.24, 0.95)
+	material.emission_enabled = true
+	material.emission = Color(1.0, 0.28, 0.035)
+	tracer.material_override = material
+
+	tracer.global_position = (start + end) * 0.5
+	if (end - start).length_squared() > 0.00001:
+		tracer.look_at(end, Vector3.UP)
+
+	add_child(tracer)
+
+	var lifetime := 0.045 if preset == 0 else 0.065 if preset == 1 else 0.085
+	get_tree().create_timer(lifetime).timeout.connect(
+		func() -> void:
+			if is_instance_valid(tracer):
+				tracer.queue_free()
+	)
+
+
+func spawn_bullet_impact(
+	position: Vector3,
+	normal: Vector3,
+	heavy: bool = false
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var preset := _preset()
+	var holder := Node3D.new()
+	holder.name = "BulletImpact"
+	holder.global_position = position + normal * 0.025
+	add_child(holder)
+
+	var particles := GPUParticles3D.new()
+	particles.one_shot = true
+	particles.explosiveness = 0.95
+	particles.amount = 2 if preset == 0 else 5 if preset == 1 else 9
+	if heavy:
+		particles.amount *= 2
+	particles.lifetime = 0.25 if preset == 0 else 0.40 if preset == 1 else 0.55
+
+	var process := ParticleProcessMaterial.new()
+	process.direction = normal
+	process.spread = 55.0
+	process.initial_velocity_min = 0.7
+	process.initial_velocity_max = 2.6 if heavy else 1.7
+	process.gravity = Vector3(0.0, -4.5, 0.0)
+	process.scale_min = 0.025
+	process.scale_max = 0.07 if heavy else 0.045
+	process.color = Color(0.52, 0.46, 0.38, 0.88)
+	particles.process_material = process
+
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.025
+	mesh.height = 0.05
+	particles.draw_pass_1 = mesh
+	holder.add_child(particles)
+	particles.emitting = true
+
+	get_tree().create_timer(0.65 if preset == 0 else 1.0).timeout.connect(
+		func() -> void:
+			if is_instance_valid(holder):
+				holder.queue_free()
+	)
+
+
+func spawn_ambient_smoke_column(
+	position: Vector3,
+	intensity: float = 1.0
+) -> Node3D:
+	if DisplayServer.get_name() == "headless":
+		return null
+
+	var preset := _preset()
+	var holder := Node3D.new()
+	holder.name = "AmbientBattlefieldSmoke"
+	holder.global_position = position
+	add_child(holder)
+
+	var particles := GPUParticles3D.new()
+	particles.amount = 4 if preset == 0 else 8 if preset == 1 else 14
+	particles.lifetime = 2.2 if preset == 0 else 3.2 if preset == 1 else 4.2
+	particles.emitting = true
+
+	var process := ParticleProcessMaterial.new()
+	process.direction = Vector3.UP
+	process.spread = 24.0
+	process.initial_velocity_min = 0.45 * intensity
+	process.initial_velocity_max = 1.25 * intensity
+	process.gravity = Vector3(0.0, 0.18, 0.0)
+	process.scale_min = 0.22 * intensity
+	process.scale_max = 0.55 * intensity
+	process.color = Color(0.12, 0.115, 0.105, 0.60)
+	particles.process_material = process
+
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.13
+	mesh.height = 0.26
+	particles.draw_pass_1 = mesh
+	holder.add_child(particles)
+	return holder
+
+
+func spawn_ambient_fire_pocket(position: Vector3) -> Node3D:
+	if DisplayServer.get_name() == "headless":
+		return null
+
+	var holder := Node3D.new()
+	holder.name = "AmbientBattlefieldFire"
+	holder.global_position = position
+	add_child(holder)
+
+	var preset := _preset()
+	var particles := GPUParticles3D.new()
+	particles.amount = 3 if preset == 0 else 6 if preset == 1 else 10
+	particles.lifetime = 0.75
+	particles.emitting = true
+
+	var process := ParticleProcessMaterial.new()
+	process.direction = Vector3.UP
+	process.spread = 18.0
+	process.initial_velocity_min = 0.45
+	process.initial_velocity_max = 1.25
+	process.gravity = Vector3(0.0, 0.55, 0.0)
+	process.scale_min = 0.08
+	process.scale_max = 0.18
+	process.color = Color(1.0, 0.24, 0.035, 0.94)
+	particles.process_material = process
+
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.07
+	mesh.height = 0.14
+	particles.draw_pass_1 = mesh
+	holder.add_child(particles)
+
+	if preset > 0:
+		var light := OmniLight3D.new()
+		light.omni_range = 2.6
+		light.light_energy = 0.45 if preset == 1 else 0.75
+		light.light_color = Color(1.0, 0.28, 0.06)
+		light.shadow_enabled = false
+		holder.add_child(light)
+
+	return holder

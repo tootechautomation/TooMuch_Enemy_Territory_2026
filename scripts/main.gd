@@ -231,7 +231,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.12.0"
+const BUILD_VERSION := "9.13.0"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -482,6 +482,7 @@ var vehicle_snapshot_accumulator := 0.0
 var vehicle_next_fire_ms: Dictionary = {}
 var vehicle_respawn_at_ms: Dictionary = {}
 var vehicle_damage_smoke_nodes: Dictionary = {}
+var ambient_battlefield_effects: Array[Node3D] = []
 var vehicle_service_accumulator := 0.0
 const VEHICLE_SERVICE_INTERVAL := 1.0
 const VEHICLE_SERVICE_RADIUS := 8.0
@@ -996,6 +997,7 @@ func _initialize_visual_quality_manager() -> void:
 		self,
 		visual_quality_manager
 	)
+	call_deferred("_initialize_ambient_battlefield_fx")
 
 func set_local_cinema_mode(enabled: bool) -> void:
 	local_cinema_mode_enabled = enabled
@@ -10279,6 +10281,8 @@ func _server_vehicle_fire(vehicle_id: int, peer_id: int) -> void:
 		end,
 		float(vehicle.call("impact_scale"))
 	)
+	show_combat_tracer.rpc(origin, end, true)
+	show_combat_impact.rpc(end, Vector3.UP, true)
 	show_vehicle_muzzle_flash.rpc(
 		origin,
 		float(vehicle.call("impact_scale"))
@@ -10763,6 +10767,92 @@ func vehicle_state_changed(
 			position,
 			seat_id
 		)
+
+
+func _initialize_ambient_battlefield_fx() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager == null:
+		return
+	if not ambient_battlefield_effects.is_empty():
+		return
+
+	var smoke_positions: Array[Vector3] = [
+		Vector3(-28.0, 0.2, -18.0),
+		Vector3(27.0, 0.2, 16.0),
+		Vector3(-6.0, 0.2, 25.0),
+		Vector3(10.0, 0.2, -26.0)
+	]
+
+	for position: Vector3 in smoke_positions:
+		var smoke: Node3D = battlefield_effects_manager.call(
+			"spawn_ambient_smoke_column",
+			position,
+			0.85
+		)
+		if smoke != null:
+			ambient_battlefield_effects.append(smoke)
+
+	var fire_positions: Array[Vector3] = [
+		Vector3(-14.0, 0.15, 13.0),
+		Vector3(17.0, 0.15, -13.5)
+	]
+
+	for position: Vector3 in fire_positions:
+		var fire: Node3D = battlefield_effects_manager.call(
+			"spawn_ambient_fire_pocket",
+			position
+		)
+		if fire != null:
+			ambient_battlefield_effects.append(fire)
+
+
+@rpc("authority", "call_local", "unreliable")
+func show_combat_tracer(
+	start: Vector3,
+	end: Vector3,
+	heavy: bool = false
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager == null:
+		return
+	if not _vector3_is_finite(start) or not _vector3_is_finite(end):
+		return
+
+	battlefield_effects_manager.call(
+		"spawn_tracer",
+		start,
+		end,
+		heavy
+	)
+
+
+@rpc("authority", "call_local", "unreliable")
+func show_combat_impact(
+	position: Vector3,
+	normal: Vector3,
+	heavy: bool = false
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if battlefield_effects_manager == null:
+		return
+	if not _vector3_is_finite(position):
+		return
+
+	var safe_normal := normal
+	if not _vector3_is_finite(safe_normal) or safe_normal.length_squared() < 0.001:
+		safe_normal = Vector3.UP
+	else:
+		safe_normal = safe_normal.normalized()
+
+	battlefield_effects_manager.call(
+		"spawn_bullet_impact",
+		position,
+		safe_normal,
+		heavy
+	)
 
 
 func _update_vehicle_damage_smoke() -> void:
