@@ -237,7 +237,7 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "9.23.0"
+const BUILD_VERSION := "9.23.1"
 const NETWORK_PROTOCOL := 341
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
@@ -7740,8 +7740,16 @@ func arm_dynamite(engineer_id: int) -> bool:
 		return false
 	dynamite_armed = true
 	dynamite_remaining = DYNAMITE_FUSE_SECONDS
-			team_callout.rpc(0, "CHARGE ARMED · HOLD THE BUNKER", "CHARGE_ARMED_ATK")
-			team_callout.rpc(1, "CHARGE ARMED · DEFUSE NOW", "CHARGE_ARMED_DEF")
+	team_callout.rpc(
+		0,
+		"CHARGE ARMED · HOLD THE BUNKER",
+		"CHARGE_ARMED_ATK"
+	)
+	team_callout.rpc(
+		1,
+		"CHARGE ARMED · DEFUSE NOW",
+		"CHARGE_ARMED_DEF"
+	)
 	defuse_progress = 0
 	_update_objective_visuals()
 	push_kill_feed.rpc("%s armed the bunker charge" % player_names.get(engineer_id, "Engineer"))
