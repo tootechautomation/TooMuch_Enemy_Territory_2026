@@ -1,12 +1,11 @@
-FRONTLINE: OBJECTIVE v9.13.1 HOTFIX
+FRONTLINE: OBJECTIVE v9.13.2
 
-Fixes player.gd parser error near line 1749 introduced by v9.13.0 tracer integration.
-The tracer call had accidentally been inserted between an if statement and its required indented body.
+HOTFIX
+- Fixed parser error: Identifier "shot_origin" not declared in current scope.
+- Infantry tracer RPC now uses the existing server-fire `origin` Vector3.
+- Preserves v9.13 combat tracers, impacts, smoke/fire atmosphere.
+- Preserves v9.12 vehicle camera/exit fixes.
+- Preserves F6/F8 and --bots 0 / --bots=0 / --no-bots.
 
-The corrected flow is:
-1. Resolve shot/hit.
-2. Broadcast combat tracer when supported.
-3. Broadcast existing show_shot_effect when supported.
-
-No gameplay systems were intentionally removed.
-Protocol remains 341.
+Build: 9.13.2
+Protocol: 341

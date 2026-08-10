@@ -1749,7 +1749,7 @@ func server_fire(direction: Vector3) -> void:
 	# outside that conditional also prevents an empty if block/parser error.
 	if main_node != null and main_node.has_method("show_combat_tracer"):
 		main_node.show_combat_tracer.rpc(
-			shot_origin,
+			origin,
 			effect_end,
 			false
 		)
