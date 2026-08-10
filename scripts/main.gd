@@ -240,8 +240,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "10.6.0"
-const NETWORK_PROTOCOL := 350
+const BUILD_VERSION := "10.7.0"
+const NETWORK_PROTOCOL := 351
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -498,6 +498,8 @@ var vehicle_respawn_at_ms: Dictionary = {}
 var vehicle_damage_smoke_nodes: Dictionary = {}
 var ambient_battlefield_effects: Array[Node3D] = []
 var active_world_audio: Array[Node] = []
+var active_combat_presentation_fx: Array[Node] = []
+const COMBAT_PRESENTATION_FX_CAP := 42
 var world_audio_cleanup_accumulator := 0.0
 var vehicle_service_accumulator := 0.0
 var player_unstuck_next_ms: Dictionary = {}
@@ -3629,6 +3631,270 @@ func _create_authoritative_townhouse_fallback(
 		% node_name
 	)
 	return root
+
+func _register_combat_presentation_fx(node: Node) -> void:
+	if node == null:
+		return
+
+	for index: int in range(
+		active_combat_presentation_fx.size() - 1,
+		-1,
+		-1
+	):
+		var existing: Node = active_combat_presentation_fx[index]
+		if existing == null or not is_instance_valid(existing):
+			active_combat_presentation_fx.remove_at(index)
+
+	while active_combat_presentation_fx.size() >= COMBAT_PRESENTATION_FX_CAP:
+		var oldest: Node = active_combat_presentation_fx.pop_front()
+		if oldest != null and is_instance_valid(oldest):
+			oldest.queue_free()
+
+	active_combat_presentation_fx.append(node)
+	node.tree_exiting.connect(
+		func() -> void:
+			active_combat_presentation_fx.erase(node)
+	)
+
+
+func _combat_fx_material(
+	color_value: Color,
+	emission_strength: float = 0.0
+) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = color_value
+	material.roughness = 0.92
+	if emission_strength > 0.0:
+		material.emission_enabled = true
+		material.emission = Color(
+			color_value.r,
+			color_value.g,
+			color_value.b
+		)
+		material.emission_energy_multiplier = emission_strength
+	return material
+
+
+func _spawn_impact_dust(
+	position: Vector3,
+	incoming_direction: Vector3,
+	hit_player: bool
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var root := Node3D.new()
+	root.name = "ImpactDust"
+	root.global_position = position
+	add_child(root)
+	_register_combat_presentation_fx(root)
+
+	var safe_direction := incoming_direction
+	if safe_direction.length_squared() < 0.001:
+		safe_direction = Vector3.UP
+	else:
+		safe_direction = safe_direction.normalized()
+
+	var fragment_count := 3 if hit_player else 5
+	for index: int in range(fragment_count):
+		var fragment := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = 0.018 if hit_player else 0.025
+		mesh.height = mesh.radius * 2.0
+		fragment.mesh = mesh
+
+		var base_color := (
+			Color(0.50, 0.055, 0.035, 0.82)
+			if hit_player
+			else Color(0.46, 0.39, 0.29, 0.72)
+		)
+		fragment.material_override = _combat_fx_material(base_color)
+		root.add_child(fragment)
+
+		var lateral := Vector3(
+			randf_range(-0.35, 0.35),
+			randf_range(0.12, 0.55),
+			randf_range(-0.35, 0.35)
+		)
+		var destination := (
+			fragment.position
+			+ safe_direction * randf_range(0.10, 0.32)
+			+ lateral
+		)
+
+		var tween := root.create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(
+			fragment,
+			"position",
+			destination,
+			randf_range(0.18, 0.34)
+		)
+		tween.tween_property(
+			fragment,
+			"scale",
+			Vector3.ONE * 0.18,
+			randf_range(0.18, 0.34)
+		)
+
+	var cleanup := Timer.new()
+	cleanup.one_shot = true
+	cleanup.wait_time = 0.42
+	cleanup.timeout.connect(root.queue_free)
+	root.add_child(cleanup)
+	cleanup.start()
+
+
+func _spawn_major_explosion_presentation(
+	position: Vector3,
+	scale_factor: float,
+	leave_smoke: bool = true
+) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+
+	var effect_scale := clampf(scale_factor, 0.65, 3.0)
+
+	var root := Node3D.new()
+	root.name = "MajorExplosionPresentation"
+	root.global_position = position
+	add_child(root)
+	_register_combat_presentation_fx(root)
+
+	# Fast incandescent core.
+	var core := MeshInstance3D.new()
+	var core_mesh := SphereMesh.new()
+	core_mesh.radius = 0.28
+	core_mesh.height = 0.56
+	core.mesh = core_mesh
+	core.material_override = _combat_fx_material(
+		Color(1.0, 0.34, 0.035, 0.92),
+		4.2
+	)
+	root.add_child(core)
+
+	var core_tween := root.create_tween()
+	core_tween.set_parallel(true)
+	core_tween.tween_property(
+		core,
+		"scale",
+		Vector3.ONE * (4.2 * effect_scale),
+		0.16
+	)
+	core_tween.tween_property(
+		core.material_override,
+		"albedo_color",
+		Color(0.85, 0.16, 0.015, 0.0),
+		0.22
+	)
+
+	# Expanding dark smoke volumes. These are cheap meshes rather than particles.
+	if leave_smoke:
+		for index: int in range(6):
+			var smoke := MeshInstance3D.new()
+			var smoke_mesh := SphereMesh.new()
+			smoke_mesh.radius = randf_range(0.32, 0.58)
+			smoke_mesh.height = smoke_mesh.radius * 2.0
+			smoke.mesh = smoke_mesh
+			smoke.position = Vector3(
+				randf_range(-0.45, 0.45),
+				randf_range(0.10, 0.65),
+				randf_range(-0.45, 0.45)
+			) * effect_scale
+
+			var smoke_material := _combat_fx_material(
+				Color(0.10, 0.095, 0.085, 0.58)
+			)
+			smoke.material_override = smoke_material
+			root.add_child(smoke)
+
+			var smoke_tween := root.create_tween()
+			smoke_tween.set_parallel(true)
+			smoke_tween.tween_property(
+				smoke,
+				"position",
+				smoke.position + Vector3(
+					randf_range(-0.35, 0.35),
+					randf_range(1.4, 2.5) * effect_scale,
+					randf_range(-0.35, 0.35)
+				),
+				randf_range(1.35, 2.0)
+			)
+			smoke_tween.tween_property(
+				smoke,
+				"scale",
+				Vector3.ONE * randf_range(2.3, 3.8) * effect_scale,
+				randf_range(1.35, 2.0)
+			)
+			smoke_tween.tween_property(
+				smoke_material,
+				"albedo_color",
+				Color(0.08, 0.075, 0.07, 0.0),
+				2.0
+			)
+
+	# Short-lived light, no shadows.
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.34, 0.06)
+	light.light_energy = 5.2 * effect_scale
+	light.omni_range = 10.0 * effect_scale
+	light.shadow_enabled = false
+	root.add_child(light)
+
+	var light_tween := root.create_tween()
+	light_tween.tween_property(light, "light_energy", 0.0, 0.28)
+
+	# Directional chunks sell the blast without persistent rigid bodies.
+	var debris_count := 6
+	for index: int in range(debris_count):
+		var debris := MeshInstance3D.new()
+		var debris_mesh := BoxMesh.new()
+		debris_mesh.size = Vector3(
+			randf_range(0.05, 0.13),
+			randf_range(0.04, 0.10),
+			randf_range(0.08, 0.20)
+		) * effect_scale
+		debris.mesh = debris_mesh
+		debris.material_override = _combat_fx_material(
+			Color(0.20, 0.17, 0.13, 0.90)
+		)
+		root.add_child(debris)
+
+		var angle := randf_range(0.0, TAU)
+		var distance := randf_range(1.0, 2.5) * effect_scale
+		var destination := Vector3(
+			cos(angle) * distance,
+			randf_range(0.55, 1.8) * effect_scale,
+			sin(angle) * distance
+		)
+
+		var debris_tween := root.create_tween()
+		debris_tween.set_parallel(true)
+		debris_tween.tween_property(
+			debris,
+			"position",
+			destination,
+			randf_range(0.42, 0.72)
+		)
+		debris_tween.tween_property(
+			debris,
+			"rotation",
+			Vector3(
+				randf_range(-3.0, 3.0),
+				randf_range(-3.0, 3.0),
+				randf_range(-3.0, 3.0)
+			),
+			randf_range(0.42, 0.72)
+		)
+
+	var cleanup := Timer.new()
+	cleanup.one_shot = true
+	cleanup.wait_time = 2.2 if leave_smoke else 0.8
+	cleanup.timeout.connect(root.queue_free)
+	root.add_child(cleanup)
+	cleanup.start()
+
 
 func _ensure_combat_effects_manager() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -8881,6 +9147,11 @@ func explode_grenade(
 	add_child(flash)
 
 	_spawn_explosion_debris(explosion_position)
+	_spawn_major_explosion_presentation(
+		explosion_position,
+		1.0,
+		true
+	)
 
 	var shockwave := MeshInstance3D.new()
 	var ring_mesh := TorusMesh.new()
@@ -9274,6 +9545,7 @@ func show_shot_effect(
 	var effect_root := Node3D.new()
 	effect_root.name = "ShotEffect"
 	add_child(effect_root)
+	_register_combat_presentation_fx(effect_root)
 
 	var tracer := MeshInstance3D.new()
 	var line_mesh := ImmediateMesh.new()
@@ -9315,6 +9587,12 @@ func show_shot_effect(
 			(start_position - end_position).normalized(),
 			hit_player
 		)
+
+	_spawn_impact_dust(
+		end_position,
+		(start_position - end_position).normalized(),
+		hit_player
+	)
 
 	var impact := MeshInstance3D.new()
 	var impact_mesh := SphereMesh.new()
@@ -11283,6 +11561,12 @@ func show_vehicle_weapon_effect(
 			impact_scale
 		)
 
+	_spawn_major_explosion_presentation(
+		end,
+		clampf(impact_scale * 0.72, 0.70, 1.55),
+		false
+	)
+
 
 @rpc("authority", "call_local", "reliable")
 func show_vehicle_explosion(
@@ -11302,6 +11586,12 @@ func show_vehicle_explosion(
 			position,
 			10.0
 		)
+
+	_spawn_major_explosion_presentation(
+		position,
+		clampf(scale_factor * 1.25, 1.25, 2.8),
+		true
+	)
 
 
 @rpc("any_peer", "call_remote", "reliable")

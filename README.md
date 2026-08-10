@@ -1,64 +1,60 @@
-FRONTLINE: OBJECTIVE v10.6.0
-MAJOR UPGRADE — TRUE INVISIBLE ARCHITECTURE COLLISION
+FRONTLINE: OBJECTIVE v10.7.0
+MAJOR UPDATE — COMBAT PRESENTATION OVERHAUL
 
-WHAT CHANGED
+FOCUS
+This phase does not rewrite either map. It improves the visual response of
+combat while preserving the now-working Ruined City architecture collision.
 
-1. REMOVED THE LARGE TEMPORARY GRAY-BOX COVER PASS
-The v10.3/v10.5 Ruined City gray-box street/building cover geometry has been
-removed. The real imported buildings/ruins remain the visual architecture.
+BULLET IMPACTS
+- existing impact/tracer systems retained
+- additional lightweight impact debris/dust
+- different impact coloration for player hits vs world surfaces
+- short lifetimes
+- no rigid-body debris
 
-2. TRUE COLLISION FROM THE ACTUAL IMPORTED MESHES
-v10.6 no longer creates world-AABB box proxies for imported buildings.
+GRENADE EXPLOSIONS
+- brighter fast explosion core
+- expanding smoke volumes
+- short non-shadowing explosion light
+- directional debris chunks
+- existing shockwave/audio/debris systems preserved
 
-Instead, on BOTH dedicated servers and clients:
-- each substantial MeshInstance3D is inspected
-- Mesh.create_trimesh_shape() creates an invisible ConcavePolygonShape3D
-- a StaticBody3D is created
-- its global transform is set to the exact imported MeshInstance3D transform
-- collision layer/mask are explicitly 1
-- the temporary source scene is removed
+VEHICLE WEAPON IMPACTS
+- tank/heavy weapon impacts now get a compact explosion presentation
+- effect scales with existing impact_scale
 
-This means collision follows actual walls/ruins instead of giant rectangular
-blockers.
+VEHICLE DESTRUCTION
+- larger explosion presentation layered over existing vehicle explosion/fire
+- persistent physics debris is NOT added
 
-3. LARGE BACKDROP/TERRAIN MESHES ARE SKIPPED
-Tiny decorative meshes and extremely large combined/background meshes are not
-turned into collision. This avoids turning the entire city backdrop into one
-enormous physics surface.
+PERFORMANCE
+v10.7 introduces a hard client-side combat-presentation budget:
+42 temporary effect roots maximum.
 
-4. OUTER MAP BOUNDARIES ARE NOW INVISIBLE
-The four perimeter safety walls retain collision but no longer render gray
-box meshes.
+When the budget is exceeded, the oldest effect is removed first.
+Effects are visual-only and never execute on a headless server.
 
-SERVER LOGS
-On Ruined City startup, look for:
-Ruined City true mesh collision: RCMesh_WestRuins -> X shapes
-Ruined City true mesh collision: RCMesh_City -> X shapes
-Ruined City true mesh collision: RCMesh_Pillbox -> X shapes
-Ruined City authoritative TRUE architecture collision: X shapes
-
-TEST
-Walk directly into:
-- house exterior walls
-- ruined masonry walls
-- the pillbox
-- large structural ruins
-
-Then test door/window/opening areas. Because this now follows actual mesh
-triangles, usable openings should behave much better than box proxies.
+No new:
+- network snapshots
+- rigid bodies
+- shadow-casting explosion lights
+- permanent debris
+- expensive volumetric particle systems
 
 PRESERVED
 - Operation Black River
-- Ruined City objectives/sectors
-- Jeeps/tanks/planes
+- Operation Ashen Streets / Ruined City
+- true imported architecture collision from v10.6
+- Jeeps / Sherman / Spitfire / Bf 109
 - WWII soldiers
-- Allied Mk 2 / Axis grenades
-- weapon textures/models
-- bot routes
-- map-aware HUD/scoreboard
+- Allied Mk 2 and Axis grenades
+- existing weapon textures/models
+- bots
+- objectives/sectors
+- TAB priority
 - contextual E
 - F6/F8
 - --bots 0
 
-Build: 10.6.0
-Protocol: 350
+Build: 10.7.0
+Protocol: 351
