@@ -1,58 +1,70 @@
-FRONTLINE: OBJECTIVE v9.24.0
-BOT COMBAT INTELLIGENCE + COVER + VEHICLE AWARENESS
+FRONTLINE: OBJECTIVE v9.26.0
+WEAPON HANDLING + RELOAD/SWAP RELIABILITY
 
-VEHICLE AWARENESS
-Bots now periodically inspect active enemy vehicles.
-- enemy vehicles inside ~11m trigger an escape goal
-- tanks produce a larger retreat distance
-- destroyed/friendly vehicles are ignored
-- checks are cached for 650ms to keep server cost low
+DIRECT WEAPON KEYS
+1 = primary slot
+2 = secondary slot
 
-LOW-HEALTH COVER
-Bots at 42 HP or below attempt to use the existing server cover-position
-system when an enemy is present.
-- cover goal is cached for 1.8 seconds
-- avoids recalculating cover every frame
-- suppression cover still works
-- vehicle escape remains higher priority
+These are handled in the direct input path so focused UI Controls are less
+likely to swallow weapon selection during normal gameplay.
 
-GRENADE DISCIPLINE
-Bots now:
-- throw only from ~9–21m
-- check for friendly players within 6m of the intended impact point
-- use grenades slightly less frequently
-- wait longer before considering another throw
+QUICK SWITCH
+The existing weapon_switch action (Q in the current control scheme) now
+prefers the actual previously equipped weapon instead of blindly advancing
+through the slot array.
 
-This reduces obvious friendly-fire grenade behavior and grenade spam.
+This matters if more weapon slots are added later.
 
-COMBAT MOVEMENT
-Emergency vehicle escape / suppression / low-health cover goals are no longer
-overwritten by normal strafe/spacing movement in the same bot tick.
+RESPONSIVE LOCAL PRESENTATION
+Weapon models switch immediately on the local client while the server remains
+authoritative and confirms/corrects the selected slot.
 
-BOT ACCURACY
-Bot accuracy now receives small penalties while:
-- moving quickly
-- suppressed
+A short 110 ms debounce prevents duplicate key repeats/RPC spam.
 
-This makes firefights less robotic while retaining bot_skill scaling.
+RELOAD CANCELLATION
+Changing weapons cancels reload safely.
+
+Firing during a tactical reload:
+- if the magazine still contains rounds, the reload is cancelled and fire is
+  allowed
+- if the magazine is empty, the reload cannot be bypassed
+
+No ammunition is granted/lost because ammo state is stored before switching.
+
+EMPTY-MAG AUTO RELOAD
+If the server receives a fire request with:
+- magazine = 0
+- reserve > 0
+
+it starts the normal reload automatically.
+
+This avoids repeated dry-fire requests when the player is already trying to
+continue firing.
+
+RELOAD AUDIO
+Reload audio now only begins when a reload is actually possible.
+Weapon switching or firing-to-cancel also stops the local reload audio.
+
+VEHICLES
+Infantry weapon switching is ignored while seated in a vehicle.
 
 PERFORMANCE
-- vehicle checks only every ~650ms per bot
-- cover decisions cached ~1.8s
-- grenade safety scans happen only when a bot is actually considering a throw
-- no new pathfinding system
-- no physics bodies
-- no extra client networking
+No new rendering.
+No new physics.
+No continuous RPCs.
+Only tiny input-state/debounce logic.
 
 PRESERVED
-- --bots 0 / --bots=0 / --no-bots
-- v9.23.3 revive marker scope fix
-- team awareness/callouts
+- v9.25 TAB scoreboard priority
+- v9.24 bot combat intelligence
+- revive/team awareness
 - spatial audio
 - effect budgets
 - spawn safety
-- all vehicle/aircraft systems
+- destructible environment
+- all vehicles/aircraft
 - F6/F8
+- --bots 0 / --bots=0 / --no-bots
 
-Build: 9.24.0
+Build: 9.26.0
 Protocol: 341

@@ -192,6 +192,10 @@ var weapon_magazines: Array[int] = []
 var weapon_reserves: Array[int] = []
 var weapon_slot_teams: Array[int] = []
 var current_weapon_index := 0
+var previous_weapon_index := 1
+var local_weapon_switch_ready_ms := 0
+var server_weapon_switch_ready_ms := 0
+const WEAPON_SWITCH_DEBOUNCE_MS := 110
 var hit_marker: Label
 var hit_marker_until_ms := 0
 var muzzle_flash: MeshInstance3D
@@ -903,6 +907,21 @@ func _input(event: InputEvent) -> void:
 					get_viewport().set_input_as_handled()
 					return
 
+	# Direct weapon slots remain available even if UI focus changes.
+	if (
+		key_event.pressed
+		and not key_event.echo
+		and current_vehicle_id < 0
+	):
+		if key_code == KEY_1:
+			_local_request_weapon_index(0)
+			get_viewport().set_input_as_handled()
+			return
+		if key_code == KEY_2 and weapon_slots.size() > 1:
+			_local_request_weapon_index(1)
+			get_viewport().set_input_as_handled()
+			return
+
 	# U requests a server-validated safe recovery position.
 	if (
 		key_code == KEY_U
@@ -1303,6 +1322,12 @@ func _collect_and_send_input() -> void:
 		)
 
 	if not downed and Input.is_action_pressed("fire"):
+		if is_reloading and ammo_in_mag > 0:
+			is_reloading = false
+			reload_finish_ms = 0
+			if reload_audio != null and reload_audio.playing:
+				reload_audio.stop()
+
 		var camera := $Head/Camera3D as Camera3D
 		if camera != null:
 			var now: int = Time.get_ticks_msec()
@@ -1369,14 +1394,23 @@ func _collect_and_send_input() -> void:
 			)
 
 	if not downed and Input.is_action_just_pressed("reload"):
-		if (
-			reload_audio != null
-			and reload_audio.stream != null
-			and not reload_audio.playing
-		):
-			reload_audio.play()
-		if main_node != null:
-			main_node.request_player_reload.rpc_id(1, local_peer_id)
+		var reload_possible: bool = (
+			not is_reloading
+			and ammo_in_mag < _weapon_magazine_size()
+			and reserve_ammo > 0
+		)
+		if reload_possible:
+			if (
+				reload_audio != null
+				and reload_audio.stream != null
+				and not reload_audio.playing
+			):
+				reload_audio.play()
+			if main_node != null:
+				main_node.request_player_reload.rpc_id(
+					1,
+					local_peer_id
+				)
 
 	if not downed and Input.is_action_just_pressed("throw_grenade"):
 		var grenade_camera: Camera3D = $Head/Camera3D as Camera3D
@@ -1757,13 +1791,29 @@ func apply_player_snapshot(pos: Vector3, yaw: float, head_pitch: float, hp: int,
 			_show_spawn_menu()
 
 func server_fire(direction: Vector3) -> void:
-	if not multiplayer.is_server() or not alive or downed or is_reloading:
+	if not multiplayer.is_server() or not alive or downed:
+		return
+
+	var now: int = Time.get_ticks_msec()
+
+	# Fire cancels a reload only when there is still a chamber/magazine round
+	# available. Empty-mag reloads cannot be bypassed.
+	if is_reloading:
+		if ammo_in_mag > 0:
+			is_reloading = false
+			reload_finish_ms = 0
+		else:
+			return
+
+	if now < next_fire_time:
+		return
+
+	if ammo_in_mag <= 0:
+		if reserve_ammo > 0:
+			_server_start_reload()
 		return
 
 	_cancel_spawn_protection()
-	var now: int = Time.get_ticks_msec()
-	if now < next_fire_time or ammo_in_mag <= 0:
-		return
 
 	var origin: Vector3 = $Head.global_position
 	next_fire_time = now + _weapon_fire_interval_ms()
@@ -2128,13 +2178,21 @@ func _apply_weapon_index(index: int, rebuild_view: bool = true) -> void:
 	if current_weapon_index >= 0 and current_weapon_index < weapon_slots.size():
 		_store_current_weapon_ammo()
 
+	if safe_index != current_weapon_index:
+		previous_weapon_index = current_weapon_index
+
 	current_weapon_index = safe_index
 	aim_requested = false
 	is_aiming = false
+
+	# Swapping is an intentional reload cancel. Ammo is stored before changing
+	# slots, so cancelling never grants or loses ammunition.
+	is_reloading = false
+	reload_finish_ms = 0
+
 	weapon = weapon_slots[current_weapon_index]
 	ammo_in_mag = weapon_magazines[current_weapon_index]
 	reserve_ammo = weapon_reserves[current_weapon_index]
-	is_reloading = false
 
 	if rebuild_view and _is_local_player() and DisplayServer.get_name() != "headless":
 		_rebuild_first_person_weapon()
@@ -2142,26 +2200,69 @@ func _apply_weapon_index(index: int, rebuild_view: bool = true) -> void:
 		_refresh_external_weapon_model()
 	_refresh_first_person_arms_pose()
 
-func _local_request_weapon_switch() -> void:
+func _local_request_weapon_index(desired_index: int) -> void:
 	if weapon_slots.is_empty():
 		return
+	if not alive or downed:
+		return
+	if current_vehicle_id >= 0:
+		return
 
-	var desired_index: int = posmod(
-		current_weapon_index + 1,
-		weapon_slots.size()
+	var safe_index: int = clampi(
+		desired_index,
+		0,
+		weapon_slots.size() - 1
+	)
+	if safe_index == current_weapon_index:
+		return
+
+	var now: int = Time.get_ticks_msec()
+	if now < local_weapon_switch_ready_ms:
+		return
+
+	local_weapon_switch_ready_ms = (
+		now + WEAPON_SWITCH_DEBOUNCE_MS
 	)
 
-	# Change the local model immediately; the server remains authoritative
-	# and will confirm or correct the slot in the next snapshot.
-	_apply_weapon_index(desired_index, true)
+	# Immediate local presentation; server remains authoritative.
+	_apply_weapon_index(safe_index, true)
+
+	if selection_status != null:
+		selection_status.text = (
+			"WEAPON · %s · 1/2 DIRECT · Q QUICK SWITCH"
+			% _weapon_display_name()
+		)
+
+	if reload_audio != null and reload_audio.playing:
+		reload_audio.stop()
+
 	var main_node: Node = get_parent()
-	var local_peer_id: int = multiplayer.get_unique_id()
 	if main_node != null:
 		main_node.request_player_weapon.rpc_id(
 			1,
-			local_peer_id,
-			desired_index
+			multiplayer.get_unique_id(),
+			safe_index
 		)
+
+
+func _local_request_weapon_switch() -> void:
+	if weapon_slots.size() <= 1:
+		return
+
+	var desired_index: int = previous_weapon_index
+	if (
+		desired_index < 0
+		or desired_index >= weapon_slots.size()
+		or desired_index == current_weapon_index
+	):
+		desired_index = posmod(
+			current_weapon_index + 1,
+			weapon_slots.size()
+		)
+
+	_local_request_weapon_index(desired_index)
+
+
 
 func server_equip_battlefield_weapon(
 	slot_index: int,
@@ -2460,8 +2561,19 @@ func server_weapon_switch_request(desired_index: int) -> void:
 		return
 	if not alive or downed:
 		return
+	if current_vehicle_id >= 0:
+		return
 	if desired_index < 0 or desired_index >= weapon_slots.size():
 		return
+	if desired_index == current_weapon_index:
+		return
+
+	var now: int = Time.get_ticks_msec()
+	if now < server_weapon_switch_ready_ms:
+		return
+	server_weapon_switch_ready_ms = (
+		now + WEAPON_SWITCH_DEBOUNCE_MS
+	)
 
 	_apply_weapon_index(desired_index, false)
 	confirm_weapon_switch.rpc_id(peer_id, desired_index)
