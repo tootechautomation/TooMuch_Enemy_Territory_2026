@@ -53,27 +53,33 @@ const SCOUT_MARKSMAN: Resource = preload("res://data/weapons/scout_marksman.tres
 
 @export var weapon: Resource = SERVICE_RIFLE
 
-# v19 ET Gameplay Core: fast, momentum-friendly infantry movement.
-const WALK_SPEED := 8.25
-const SPRINT_SPEED := 10.4
-const CROUCH_SPEED := 4.8
-const JUMP_SPEED := 5.75
-const GROUND_ACCELERATION := 38.0
-const GROUND_DECELERATION := 26.0
-const AIR_ACCELERATION := 11.5
-const AIR_SPEED_CAP := 9.35
-const JUMP_BUFFER_MS := 150
-const COYOTE_TIME_MS := 95
+# v20 ETPro Competitive Movement Core.
+# Ratios are translated from ET GPL pmove: friction 6, accelerate 10,
+# airaccelerate 1, stopspeed 100 with base speed 320. Godot uses meters,
+# so absolute speed is calibrated to Frontline's map scale.
+const WALK_SPEED := 9.15
+const SPRINT_SPEED := 10.85
+const CROUCH_SPEED := 4.95
+const JUMP_SPEED := 6.15
+const ET_PMOVE_STEP := 0.008 # 125 Hz movement integration target.
+const ET_GROUND_FRICTION := 6.0
+const ET_GROUND_ACCELERATE := 10.0
+const ET_AIR_ACCELERATE := 1.0
+const ET_STOP_SPEED := 2.86
+const ET_MAX_SUBSTEPS := 8
+const JUMP_BUFFER_MS := 110
+const COYOTE_TIME_MS := 80
+const ET_JUMP_RETRIGGER_MS := 180
 const SNAPSHOT_LERP_SPEED := 20.0
 const ABILITY_COOLDOWN_MS := 12000
 const CLASS_POWER_MAX := 100.0
 const CLASS_POWER_REGEN_PER_SECOND := 8.5
 const SCOUT_SPOT_DURATION_MS := 8000
 const DEFAULT_FOV := 75.0
-const ADS_FOV := 62.0
-const SCOUT_ADS_FOV := 28.0
+const ADS_FOV := 60.0
+const SCOUT_ADS_FOV := 26.0
 const ADS_MOVE_MULTIPLIER := 0.86
-const ET_ZOOM_LERP_SPEED := 26.0
+const ET_ZOOM_LERP_SPEED := 34.0
 const ASSIST_WINDOW_MS := 10000
 const FALL_DAMAGE_START_SPEED := 12.0
 const FALL_DAMAGE_MAX_SPEED := 24.0
@@ -149,6 +155,8 @@ var jump_buffer_until_ms := 0
 var last_grounded_ms := 0
 var class_power := CLASS_POWER_MAX
 var class_power_last_update_ms := 0
+var et_pmove_accumulator := 0.0
+var et_next_jump_allowed_ms := 0
 var sprint_requested := false
 var crouch_requested := false
 var aim_requested := false
@@ -1580,6 +1588,108 @@ func _server_wall_safety_sweep(
 	)
 	return horizontal_motion * safe_fraction
 
+func _server_slide_planar_along_wall(
+	planar_velocity: Vector3,
+	horizontal_motion: Vector3
+) -> Vector3:
+	if horizontal_motion.length_squared() <= 0.000001:
+		return planar_velocity
+	var direction := horizontal_motion.normalized()
+	var probe_distance := horizontal_motion.length() + 0.48
+	var space_state := get_world_3d().direct_space_state
+	var best_distance := INF
+	var best_normal := Vector3.ZERO
+	for probe_height: float in [0.35, 0.95, 1.45]:
+		var origin := global_position + Vector3.UP * probe_height
+		var query := PhysicsRayQueryParameters3D.create(
+			origin,
+			origin + direction * probe_distance
+		)
+		query.exclude = [self]
+		query.collision_mask = 1
+		query.collide_with_bodies = true
+		query.collide_with_areas = false
+		var hit := space_state.intersect_ray(query)
+		if hit.is_empty():
+			continue
+		var hit_position := Vector3(hit.get("position", origin))
+		var distance := origin.distance_to(hit_position)
+		if distance < best_distance:
+			best_distance = distance
+			best_normal = Vector3(hit.get("normal", Vector3.ZERO))
+	if best_normal.length_squared() <= 0.000001:
+		return planar_velocity
+	best_normal.y = 0.0
+	if best_normal.length_squared() <= 0.000001:
+		return planar_velocity
+	best_normal = best_normal.normalized()
+	# Equivalent in spirit to ET PM_ClipVelocity: remove only the component
+	# pushing into the wall, preserving the tangent for fast wall/ruin slides.
+	var into_wall := planar_velocity.dot(best_normal)
+	if into_wall < 0.0:
+		return planar_velocity - best_normal * into_wall
+	return planar_velocity
+
+func _et_apply_ground_friction(planar_velocity: Vector3, step: float) -> Vector3:
+	var speed := planar_velocity.length()
+	if speed < 0.001:
+		return Vector3.ZERO
+	var control := maxf(speed, ET_STOP_SPEED)
+	var drop := control * ET_GROUND_FRICTION * step
+	var new_speed := maxf(0.0, speed - drop)
+	if new_speed <= 0.0:
+		return Vector3.ZERO
+	return planar_velocity * (new_speed / speed)
+
+func _et_accelerate(
+	planar_velocity: Vector3,
+	wish_direction: Vector3,
+	wish_speed: float,
+	acceleration: float,
+	step: float
+) -> Vector3:
+	if wish_direction.length_squared() <= 0.000001 or wish_speed <= 0.0:
+		return planar_velocity
+	var wishdir := wish_direction.normalized()
+	# Direct translation of ET GPL PM_Accelerate's q2-style projection:
+	# only the velocity component along wishdir limits additional acceleration.
+	var current_speed := planar_velocity.dot(wishdir)
+	var add_speed := wish_speed - current_speed
+	if add_speed <= 0.0:
+		return planar_velocity
+	var accel_speed := acceleration * step * wish_speed
+	accel_speed = minf(accel_speed, add_speed)
+	return planar_velocity + wishdir * accel_speed
+
+func _et_integrate_planar(
+	current_planar: Vector3,
+	wish_direction: Vector3,
+	wish_speed: float,
+	on_ground: bool,
+	step: float,
+	skip_ground_friction: bool
+) -> Vector3:
+	var planar := current_planar
+	if on_ground:
+		if not skip_ground_friction:
+			planar = _et_apply_ground_friction(planar, step)
+		planar = _et_accelerate(
+			planar,
+			wish_direction,
+			wish_speed,
+			ET_GROUND_ACCELERATE,
+			step
+		)
+	else:
+		planar = _et_accelerate(
+			planar,
+			wish_direction,
+			wish_speed,
+			ET_AIR_ACCELERATE,
+			step
+		)
+	return planar
+
 func _server_simulate(delta: float) -> void:
 	_server_check_out_of_bounds_recovery()
 	var now: int = Time.get_ticks_msec()
@@ -1596,8 +1706,9 @@ func _server_simulate(delta: float) -> void:
 		velocity = Vector3.ZERO
 		return
 
-	# v19 ET-style jump buffering/coyote time keeps movement responsive around
-	# steps, rubble and ledges without allowing flight or map-boundary exploits.
+	# v20 ET/ETPro movement: jump is resolved before ground friction, matching
+	# ET PM_WalkMove -> PM_CheckJump -> PM_AirMove behavior. This is what keeps
+	# horizontal momentum alive across a jump instead of "sticking" on takeoff.
 	if was_on_floor:
 		last_grounded_ms = now
 	if jump_requested:
@@ -1607,12 +1718,16 @@ func _server_simulate(delta: float) -> void:
 	var can_buffered_jump: bool = (
 		now <= jump_buffer_until_ms
 		and now - last_grounded_ms <= COYOTE_TIME_MS
+		and now >= et_next_jump_allowed_ms
 		and not crouch_requested
 	)
+	var jumped_this_tick := false
 	if can_buffered_jump:
 		velocity.y = JUMP_SPEED
 		jump_buffer_until_ms = 0
 		last_grounded_ms = 0
+		et_next_jump_allowed_ms = now + ET_JUMP_RETRIGGER_MS
+		jumped_this_tick = true
 
 	jump_requested = false
 	_apply_server_crouch(crouch_requested)
@@ -1657,29 +1772,46 @@ func _server_simulate(delta: float) -> void:
 		* Vector3(input_vector.x, 0.0, input_vector.y)
 	).normalized()
 
-	# v19 preserves horizontal momentum and permits controlled air steering.
-	# Ground movement remains authoritative, but no longer snaps velocity every
-	# tick, which is the key difference between tactical movement and ET-like
-	# strafe/jump flow.
+	# Fixed 125 Hz velocity integration. CharacterBody3D is moved once per
+	# Godot physics tick to preserve collision stability; the ET acceleration/
+	# friction math itself is sub-stepped at ETPro's competitive cadence.
+	et_pmove_accumulator = minf(
+		et_pmove_accumulator + delta,
+		ET_PMOVE_STEP * float(ET_MAX_SUBSTEPS)
+	)
 	var planar_velocity := Vector3(velocity.x, 0.0, velocity.z)
-	var desired_velocity := direction * move_speed
-	if is_on_floor():
-		var ground_rate := (
-			GROUND_ACCELERATION if direction.length_squared() > 0.001
-			else GROUND_DECELERATION
+	var substeps := 0
+	while (
+		et_pmove_accumulator >= ET_PMOVE_STEP
+		and substeps < ET_MAX_SUBSTEPS
+	):
+		var ground_for_step := is_on_floor() and not jumped_this_tick
+		planar_velocity = _et_integrate_planar(
+			planar_velocity,
+			direction,
+			move_speed,
+			ground_for_step,
+			ET_PMOVE_STEP,
+			jumped_this_tick
 		)
-		planar_velocity = planar_velocity.move_toward(
-			desired_velocity,
-			ground_rate * delta
+		et_pmove_accumulator -= ET_PMOVE_STEP
+		substeps += 1
+
+	# If the host physics rate is unusually high, don't starve movement waiting
+	# for a full 8 ms quantum; integrate the small remainder once.
+	if substeps == 0 and et_pmove_accumulator > 0.0:
+		var remainder := et_pmove_accumulator
+		var ground_for_remainder := is_on_floor() and not jumped_this_tick
+		planar_velocity = _et_integrate_planar(
+			planar_velocity,
+			direction,
+			move_speed,
+			ground_for_remainder,
+			remainder,
+			jumped_this_tick
 		)
-	else:
-		if direction.length_squared() > 0.001:
-			planar_velocity = planar_velocity.move_toward(
-				direction * AIR_SPEED_CAP,
-				AIR_ACCELERATION * delta
-			)
-		if planar_velocity.length() > AIR_SPEED_CAP:
-			planar_velocity = planar_velocity.normalized() * AIR_SPEED_CAP
+		et_pmove_accumulator = 0.0
+
 	velocity.x = planar_velocity.x
 	velocity.z = planar_velocity.z
 	previous_vertical_velocity = velocity.y
@@ -1699,15 +1831,13 @@ func _server_simulate(delta: float) -> void:
 			0.0,
 			1.0
 		)
-		var probe_ratio := _server_forward_wall_probe(
-			intended_horizontal
-		)
-		var movement_ratio := minf(
-			sweep_ratio,
-			probe_ratio
-		)
-		velocity.x *= movement_ratio
-		velocity.z *= movement_ratio
+		if sweep_ratio < 0.995:
+			var clipped_planar := _server_slide_planar_along_wall(
+				Vector3(velocity.x, 0.0, velocity.z),
+				intended_horizontal
+			)
+			velocity.x = clipped_planar.x
+			velocity.z = clipped_planar.z
 
 	move_and_slide()
 
@@ -2050,7 +2180,16 @@ func server_fire(direction: Vector3) -> void:
 				var local_hit_height: float = (
 					effect_end.y - target.global_position.y
 				)
-				was_headshot = local_hit_height >= 0.62
+				# v20 competitive "real head" pass: classify against the replicated
+				# Head node itself instead of a broad fixed upper-body cutoff. This
+				# automatically follows standing/crouching head height.
+				var target_head := target.get_node_or_null("Head") as Node3D
+				if target_head != null:
+					was_headshot = (
+						absf(effect_end.y - target_head.global_position.y) <= 0.24
+					)
+				else:
+					was_headshot = local_hit_height >= 0.62
 				var damage_amount: int = _weapon_damage()
 				if was_headshot:
 					damage_amount = int(round(
@@ -3931,9 +4070,17 @@ func ability_cooldown_remaining_ms() -> int:
 	if not multiplayer.is_server():
 		return replicated_ability_cooldown_ms
 	_update_class_power()
-	if class_power >= CLASS_POWER_MAX:
+	var required := _class_ability_power_cost()
+	if class_power >= required:
 		return maxi(0, next_ability_time - Time.get_ticks_msec())
-	return int(ceil((CLASS_POWER_MAX - class_power) / CLASS_POWER_REGEN_PER_SECOND * 1000.0))
+	var regen_rate := CLASS_POWER_REGEN_PER_SECOND
+	var main := get_parent()
+	if (
+		main != null
+		and int(main.get("command_post_control")) == team
+	):
+		regen_rate *= 1.15
+	return int(ceil((required - class_power) / regen_rate * 1000.0))
 
 func spotted_remaining_ms() -> int:
 	if not multiplayer.is_server():
@@ -4644,9 +4791,16 @@ func _update_class_power(now_ms: int = -1) -> void:
 		return
 	var elapsed := maxf(0.0, float(now - class_power_last_update_ms) / 1000.0)
 	class_power_last_update_ms = now
+	var regen_rate := CLASS_POWER_REGEN_PER_SECOND
+	var main := get_parent()
+	if (
+		main != null
+		and int(main.get("command_post_control")) == team
+	):
+		regen_rate *= 1.15
 	class_power = minf(
 		CLASS_POWER_MAX,
-		class_power + CLASS_POWER_REGEN_PER_SECOND * elapsed
+		class_power + regen_rate * elapsed
 	)
 
 func class_power_percent() -> int:
@@ -4668,16 +4822,32 @@ func _ability_name() -> String:
 		_:
 			return "Ability"
 
+func _class_ability_power_cost() -> float:
+	match player_class:
+		PlayerClass.SOLDIER:
+			return 75.0
+		PlayerClass.MEDIC:
+			return 45.0
+		PlayerClass.ENGINEER:
+			return 55.0
+		PlayerClass.FIELD_OPS:
+			return 100.0
+		PlayerClass.SCOUT:
+			return 70.0
+		_:
+			return 100.0
+
 func server_ability_request() -> void:
 	if not multiplayer.is_server() or not alive or downed:
 		return
 	var now: int = Time.get_ticks_msec()
 	_update_class_power(now)
-	if now < next_ability_time or class_power < CLASS_POWER_MAX:
+	var power_cost := _class_ability_power_cost()
+	if now < next_ability_time or class_power < power_cost:
 		return
-	class_power = 0.0
-	# Only a short anti-spam lock remains; the visible recharge is now the
-	# shared ET-style class power meter rather than disconnected cooldowns.
+	class_power = maxf(0.0, class_power - power_cost)
+	# Short anti-spam lock only; class actions are governed primarily by the
+	# persistent ET-style charge resource and their per-class power cost.
 	next_ability_time = now + 350
 	var main: Node = get_parent()
 	if main == null:
@@ -9301,6 +9471,16 @@ func _update_interaction_prompt() -> void:
 	interaction_prompt.visible = not prompt_text.is_empty()
 
 
+func _hud_class_charge_percent() -> int:
+	if multiplayer.is_server():
+		return class_power_percent()
+	var required := _class_ability_power_cost()
+	if replicated_ability_cooldown_ms <= 0:
+		return int(round(maxf(required, 100.0)))
+	var remaining_seconds := float(replicated_ability_cooldown_ms) / 1000.0
+	var estimated := required - remaining_seconds * CLASS_POWER_REGEN_PER_SECOND
+	return clampi(int(round(estimated)), 0, 100)
+
 func _update_hud() -> void:
 	if hud == null:
 		return
@@ -9481,7 +9661,12 @@ func _update_hud() -> void:
 			)
 
 	if class_mode_label != null:
-		var ability_state := "READY" if replicated_ability_cooldown_ms <= 0 else "%.1fs" % (float(replicated_ability_cooldown_ms) / 1000.0)
+		var charge_percent := _hud_class_charge_percent()
+		var ability_state := (
+			"READY · %d%%" % charge_percent
+			if replicated_ability_cooldown_ms <= 0
+			else "CHARGE %d%%" % charge_percent
+		)
 		var active_mode := ""
 		if replicated_heavy_fire_ms > 0:
 			active_mode = " · HEAVY FIRE %.1fs" % (float(replicated_heavy_fire_ms) / 1000.0)
@@ -9627,10 +9812,11 @@ func _update_hud() -> void:
 		replicated_ability_cooldown_ms
 	) / 1000.0
 	var ability_name: String = _ability_name()
+	var charge_percent := _hud_class_charge_percent()
 	var ability_state := (
-		"READY"
+		"READY · %d%%" % charge_percent
 		if replicated_ability_cooldown_ms <= 0
-		else "%.1fs" % cooldown
+		else "CHARGE %d%%" % charge_percent
 	)
 	hud.text = "%s | %s | %s\n%s · %s · Stamina %d%%\nHP %d  Ammo %d/%d  %s [%d/%d]  Grenades %d  Smoke %d  %s\nLoadout: %s + Service Pistol\n%s\n%s  Time %02d:%02d\nClass: %s  XP %d (%s)  Q: %s [%s]  RMB: aim/zoom  G: grenade  X: switch  E: interact  M: spawn menu  K: map  MMB: ping  B: smoke  C: barricade  V: rally  F: freecam\nBlue=Attackers  Red=Defenders  Accent=Class" % [
 		player_name,
