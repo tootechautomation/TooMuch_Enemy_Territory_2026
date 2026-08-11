@@ -581,6 +581,11 @@ func _build_imported_first_person_weapon(
 			pickup_slot
 		)
 	)
+	# v22.1 regression guard: Axis primary must resolve through the external
+	# weapon registry (MP40). Never silently present the generic Allied/service
+	# rifle as the Axis primary when the registered MP40 is available.
+	if selected_scene == null and visual_team == 1 and not is_pistol:
+		push_warning("Axis MP40 registry scene unavailable; using legacy primary fallback")
 	if selected_scene == null:
 		selected_scene = fp_pistol_scene if is_pistol else fp_rifle_scene
 	if selected_scene == null:
@@ -2431,6 +2436,11 @@ func _configure_class_loadout(
 
 	if weapon_slot_teams.size() != weapon_slots.size():
 		weapon_slot_teams = [team, team]
+	# Class/team loadouts are native team weapons. Battlefield pickups overwrite
+	# this later per slot, but a respawn/class rebuild must restore Axis -> MP40
+	# and Allies -> Thompson visual ownership.
+	if reset_ammunition:
+		weapon_slot_teams = [team, team]
 
 	current_weapon_index = clampi(
 		current_weapon_index,
@@ -2438,6 +2448,9 @@ func _configure_class_loadout(
 		weapon_slots.size() - 1
 	)
 	_apply_weapon_index(current_weapon_index, rebuild_view)
+	if rebuild_view:
+		_clear_external_weapon_model()
+		_refresh_external_weapon_model()
 
 func _initialize_loadout() -> void:
 	current_weapon_index = 0
