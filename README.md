@@ -1,77 +1,53 @@
-Frontline: Objective v21.0.0 — ET CLASS RHYTHM / TRACKING COMBAT
-Network Protocol 363
+Frontline: Objective v22.0.0 — ET FIRETEAMS / TEAM COHESION
+Network Protocol 364
 
-SOURCE OF TRUTH
-Built directly on the approved v20 ETPro Competitive Movement Core overlay.
-v20 movement physics are intentionally preserved rather than retuned.
+PURPOSE
+Build on the approved v20 movement and v21 class/combat rhythm by making small-team
+cooperation feel more like Enemy Territory fireteams without adding another strategic
+map layer.
 
-MEDIC
-- Direct revive range increased from 2.8m to 3.35m.
-- Interact cadence reduced substantially for faster syringe-like revive response.
-- Revived players return at 52% class health (minimum 55 HP).
-- Medic ability is now a cheap repeatable medical-support action (28 charge).
-- Ability drops a health supply pack and can immediately heal one nearby living teammate.
-- Crouch + ability preserves the v14 persistent aid-station deployment.
-- Revive remains a deliberate direct teammate interaction rather than a mass revive pulse.
+FIRETEAMS
+- A human tactical ping now establishes/refreshes a lightweight fireteam around that player.
+- Up to 5 nearby allied bots join the human leader (6 members including leader).
+- Human teammates are never forcibly reassigned.
+- Existing v15 tactical orders preferentially assign the leader's fireteam.
+- Order markers report FT member count.
+- Between explicit orders, assigned bots regroup toward their human leader when they drift
+  beyond the cohesion radius.
+- Medic casualty priority still overrides fireteam regrouping.
+- Engineer high-urgency objective priority still overrides tactical orders.
+- Field Ops, Soldier and Scout retain their existing class logic.
 
-FIELD OPS
-- Normal ability use = fast ammo support (30 charge).
-- Mouse2 + ability = full-charge aimed artillery (100 charge).
-- Normal support toss creates ammunition without forcing artillery cooldown.
-- Crouch + normal ability preserves the v14 persistent ammo-crate deployment.
+TEAM COHESION
+- Mixed-class fireteams operating together can periodically reward the leader with small
+  cohesion XP.
+- Reward requires at least 3 nearby living members and at least 2 classes.
+- Reward is throttled to prevent passive XP farming.
+- No persistent world nodes are created for fireteam membership.
 
-ENGINEER
-- Fortify ability cost reduced to 50 charge.
-- Bridge/objective construction progresses 2 units per interaction instead of 1.
-- Defuse progress advances 2 units per interaction instead of 1.
-- Existing dynamite, repair, barricade and frontline-fortification systems are preserved.
-
-SOLDIER / SCOUT
-- Existing Heavy Fire and Sensor roles preserved.
-- Existing class-charge behavior from v20 remains.
-
-TRACKING COMBAT
-- Moving spread reduced to 72% of prior resource values.
-- Hip spread reduced to 82% of prior resource values.
-- Camera recoil greatly reduced so sustained SMG/rifle tracking during strafing is viable.
-- Weapon-model kick remains for readable firing feedback.
-- v20 real-head hit classification is preserved.
-
-REINFORCEMENT RHYTHM
-- Base reinforcement wave changed from 10s to 14s.
-- Command Post/forward wave bonus increased from 2.0s to 2.5s.
-- Goal: more recognizable team respawn pushes and less constant player trickle.
-
-CONTROLS / CLASS SUPPORT
-- Medic: Ability = quick medical support; Crouch+Ability = persistent aid station.
-- Field Ops: Ability = ammo; Mouse2+Ability = artillery; Crouch+Ability = ammo crate.
-- Engineer: Interact remains primary objective action.
-- Existing M class menu, TAB scoreboard, zoom, grenades, vehicles and objective controls remain.
+HUD
+- Existing ET route/status line now displays FIRETEAM LEAD / FIRETEAM membership when active.
+- Compass/objective status includes fireteam state.
+- Existing tactical order and battlefield-operation presentation remains.
 
 PRESERVATION
-- v20 ETPro movement constants and movement functions preserved.
-- No map/environment edits.
-- No spawn coordinate/deployment edits.
-- No asset removal/replacement.
-- No vehicle/objective system removal.
-- Existing --bots 0, --bots=0 and --no-bots support preserved.
-- v13-v20 layers remain present.
+- v20 ETPro movement physics unchanged.
+- v21 Medic/Field Ops/Engineer/combat/reinforcement tuning unchanged.
+- No environment, map geometry, spawn coordinate, vehicle, weapon model, GLB or texture edits.
+- Safe initial human deployment preserved.
+- Existing --bots 0, --bots=0 and --no-bots behavior preserved.
 
 TEST
-1. Confirm v20 movement still feels unchanged.
-2. Medic: approach a downed teammate and revive using INTERACT.
-3. Medic: use repeated health support during a moving firefight.
-4. Medic: crouch+ability and verify aid-station deployment still works.
-5. Field Ops: normal ability should drop ammo without artillery.
-6. Field Ops: Mouse2+ability should call artillery.
-7. Field Ops: crouch+normal ability should preserve persistent ammo-crate deployment.
-8. Engineer: bridge construction and defuse should feel noticeably quicker.
-9. Track strafing enemies with automatic weapons and judge camera kick/spread.
-10. Die with teammates and verify the 14s reinforcement cadence produces group pushes.
-11. Regression-test objectives, bots, vehicles, safe initial spawning and v13-v20 systems.
+1. Spawn with bots and issue a tactical ping.
+2. Confirm the ping reports an FT count and only a small nearby group responds.
+3. Move away after the order expires and see whether fireteam bots regroup toward you.
+4. Ping another objective and confirm the same fireteam preferentially responds.
+5. Verify Medic bots still break formation for wounded/downed teammates.
+6. Verify Engineers still prioritize urgent construction/dynamite/defuse work.
+7. Verify HUD/compass reports fireteam state without covering the scoreboard.
+8. Regression-test v20 movement, v21 class support, reinforcement waves, safe spawn,
+   objectives, vehicles, deployables and bot-disable CLI options.
 
 VALIDATION LIMITATION
-The supplied release is an overlay rather than a complete standalone Godot project.
-No Godot executable is installed in the artifact runtime, so full engine parse/launch
-validation cannot be performed here. Structural, preservation and ZIP integrity checks
-were performed.
+This package remains the source-of-truth overlay, not the full standalone Godot project.
+Static structural checks, preservation hashes and ZIP integrity were performed.

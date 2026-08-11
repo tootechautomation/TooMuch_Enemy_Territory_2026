@@ -2988,6 +2988,10 @@ func _update_objective_compass() -> void:
 		)
 		if not order_text.is_empty():
 			tactical_suffix = " · %s" % order_text
+	if main_node.has_method("fireteam_status_text"):
+		var fireteam_text := str(main_node.call("fireteam_status_text", self))
+		if not fireteam_text.is_empty():
+			tactical_suffix += " · %s" % fireteam_text
 	compass_label.text = "%s OBJECTIVE %dm%s" % [arrow, distance, tactical_suffix]
 
 func confirm_hit() -> void:
@@ -5037,6 +5041,10 @@ func _bot_class_tactical_goal(main: Node) -> Vector3:
 			if accept_order and global_position.distance_to(Vector3(command_goal)) > 2.5:
 				anchor = Vector3(command_goal)
 				has_tactical_order = true
+	if not has_tactical_order and main.has_method("fireteam_leader_goal"):
+		var leader_goal: Variant = main.call("fireteam_leader_goal", self)
+		if leader_goal is Vector3:
+			anchor = Vector3(leader_goal)
 
 	match player_class:
 		PlayerClass.MEDIC:
@@ -7906,9 +7914,13 @@ func _update_et_style_hud(main: Node, names: Array) -> void:
 			squad_order = str(
 				main.call("squad_order_text", team)
 			)
-		et_route_hint_label.text = "%s · ORDER: %s" % [
+		var fireteam_text := ""
+		if main.has_method("fireteam_status_text"):
+			fireteam_text = str(main.call("fireteam_status_text", self))
+		et_route_hint_label.text = "%s · ORDER: %s%s" % [
 			route_text,
-			squad_order
+			squad_order,
+			(" · %s" % fireteam_text if not fireteam_text.is_empty() else "")
 		]
 
 	et_team_label.text = "%s · %s" % [

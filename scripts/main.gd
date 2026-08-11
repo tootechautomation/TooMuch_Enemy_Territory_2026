@@ -243,8 +243,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "21.0.0"
-const NETWORK_PROTOCOL := 363
+const BUILD_VERSION := "22.0.0"
+const NETWORK_PROTOCOL := 364
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -270,6 +270,10 @@ const SQUAD_ORDER_LIFETIME_MS := 14000
 const SQUAD_ORDER_MAX_ASSIGNEES := 4
 const SQUAD_ORDER_ASSIGN_RADIUS := 38.0
 const SQUAD_ORDER_ARRIVAL_RADIUS := 8.5
+const FIRETEAM_MAX_MEMBERS := 6
+const FIRETEAM_JOIN_RADIUS := 32.0
+const FIRETEAM_COHESION_RADIUS := 11.0
+const FIRETEAM_SUPPORT_XP_INTERVAL_MS := 9000
 const FIELD_EMPLACEMENT_COUNT := 2
 const SUPPLY_DEPOT_CAPTURE_SECONDS := 10.0
 const SUPPLY_DEPOT_RADIUS := 5.2
@@ -355,6 +359,9 @@ var squad_order_revision := 0
 var squad_tactical_orders: Dictionary = {}
 var team_tactical_order_display: Dictionary = {}
 var squad_order_next_id := 1
+var player_fireteam: Dictionary = {}
+var fireteam_leader_by_team: Dictionary = {}
+var fireteam_support_next_xp_ms: Dictionary = {}
 var squad_claim_reset_ms := 0
 var player_teams: Dictionary = {}
 var player_names: Dictionary = {}
@@ -7314,6 +7321,119 @@ func team_callout(
 	)
 
 
+func _server_fireteam_members(team_id: int, leader_id: int) -> Array[int]:
+	var result: Array[int] = []
+	for peer_value: Variant in players.keys():
+		var peer_id := int(peer_value)
+		var actor: Node3D = players.get(peer_id) as Node3D
+		if actor == null or int(actor.get("team")) != team_id:
+			continue
+		if int(player_fireteam.get(peer_id, -1)) == leader_id:
+			result.append(peer_id)
+	return result
+
+func _server_ensure_fireteam(leader: Node3D) -> Array[int]:
+	var result: Array[int] = []
+	if not multiplayer.is_server() or leader == null:
+		return result
+	var team_id := int(leader.get("team"))
+	var leader_id := int(leader.get("peer_id"))
+	player_fireteam[leader_id] = leader_id
+	fireteam_leader_by_team[team_id] = leader_id
+	result.append(leader_id)
+	var candidates: Array[Dictionary] = []
+	for player_value: Variant in players.values():
+		var actor := player_value as Node3D
+		if actor == null or actor == leader:
+			continue
+		if int(actor.get("team")) != team_id:
+			continue
+		if not bool(actor.get("alive")) or bool(actor.get("downed")):
+			continue
+		var distance := actor.global_position.distance_to(leader.global_position)
+		if distance > FIRETEAM_JOIN_RADIUS:
+			continue
+		# Humans are never forcibly reassigned; nearby bots fill the fireteam.
+		if not bool(actor.get("is_bot")):
+			continue
+		candidates.append({
+			"id": int(actor.get("peer_id")),
+			"distance": distance
+		})
+	candidates.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a["distance"]) < float(b["distance"])
+	)
+	for candidate: Dictionary in candidates:
+		if result.size() >= FIRETEAM_MAX_MEMBERS:
+			break
+		var member_id := int(candidate["id"])
+		player_fireteam[member_id] = leader_id
+		result.append(member_id)
+	return result
+
+func fireteam_status_text(actor: Node3D) -> String:
+	if actor == null:
+		return ""
+	var peer_id := int(actor.get("peer_id"))
+	var leader_id := int(player_fireteam.get(peer_id, -1))
+	if leader_id < 0:
+		return ""
+	var team_id := int(actor.get("team"))
+	var count := _server_fireteam_members(team_id, leader_id).size()
+	if peer_id == leader_id:
+		return "FIRETEAM LEAD · %d" % count
+	return "FIRETEAM · %d" % count
+
+func fireteam_leader_goal(actor: Node3D) -> Variant:
+	if actor == null:
+		return null
+	var actor_id := int(actor.get("peer_id"))
+	var leader_id := int(player_fireteam.get(actor_id, -1))
+	if leader_id < 0 or leader_id == actor_id or not players.has(leader_id):
+		return null
+	var leader: Node3D = players[leader_id] as Node3D
+	if (
+		leader == null
+		or not bool(leader.get("alive"))
+		or bool(leader.get("downed"))
+	):
+		return null
+	if actor.global_position.distance_to(leader.global_position) <= FIRETEAM_COHESION_RADIUS:
+		return null
+	return leader.global_position
+
+func _update_fireteam_cohesion_rewards() -> void:
+	if not multiplayer.is_server():
+		return
+	var now := Time.get_ticks_msec()
+	for team_value: Variant in fireteam_leader_by_team.keys():
+		var team_id := int(team_value)
+		var leader_id := int(fireteam_leader_by_team.get(team_id, -1))
+		if not players.has(leader_id):
+			continue
+		var leader: Node3D = players[leader_id] as Node3D
+		if leader == null or not bool(leader.get("alive")):
+			continue
+		if now < int(fireteam_support_next_xp_ms.get(leader_id, 0)):
+			continue
+		var nearby_classes: Dictionary = {}
+		var nearby := 0
+		for member_id: int in _server_fireteam_members(team_id, leader_id):
+			if not players.has(member_id):
+				continue
+			var member: Node3D = players[member_id] as Node3D
+			if member == null or not bool(member.get("alive")):
+				continue
+			if member.global_position.distance_to(leader.global_position) > FIRETEAM_COHESION_RADIUS:
+				continue
+			nearby += 1
+			nearby_classes[int(member.get("player_class"))] = true
+		# Reward actual mixed-class cooperation, not simply bot clustering.
+		if nearby >= 3 and nearby_classes.size() >= 2:
+			leader.call("add_xp", 2, "fireteam cohesion")
+			fireteam_support_next_xp_ms[leader_id] = now + FIRETEAM_SUPPORT_XP_INTERVAL_MS
+
 @rpc("any_peer", "call_remote", "reliable")
 func request_squad_ping(
 	requested_peer_id: int,
@@ -7350,7 +7470,10 @@ func request_squad_ping(
 				hit.get("position", end_position)
 			)
 
+	var fireteam_members := _server_ensure_fireteam(player)
 	var order_label := _server_issue_tactical_order(player, end_position)
+	if fireteam_members.size() > 1:
+		order_label = "%s · FT%d" % [order_label, fireteam_members.size()]
 	show_squad_ping.rpc(
 		int(player.get("team")),
 		end_position,
@@ -7484,9 +7607,16 @@ func _server_issue_tactical_order(issuer: Node3D, world_position: Vector3) -> St
 		var order_distance := candidate.global_position.distance_to(world_position)
 		if minf(issuer_distance, order_distance) > SQUAD_ORDER_ASSIGN_RADIUS:
 			continue
+		var candidate_id := int(candidate.get("peer_id"))
+		var same_fireteam := (
+			int(player_fireteam.get(candidate_id, -1)) == issuer_id
+		)
 		candidates.append({
-			"id": int(candidate.get("peer_id")),
-			"score": issuer_distance * 0.65 + order_distance * 0.35
+			"id": candidate_id,
+			"score": (
+				issuer_distance * 0.65 + order_distance * 0.35
+				- (18.0 if same_fireteam else 0.0)
+			)
 		})
 	candidates.sort_custom(
 		func(a: Dictionary, b: Dictionary) -> bool:
@@ -7494,7 +7624,7 @@ func _server_issue_tactical_order(issuer: Node3D, world_position: Vector3) -> St
 	)
 	var assigned: Array[int] = []
 	for candidate: Dictionary in candidates:
-		if assigned.size() >= SQUAD_ORDER_MAX_ASSIGNEES:
+		if assigned.size() >= maxi(SQUAD_ORDER_MAX_ASSIGNEES, FIRETEAM_MAX_MEMBERS):
 			break
 		assigned.append(int(candidate["id"]))
 
@@ -7529,6 +7659,7 @@ func _update_squad_command_system() -> void:
 	if not multiplayer.is_server():
 		return
 	var now := Time.get_ticks_msec()
+	_update_fireteam_cohesion_rewards()
 	_cleanup_vehicle_designations(now)
 	var remove_ids: Array[int] = []
 	for order_id_value: Variant in squad_tactical_orders.keys():
@@ -11809,6 +11940,9 @@ func _reset_round() -> void:
 	squad_shared_targets.clear()
 	squad_target_claims.clear()
 	squad_tactical_orders.clear()
+	player_fireteam.clear()
+	fireteam_leader_by_team.clear()
+	fireteam_support_next_xp_ms.clear()
 	team_tactical_order_display.clear()
 	squad_order_revision += 1
 	vehicle_designations.clear()
