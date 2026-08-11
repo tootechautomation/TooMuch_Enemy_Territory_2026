@@ -243,8 +243,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "20.0.0"
-const NETWORK_PROTOCOL := 362
+const BUILD_VERSION := "21.0.0"
+const NETWORK_PROTOCOL := 363
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -253,12 +253,12 @@ var playable_world_initializing := false
 const ROUND_RESTART_SECONDS := 10.0
 const BOT_PEER_ID_START := 10000
 const MATCH_LENGTH_SECONDS := 600.0
-const SPAWN_WAVE_SECONDS := 10.0
+const SPAWN_WAVE_SECONDS := 14.0
 const DYNAMITE_FUSE_SECONDS := 8.0
 const INITIAL_TEAM_TICKETS := 80
 const COMMAND_POST_CAPTURE_SECONDS := 12.0
 const COMMAND_POST_RADIUS := 5.5
-const FORWARD_SPAWN_WAVE_BONUS := 2.0
+const FORWARD_SPAWN_WAVE_BONUS := 2.5
 const MAX_BARRICADES_PER_ENGINEER := 2
 const COMMAND_POST_STATION_INTERVAL := 1.0
 const ARTILLERY_WARNING_SECONDS := 2.8
@@ -8990,7 +8990,7 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 				build_site.global_position,
 				14.0
 			)
-			var build_amount := 1
+			var build_amount := 2
 			if vehicle_bonus >= 0.08:
 				build_amount += 1
 
@@ -9035,7 +9035,7 @@ func server_engineer_interact(engineer: Node3D) -> bool:
 		return arm_dynamite(engineer_id)
 
 	if dynamite_armed:
-		defuse_progress = mini(defuse_required, defuse_progress + 1)
+		defuse_progress = mini(defuse_required, defuse_progress + 2)
 		engineer.add_xp(5, "defusing")
 		if defuse_progress >= defuse_required:
 			dynamite_armed = false

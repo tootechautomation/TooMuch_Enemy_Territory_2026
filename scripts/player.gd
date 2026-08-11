@@ -90,7 +90,7 @@ const STAMINA_REGEN_DELAY_MS := 900
 const SUPPRESSION_DURATION_MS := 1800
 const HEAVY_FIRE_DURATION_MS := 9000
 const MEDIC_REVIVE_PULSE_RADIUS := 12.0
-const REVIVE_RANGE := 2.8
+const REVIVE_RANGE := 3.35
 const BLEEDOUT_MS := 15000
 const STANDING_HEAD_Y := 0.65
 const CROUCH_HEAD_Y := 0.12
@@ -1462,7 +1462,7 @@ func _collect_and_send_input() -> void:
 
 	if Input.is_action_pressed("interact"):
 		interact_accumulator += get_physics_process_delta_time()
-		if interact_accumulator >= 0.45:
+		if interact_accumulator >= 0.24:
 			interact_accumulator = 0.0
 			if main_node != null:
 				main_node.request_player_interact.rpc_id(1, local_peer_id)
@@ -2349,10 +2349,10 @@ func _weapon_range_meters() -> float:
 	return _resource_float(weapon, "range_meters", 100.0)
 
 func _weapon_moving_spread() -> float:
-	return _resource_float(weapon, "moving_spread_degrees", 1.5)
+	return _resource_float(weapon, "moving_spread_degrees", 1.5) * 0.72
 
 func _weapon_hip_spread() -> float:
-	return _resource_float(weapon, "hip_spread_degrees", 0.75)
+	return _resource_float(weapon, "hip_spread_degrees", 0.75) * 0.82
 
 func _weapon_recoil_degrees() -> float:
 	return _resource_float(weapon, "recoil_degrees", 0.5)
@@ -3340,7 +3340,7 @@ func server_revive(reviver_id: int = 0) -> void:
 		return
 	downed = false
 	_register_visual_revive()
-	health = maxi(45, int(_class_health(player_class) * 0.4))
+	health = maxi(55, int(_class_health(player_class) * 0.52))
 	bleedout_finish_ms = 0
 	if get_parent().players.has(reviver_id):
 		get_parent().players[reviver_id].add_xp(15, "revive")
@@ -4023,7 +4023,7 @@ func server_interact_request() -> void:
 	var now := Time.get_ticks_msec()
 	if now < next_interact_time:
 		return
-	next_interact_time = now + 350
+	next_interact_time = now + 220
 
 	var main_node: Node = get_parent()
 
@@ -4827,11 +4827,14 @@ func _class_ability_power_cost() -> float:
 		PlayerClass.SOLDIER:
 			return 75.0
 		PlayerClass.MEDIC:
-			return 45.0
+			# ET-style repeatable health support rather than one large pulse.
+			return 28.0
 		PlayerClass.ENGINEER:
-			return 55.0
+			return 50.0
 		PlayerClass.FIELD_OPS:
-			return 100.0
+			# Hip/normal use = quick ammo pack. Hold Mouse2 while using the
+			# ability to commit a full charge to artillery.
+			return 100.0 if aim_requested else 30.0
 		PlayerClass.SCOUT:
 			return 70.0
 		_:
@@ -4861,29 +4864,41 @@ func server_ability_request() -> void:
 			main.push_kill_feed.rpc("%s activated Heavy Fire" % player_name)
 
 		PlayerClass.MEDIC:
-			var revived_count := 0
-			var healed_count := 0
+			# v21 ET class rhythm: revive remains a direct INTERACT/syringe-like
+			# action. Ability throws repeatable health support into the fight.
+			if main.has_method("create_supply_pack"):
+				main.call("create_supply_pack", self, 0, 38)
+			var healed_target: Node = null
+			var healed_distance := 99999.0
 			for player_value in main.players.values():
 				var teammate: Node3D = player_value as Node3D
-				if teammate == null or int(teammate.get("team")) != team:
+				if (
+					teammate == null
+					or teammate == self
+					or int(teammate.get("team")) != team
+					or not bool(teammate.get("alive"))
+					or bool(teammate.get("downed"))
+				):
 					continue
-				if global_position.distance_to(teammate.global_position) > MEDIC_REVIVE_PULSE_RADIUS:
-					continue
-				if bool(teammate.get("alive")) and bool(teammate.get("downed")):
-					teammate.call("server_revive", peer_id)
-					revived_count += 1
-				elif bool(teammate.get("alive")):
-					var maximum: int = int(teammate.call("_class_health", int(teammate.get("player_class"))))
-					var current: int = int(teammate.get("health"))
-					if current < maximum:
-						teammate.set("health", mini(maximum, current + 32))
-						healed_count += 1
-			if main.has_method("create_supply_pack"):
-				main.call("create_supply_pack", self, 0, 50)
-			if main.has_method("deploy_class_support"):
+				var distance := global_position.distance_to(teammate.global_position)
+				if distance < healed_distance and distance <= 4.5:
+					healed_distance = distance
+					healed_target = teammate
+			if healed_target != null:
+				var maximum := int(healed_target.call(
+					"_class_health",
+					int(healed_target.get("player_class"))
+				))
+				var current := int(healed_target.get("health"))
+				if current < maximum:
+					healed_target.set("health", mini(maximum, current + 22))
+					add_xp(2, "field medicine")
+			# Crouch+ability deliberately deploys the persistent v14 aid station,
+			# keeping that system available without making every health toss create
+			# another persistent battlefield node.
+			if crouch_requested and main.has_method("deploy_class_support"):
 				main.call("deploy_class_support", self, 0)
-			add_xp(revived_count * 12 + healed_count * 3, "revive pulse")
-			main.push_kill_feed.rpc("%s used Revive Pulse" % player_name)
+			main.push_kill_feed.rpc("%s dropped medical supplies" % player_name)
 
 		PlayerClass.ENGINEER:
 			health = mini(_class_health(player_class), health + 30)
@@ -4899,22 +4914,29 @@ func server_ability_request() -> void:
 			main.push_kill_feed.rpc("%s reinforced field defenses" % player_name)
 
 		PlayerClass.FIELD_OPS:
-			var target_position: Vector3 = global_position + (-global_transform.basis.z * 22.0)
-			target_position.y = 0.15
-			var ray_start: Vector3 = $Head.global_position
-			var ray_end: Vector3 = ray_start + (-$Head.global_transform.basis.z * 50.0)
-			var query := PhysicsRayQueryParameters3D.create(ray_start, ray_end)
-			query.exclude = [self]
-			var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
-			if not hit.is_empty():
-				target_position = Vector3(hit.get("position", target_position))
-			if main.has_method("server_call_artillery"):
-				main.call("server_call_artillery", self, target_position)
-			if main.has_method("create_supply_pack"):
-				main.call("create_supply_pack", self, 1, 85)
-			if main.has_method("deploy_class_support"):
-				main.call("deploy_class_support", self, 1)
-			add_xp(5, "artillery call")
+			if not aim_requested:
+				# Fast ET-style ammo toss. Crouch+ability also establishes the
+				# persistent v14 ammunition crate when a static support point is wanted.
+				if main.has_method("create_supply_pack"):
+					main.call("create_supply_pack", self, 1, 70)
+				if crouch_requested and main.has_method("deploy_class_support"):
+					main.call("deploy_class_support", self, 1)
+				add_xp(2, "ammo support")
+				main.push_kill_feed.rpc("%s dropped ammunition" % player_name)
+			else:
+				# Mouse2 + ability commits the full charge bar to aimed artillery.
+				var target_position: Vector3 = global_position + (-global_transform.basis.z * 22.0)
+				target_position.y = 0.15
+				var ray_start: Vector3 = $Head.global_position
+				var ray_end: Vector3 = ray_start + (-$Head.global_transform.basis.z * 50.0)
+				var query := PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+				query.exclude = [self]
+				var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
+				if not hit.is_empty():
+					target_position = Vector3(hit.get("position", target_position))
+				if main.has_method("server_call_artillery"):
+					main.call("server_call_artillery", self, target_position)
+				add_xp(5, "artillery call")
 
 		PlayerClass.SCOUT:
 			if main.has_method("create_sensor_beacon"):
@@ -6361,9 +6383,11 @@ func _local_fire_feedback() -> void:
 	if not _is_local_player():
 		return
 
+	# v21 ET-style tracking combat: weapon kick is readable feedback, not a
+	# large camera displacement that breaks strafe-tracking every shot.
 	var recoil_amount: float = maxf(
-		1.35,
-		_weapon_recoil_degrees() * 3.0
+		0.38,
+		_weapon_recoil_degrees() * 1.10
 	)
 	pitch = clampf(
 		pitch - deg_to_rad(recoil_amount),
@@ -6372,9 +6396,9 @@ func _local_fire_feedback() -> void:
 	)
 	$Head.rotation.x = pitch
 
-	weapon_kick_offset = 0.10
-	recoil_position_impulse += Vector3(randf_range(-0.018,0.018),randf_range(-0.010,0.015),0.09)
-	recoil_rotation_impulse += Vector3(deg_to_rad(randf_range(1.0,2.5)),deg_to_rad(randf_range(-0.9,0.9)),deg_to_rad(randf_range(-0.7,0.7)))
+	weapon_kick_offset = 0.065
+	recoil_position_impulse += Vector3(randf_range(-0.010,0.010),randf_range(-0.006,0.009),0.055)
+	recoil_rotation_impulse += Vector3(deg_to_rad(randf_range(0.45,1.15)),deg_to_rad(randf_range(-0.45,0.45)),deg_to_rad(randf_range(-0.35,0.35)))
 	_apply_weapon_kick()
 	visual_weapon_heat = clampf(
 		visual_weapon_heat + _first_person_heat_gain(),
