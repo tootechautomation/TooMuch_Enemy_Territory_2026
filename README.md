@@ -1,21 +1,27 @@
-Frontline: Objective v22.1.0 — AXIS MP40 RESTORATION HOTFIX
-Network Protocol 364 (compatible with v22)
+Frontline: Objective v22.2.0 — AXIS WEAPON ASSET RESTORATION
+Network Protocol 364
 
-- Fixes regression where an Axis/Defender primary could retain/fall back to the generic
-  service-rifle visual instead of resolving the registered MP40.
-- Native class/team loadout rebuild now explicitly restores weapon visual ownership to
-  the player's current team.
-- External weapon visual cache is forcibly refreshed after class/team loadout rebuild.
-- Axis primary resolution remains tied to the existing external asset registry; no
-  replacement MP40 model or new environment asset was introduced.
-- Battlefield cross-team weapon pickups remain supported and can still intentionally
-  retain the picked weapon's source-team visual.
-- v20 movement, v21 class/combat rhythm, v22 fireteams, maps, spawns, vehicles,
-  objectives and environment are unchanged.
+RESTORED FROM USER-SUPPLIED ORIGINAL ASSETS
+- Axis primary: MP40 FBX + PBR texture set physically embedded.
+- Axis sidearm: Walther P38 FBX + PBR texture set physically embedded.
+- Added/overrode scripts/assets/asset_registry.gd so Axis slot 0 resolves MP40 and
+  Axis slot 1 resolves P38 directly from packaged resources.
+- Existing first-person real-asset adaptation remains responsible for scale/orientation.
+- Explicit warnings now exist for missing MP40 AND missing P38 resources instead of silent
+  generic fallback.
+- Cross-team pickup visual ownership logic remains intact.
+- Network Protocol remains 364: asset restoration only.
+- v20 movement, v21 class/combat, v22 fireteams, maps, spawns, vehicles and objectives unchanged.
 
-TEST:
-1. Join Defenders/Axis as Medic: primary should visually be MP40.
-2. Respawn and change Axis classes: primary should remain MP40 visual.
-3. Join Allies: primary should remain Thompson visual.
-4. Pick up an enemy primary and verify cross-team weapon visual still follows the pickup.
-5. Drop/repick weapons and verify visuals refresh correctly.
+IMPORTANT
+This is still an overlay package. Apply it on top of the same complete project/base used
+for v22.1. The new registry file intentionally replaces the missing/older registry mapping.
+
+TEST
+1. Defenders/Axis Medic/Soldier/Engineer/Field Ops: primary visually resolves MP40.
+2. Switch to pistol: visually resolves Walther P38.
+3. Respawn/change Axis class and verify both persist.
+4. Join Allies and verify Allied mappings from the base project remain available.
+5. Pick up cross-team primary/pistol and verify source-team weapon visuals follow pickup.
+6. Check first-person muzzle direction/scale. Report a screenshot if either imported asset
+   needs a final pose-only adjustment; do not replace the model.

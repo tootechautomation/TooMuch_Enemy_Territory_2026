@@ -586,6 +586,8 @@ func _build_imported_first_person_weapon(
 	# rifle as the Axis primary when the registered MP40 is available.
 	if selected_scene == null and visual_team == 1 and not is_pistol:
 		push_warning("Axis MP40 registry scene unavailable; using legacy primary fallback")
+	if selected_scene == null and visual_team == 1 and is_pistol:
+		push_warning("Axis P38 registry scene unavailable; using legacy pistol fallback")
 	if selected_scene == null:
 		selected_scene = fp_pistol_scene if is_pistol else fp_rifle_scene
 	if selected_scene == null:
