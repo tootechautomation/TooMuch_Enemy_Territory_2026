@@ -643,11 +643,18 @@ func _build_imported_first_person_weapon(
 		asset_forward_yaw = 180.0
 
 	# Small presentation tilt only; the large axis correction is model-specific.
-	holder.rotation_degrees = auto_rotation + Vector3(
-		2.0 if is_pistol else 1.5,
-		asset_forward_yaw,
-		-3.0 if is_pistol else -4.0
-	)
+	# The supplied MP40 is authored lengthwise on local +X (not local -Z).
+	# The generic adapter therefore leaves it visually sideways in first person.
+	# Rotate +90 degrees around Y so +X becomes camera-forward (-Z), preserving
+	# the model itself, its textures, and all weapon gameplay behavior.
+	if "/mp40/" in selected_path or "mp40.fbx" in selected_path:
+		holder.rotation_degrees = Vector3(1.5, 90.0, -4.0)
+	else:
+		holder.rotation_degrees = auto_rotation + Vector3(
+			2.0 if is_pistol else 1.5,
+			asset_forward_yaw,
+			-3.0 if is_pistol else -4.0
+		)
 
 	# v8.63: force the Axis Walther P38 itself to rotate 180 degrees AFTER the
 	# generic FBX adaptation/holder rotation. The previous filename/yaw approach
@@ -4452,6 +4459,13 @@ func _refresh_external_weapon_model() -> void:
 			external_weapon_model,
 			0.29 if current_weapon_index == 1 else 0.88
 		)
+		var external_scene_path := scene.resource_path.to_lower()
+		if (
+			visual_team == 1
+			and current_weapon_index == 0
+			and ("/mp40/" in external_scene_path or "mp40.fbx" in external_scene_path)
+		):
+			external_weapon_model.rotation_degrees = Vector3(0.0, 90.0, 0.0)
 		external_weapon_index = current_weapon_index
 		external_weapon_team = visual_team
 

@@ -1,23 +1,21 @@
-Frontline: Objective v22.2.1 — ASSET REGISTRY COMPATIBILITY HOTFIX
+Frontline: Objective v22.2.2 — MP40 FIRST-PERSON ORIENTATION HOTFIX
 Network Protocol 364
 
 FIX
-- Corrects the parser error:
-  Static function "grenade_scene()" not found in base "res://scripts/assets/asset_registry.gd".
-- v22.2 weapon restoration accidentally replaced the long-running asset registry with a
-  weapon-only subset. v22.2.1 restores the complete registry API surface currently called
-  by main.gd, grenade.gd and player.gd.
-- Restored registry methods:
-  weapon_scene, grenade_scene, available_character, character_config,
-  environment_scene, environment_config, availability_report.
-- Allied MK2 grenade remains physically packaged.
-- Axis grenade registry checks established Model 24 candidate paths and safely returns null
-  to the existing fallback if the complete base project supplies it elsewhere.
-- MP40 and P38 mappings/assets from v22.2 are retained.
+- Keeps the correct user-supplied MP40 model and textures from v22.2.
+- Corrects the MP40 first-person pose so the barrel points forward instead of the
+  model rendering sideways across the screen.
+- The supplied MP40 mesh is authored lengthwise along local +X; Frontline expects a
+  camera-forward -Z weapon axis. v22.2.2 applies a specific +90 degree Y-axis correction.
+- Applies the same axis correction to the external/third-person MP40 weapon presentation.
+- P38 mapping and pose logic are unchanged.
+- No movement, class, fireteam, map, environment, spawn, vehicle, objective, damage,
+  recoil, or weapon-stat changes.
 - Network Protocol remains 364.
 
-VALIDATION
-- Scanned every ExternalAssetRegistryScript method call in all packaged GDScript.
-- Confirmed every called registry method now has a static function definition.
-- Confirmed MP40, P38 and MK2 packaged assets exist.
-- ZIP CRC/integrity test performed.
+TEST
+1. Join Defenders/Axis and equip primary.
+2. MP40 should now point directly forward rather than horizontally across the screen.
+3. Fire, reload, zoom, move and jump to verify the corrected pose remains stable.
+4. Switch to P38 and verify it is unaffected.
+5. Verify remote Axis characters also carry the MP40 in a forward-aligned orientation.
