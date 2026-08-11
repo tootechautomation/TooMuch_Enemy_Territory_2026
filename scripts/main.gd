@@ -243,8 +243,8 @@ const RallyPointScript = preload("res://scripts/rally_point.gd")
 const BreakablePropScript = preload("res://scripts/breakable_prop.gd")
 const PORT_DEFAULT := 27960
 const MAX_CLIENTS := 32
-const BUILD_VERSION := "17.0.0"
-const NETWORK_PROTOCOL := 359
+const BUILD_VERSION := "18.0.0"
+const NETWORK_PROTOCOL := 360
 const MAP_BLACK_RIVER := "black_river"
 const MAP_RUINED_CITY := "ruined_city"
 var active_map_id := MAP_BLACK_RIVER
@@ -555,6 +555,22 @@ const BATTLEFIELD_OPERATION_DURATION_MS := 32000
 const BATTLEFIELD_OPERATION_SUPPORT_RADIUS := 20.0
 const BATTLEFIELD_OPERATION_TICKET_REWARD := 2
 const BATTLEFIELD_OPERATION_XP_REWARD := 7
+
+# v18 Battlefield Persistence / Fortification & Attrition. Sector resilience is
+# server-owned state only: it does not add collision, map geometry, or persistent
+# scene nodes. Held ground gradually becomes harder to flip, while active combat
+# strips that resilience back down. Engineers can accelerate preparation by
+# fortifying near a friendly sector.
+var sector_fortification: Dictionary = {
+	"Village": 0.0,
+	"Rail Yard": 0.0,
+	"Fort": 0.0
+}
+const SECTOR_FORTIFY_BUILD_PER_SECOND := 1.15
+const SECTOR_FORTIFY_CONTEST_DECAY_PER_SECOND := 4.5
+const SECTOR_FORTIFY_MAX_CAPTURE_RESISTANCE := 0.32
+const ENGINEER_SECTOR_FORTIFY_BONUS := 12.0
+const SECTOR_FORTIFIED_THRESHOLD := 45.0
 var low_cost_visual_clarity: Node
 var battlefield_effects_manager: Node3D
 var local_cinema_mode_enabled := false
@@ -5336,6 +5352,16 @@ func _update_sector_warfare(delta: float) -> void:
 		var contested: bool = attackers > 0 and defenders > 0
 		sector_contested[sector_name] = contested
 
+		var fortification := float(sector_fortification.get(sector_name, 0.0))
+		var current_owner := int(sector_control.get(sector_name, -1))
+		if contested:
+			fortification = maxf(0.0, fortification - SECTOR_FORTIFY_CONTEST_DECAY_PER_SECOND * delta)
+		elif current_owner >= 0:
+			fortification = minf(100.0, fortification + SECTOR_FORTIFY_BUILD_PER_SECOND * delta)
+		else:
+			fortification = maxf(0.0, fortification - 0.5 * delta)
+		sector_fortification[sector_name] = fortification
+
 		var current_progress: float = float(
 			sector_progress.get(sector_name, 0.0)
 		)
@@ -5358,6 +5384,12 @@ func _update_sector_warfare(delta: float) -> void:
 			var capture_rate: float = (
 				100.0 / capture_seconds
 			) * float(advantage)
+			# Fortification only resists an enemy push against owned ground. It never
+			# blocks neutral captures and is capped so attacks remain decisive.
+			var attacking_team := 0 if attackers > defenders else 1
+			if current_owner >= 0 and current_owner != attacking_team:
+				var resistance := (fortification / 100.0) * SECTOR_FORTIFY_MAX_CAPTURE_RESISTANCE
+				capture_rate *= (1.0 - resistance)
 
 			if attackers > defenders:
 				current_progress = minf(
@@ -5385,6 +5417,7 @@ func _update_sector_warfare(delta: float) -> void:
 
 		if new_control != old_control:
 			sector_control[sector_name] = new_control
+			sector_fortification[sector_name] = 0.0
 			if new_control == 0:
 				show_mission_event.rpc(
 					"ATTACKERS CAPTURED %s" % sector_name.to_upper()
@@ -5438,18 +5471,21 @@ func _update_sector_warfare(delta: float) -> void:
 	sync_sector_state.rpc(
 		sector_control,
 		sector_progress,
-		sector_contested
+		sector_contested,
+		sector_fortification
 	)
 
 @rpc("authority", "call_local", "unreliable")
 func sync_sector_state(
 	new_control: Dictionary,
 	new_progress: Dictionary,
-	new_contested: Dictionary
+	new_contested: Dictionary,
+	new_fortification: Dictionary
 ) -> void:
 	sector_control = new_control.duplicate(true)
 	sector_progress = new_progress.duplicate(true)
 	sector_contested = new_contested.duplicate(true)
+	sector_fortification = new_fortification.duplicate(true)
 
 func _update_sector_visuals() -> void:
 	if DisplayServer.get_name() == "headless":
@@ -5465,6 +5501,9 @@ func _update_sector_visuals() -> void:
 		)
 		var progress: int = int(round(float(
 			sector_progress.get(sector_name, 0.0)
+		)))
+		var fortification: int = int(round(float(
+			sector_fortification.get(sector_name, 0.0)
 		)))
 
 		var marker: Label3D = (
@@ -5488,9 +5527,12 @@ func _update_sector_visuals() -> void:
 			owner_text = "CONTESTED"
 
 		if marker != null:
+			var fort_text := ""
+			if control >= 0 and fortification >= int(SECTOR_FORTIFIED_THRESHOLD):
+				fort_text = " · FORT %d%%" % fortification
 			marker.text = (
-				"%s · %s · %+d%%"
-				% [sector_name.to_upper(), owner_text, progress]
+				"%s · %s · %+d%%%s"
+				% [sector_name.to_upper(), owner_text, progress, fort_text]
 			)
 			marker.modulate = color
 		if light != null:
@@ -10034,6 +10076,21 @@ func engineer_frontline_fortify(engineer: Node3D) -> int:
 		# Engineers at the active front receive extra repair value without
 		# automatically creating collision geometry around the player.
 		repaired += repair_nearby_barricades(engineer, 45)
+	# v18: deliberate Engineer fortify actions also prepare friendly sector
+	# defenses. This is abstract resilience, not invisible/visible blocker geometry.
+	var nearest_name := ""
+	var nearest_distance := 99999.0
+	for sector_name_value: Variant in sector_positions.keys():
+		var sector_name := str(sector_name_value)
+		if int(sector_control.get(sector_name, -1)) != team_id:
+			continue
+		var distance := engineer.global_position.distance_to(Vector3(sector_positions[sector_name]))
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_name = sector_name
+	if not nearest_name.is_empty() and nearest_distance <= FRONTLINE_SUPPORT_RADIUS:
+		sector_fortification[nearest_name] = minf(100.0, float(sector_fortification.get(nearest_name, 0.0)) + ENGINEER_SECTOR_FORTIFY_BONUS)
+		repaired += 1
 	return repaired
 
 
@@ -11742,6 +11799,7 @@ func _reset_round() -> void:
 		sector_control[sector_name] = -1
 		sector_progress[sector_name] = 0.0
 		sector_contested[sector_name] = false
+		sector_fortification[sector_name] = 0.0
 	overtime_active = false
 	atmosphere_elapsed = 0.0
 
