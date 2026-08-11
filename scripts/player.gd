@@ -53,17 +53,27 @@ const SCOUT_MARKSMAN: Resource = preload("res://data/weapons/scout_marksman.tres
 
 @export var weapon: Resource = SERVICE_RIFLE
 
-const WALK_SPEED := 7.0
-const SPRINT_SPEED := 10.0
-const CROUCH_SPEED := 4.0
-const JUMP_SPEED := 5.2
+# v19 ET Gameplay Core: fast, momentum-friendly infantry movement.
+const WALK_SPEED := 8.25
+const SPRINT_SPEED := 10.4
+const CROUCH_SPEED := 4.8
+const JUMP_SPEED := 5.75
+const GROUND_ACCELERATION := 38.0
+const GROUND_DECELERATION := 26.0
+const AIR_ACCELERATION := 11.5
+const AIR_SPEED_CAP := 9.35
+const JUMP_BUFFER_MS := 150
+const COYOTE_TIME_MS := 95
 const SNAPSHOT_LERP_SPEED := 20.0
 const ABILITY_COOLDOWN_MS := 12000
+const CLASS_POWER_MAX := 100.0
+const CLASS_POWER_REGEN_PER_SECOND := 8.5
 const SCOUT_SPOT_DURATION_MS := 8000
 const DEFAULT_FOV := 75.0
-const ADS_FOV := 58.0
-const SCOUT_ADS_FOV := 24.0
-const ADS_MOVE_MULTIPLIER := 0.58
+const ADS_FOV := 62.0
+const SCOUT_ADS_FOV := 28.0
+const ADS_MOVE_MULTIPLIER := 0.86
+const ET_ZOOM_LERP_SPEED := 26.0
 const ASSIST_WINDOW_MS := 10000
 const FALL_DAMAGE_START_SPEED := 12.0
 const FALL_DAMAGE_MAX_SPEED := 24.0
@@ -135,6 +145,10 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var pitch := 0.0
 var input_vector := Vector2.ZERO
 var jump_requested := false
+var jump_buffer_until_ms := 0
+var last_grounded_ms := 0
+var class_power := CLASS_POWER_MAX
+var class_power_last_update_ms := 0
 var sprint_requested := false
 var crouch_requested := false
 var aim_requested := false
@@ -1582,10 +1596,23 @@ func _server_simulate(delta: float) -> void:
 		velocity = Vector3.ZERO
 		return
 
+	# v19 ET-style jump buffering/coyote time keeps movement responsive around
+	# steps, rubble and ledges without allowing flight or map-boundary exploits.
+	if was_on_floor:
+		last_grounded_ms = now
+	if jump_requested:
+		jump_buffer_until_ms = now + JUMP_BUFFER_MS
 	if not is_on_floor():
 		velocity.y -= gravity * delta
-	elif jump_requested and not crouch_requested:
+	var can_buffered_jump: bool = (
+		now <= jump_buffer_until_ms
+		and now - last_grounded_ms <= COYOTE_TIME_MS
+		and not crouch_requested
+	)
+	if can_buffered_jump:
 		velocity.y = JUMP_SPEED
+		jump_buffer_until_ms = 0
+		last_grounded_ms = 0
 
 	jump_requested = false
 	_apply_server_crouch(crouch_requested)
@@ -1630,8 +1657,31 @@ func _server_simulate(delta: float) -> void:
 		* Vector3(input_vector.x, 0.0, input_vector.y)
 	).normalized()
 
-	velocity.x = direction.x * move_speed
-	velocity.z = direction.z * move_speed
+	# v19 preserves horizontal momentum and permits controlled air steering.
+	# Ground movement remains authoritative, but no longer snaps velocity every
+	# tick, which is the key difference between tactical movement and ET-like
+	# strafe/jump flow.
+	var planar_velocity := Vector3(velocity.x, 0.0, velocity.z)
+	var desired_velocity := direction * move_speed
+	if is_on_floor():
+		var ground_rate := (
+			GROUND_ACCELERATION if direction.length_squared() > 0.001
+			else GROUND_DECELERATION
+		)
+		planar_velocity = planar_velocity.move_toward(
+			desired_velocity,
+			ground_rate * delta
+		)
+	else:
+		if direction.length_squared() > 0.001:
+			planar_velocity = planar_velocity.move_toward(
+				direction * AIR_SPEED_CAP,
+				AIR_ACCELERATION * delta
+			)
+		if planar_velocity.length() > AIR_SPEED_CAP:
+			planar_velocity = planar_velocity.normalized() * AIR_SPEED_CAP
+	velocity.x = planar_velocity.x
+	velocity.z = planar_velocity.z
 	previous_vertical_velocity = velocity.y
 
 	var intended_horizontal := Vector3(
@@ -3880,7 +3930,10 @@ func server_interact_request() -> void:
 func ability_cooldown_remaining_ms() -> int:
 	if not multiplayer.is_server():
 		return replicated_ability_cooldown_ms
-	return maxi(0, next_ability_time - Time.get_ticks_msec())
+	_update_class_power()
+	if class_power >= CLASS_POWER_MAX:
+		return maxi(0, next_ability_time - Time.get_ticks_msec())
+	return int(ceil((CLASS_POWER_MAX - class_power) / CLASS_POWER_REGEN_PER_SECOND * 1000.0))
 
 func spotted_remaining_ms() -> int:
 	if not multiplayer.is_server():
@@ -4584,6 +4637,22 @@ func _update_spotted_marker() -> void:
 		and local_team != team
 	)
 
+func _update_class_power(now_ms: int = -1) -> void:
+	var now := Time.get_ticks_msec() if now_ms < 0 else now_ms
+	if class_power_last_update_ms <= 0:
+		class_power_last_update_ms = now
+		return
+	var elapsed := maxf(0.0, float(now - class_power_last_update_ms) / 1000.0)
+	class_power_last_update_ms = now
+	class_power = minf(
+		CLASS_POWER_MAX,
+		class_power + CLASS_POWER_REGEN_PER_SECOND * elapsed
+	)
+
+func class_power_percent() -> int:
+	_update_class_power()
+	return int(round(class_power))
+
 func _ability_name() -> String:
 	match player_class:
 		PlayerClass.SOLDIER:
@@ -4603,9 +4672,13 @@ func server_ability_request() -> void:
 	if not multiplayer.is_server() or not alive or downed:
 		return
 	var now: int = Time.get_ticks_msec()
-	if now < next_ability_time:
+	_update_class_power(now)
+	if now < next_ability_time or class_power < CLASS_POWER_MAX:
 		return
-	next_ability_time = now + ABILITY_COOLDOWN_MS
+	class_power = 0.0
+	# Only a short anti-spam lock remains; the visible recharge is now the
+	# shared ET-style class power meter rather than disconnected cooldowns.
+	next_ability_time = now + 350
 	var main: Node = get_parent()
 	if main == null:
 		return
@@ -6519,7 +6592,7 @@ func _update_aim_view() -> void:
 	camera.fov = lerpf(
 		camera.fov,
 		target_fov,
-		clampf(get_process_delta_time() * 14.0, 0.0, 1.0)
+		clampf(get_process_delta_time() * ET_ZOOM_LERP_SPEED, 0.0, 1.0)
 	)
 
 	if scope_overlay != null:
